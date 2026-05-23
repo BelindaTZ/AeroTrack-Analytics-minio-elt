@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Stop-Process -Name \"uvicorn\" -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(cd \"c:\\\\proyectos\\\\minio-elt\\\\webapp\"; Start-Process -NoNewWindow -FilePath \"uvicorn\" -ArgumentList \"main:app --port 8000 --reload\" -PassThru | Select-Object Id; Start-Sleep 4; try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/\" -TimeoutSec 5; Write-Host \"Dashboard: $\\($r.StatusCode\\)\"; $r2 = Invoke-WebRequest -Uri \"http://localhost:8000/dim_aerolinea\" -TimeoutSec 5; Write-Host \"dim_aerolinea: $\\($r2.StatusCode\\)\"; $r3 = Invoke-WebRequest -Uri \"http://localhost:8000/dim_ruta\" -TimeoutSec 5; Write-Host \"dim_ruta: $\\($r3.StatusCode\\)\" } catch { $_.Exception.Message })",
+      "PowerShell($tablas = @\\(\"dim_aerolinea\",\"dim_aeropuerto\",\"dim_avion\",\"fact_vuelo\",\"dim_tiempo\",\"dim_ruta\"\\); foreach \\($t in $tablas\\) { try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/$t\" -TimeoutSec 5; Write-Host \"$t : $\\($r.StatusCode\\)\" } catch { Write-Host \"$t : ERROR - $\\($_.Exception.Message\\)\" } })"
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Error {{ codigo }} — AeroTrack Analytics{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:center;
+            min-height:calc(100vh - 120px)">
+  <div style="text-align:center;max-width:480px">
+
+    <!-- Icon -->
+    <div style="width:72px;height:72px;background:#fef2f2;border-radius:16px;
+                display:flex;align-items:center;justify-content:center;
+                margin:0 auto 20px">
+      {% if codigo == 404 %}
+      <i class="bi bi-map" style="font-size:32px;color:#dc2626"></i>
+      {% else %}
+      <i class="bi bi-exclamation-octagon" style="font-size:32px;color:#dc2626"></i>
+      {% endif %}
+    </div>
+
+    <!-- Code -->
+    <div style="font-size:64px;font-weight:800;color:var(--at-navy);
+                line-height:1;margin-bottom:8px">
+      {{ codigo }}
+    </div>
+
+    <!-- Title -->
+    <h1 style="font-size:20px;font-weight:700;margin-bottom:10px">
+      {% if codigo == 404 %}
+        Página no encontrada
+      {% else %}
+        Error del servidor
+      {% endif %}
+    </h1>
+
+    <!-- Message -->
+    <p style="font-size:14px;color:var(--at-muted);margin-bottom:28px;line-height:1.6">
+      {{ mensaje }}
+    </p>
+
+    <!-- Actions -->
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a href="/" class="btn-at-primary" id="btn-ir-dashboard">
+        <i class="bi bi-grid-1x2-fill"></i> Ir al Dashboard
+      </a>
+      <a href="javascript:history.back()" class="btn-at-ghost" id="btn-volver">
+        <i class="bi bi-arrow-left"></i> Volver
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
