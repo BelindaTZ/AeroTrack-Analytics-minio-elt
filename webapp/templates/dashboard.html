@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AeroTrack Analytics{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <h1>System Overview</h1>
+  <p>Estado general del modelo de datos de vuelos.</p>
+</div>
+
+<!-- ── Metric cards ────────────────────────────────────────────────────── -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:28px">
+
+  <!-- Total vuelos -->
+  <div class="at-card" style="display:flex;align-items:center;gap:16px;padding:20px 22px">
+    <div style="width:46px;height:46px;background:#eff6ff;border-radius:12px;
+                display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="bi bi-airplane-fill" style="color:var(--at-navy);font-size:20px"></i>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--at-muted);
+                  text-transform:uppercase;letter-spacing:.6px">Total vuelos</div>
+      <div style="font-size:26px;font-weight:700;color:var(--at-text);line-height:1.1">
+        {% if metricas.total_vuelos is not none %}
+          {{ "{:,}".format(metricas.total_vuelos) }}
+        {% else %}
+          <span style="font-size:14px;color:var(--at-muted)">Sin datos</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Promedio retraso -->
+  <div class="at-card" style="display:flex;align-items:center;gap:16px;padding:20px 22px">
+    <div style="width:46px;height:46px;background:#fff7ed;border-radius:12px;
+                display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="bi bi-clock-history" style="color:#ea580c;font-size:20px"></i>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--at-muted);
+                  text-transform:uppercase;letter-spacing:.6px">Prom. retraso (min)</div>
+      <div style="font-size:26px;font-weight:700;color:var(--at-text);line-height:1.1">
+        {% if metricas.promedio_retraso is not none %}
+          {{ metricas.promedio_retraso }}
+        {% else %}
+          <span style="font-size:14px;color:var(--at-muted)">Sin datos</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Total aerolíneas -->
+  <div class="at-card" style="display:flex;align-items:center;gap:16px;padding:20px 22px">
+    <div style="width:46px;height:46px;background:#fdf4ff;border-radius:12px;
+                display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="bi bi-building" style="color:#9333ea;font-size:20px"></i>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--at-muted);
+                  text-transform:uppercase;letter-spacing:.6px">Aerolíneas</div>
+      <div style="font-size:26px;font-weight:700;color:var(--at-text);line-height:1.1">
+        {% if metricas.total_aerolineas is not none %}
+          {{ "{:,}".format(metricas.total_aerolineas) }}
+        {% else %}
+          <span style="font-size:14px;color:var(--at-muted)">Sin datos</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Total rutas -->
+  <div class="at-card" style="display:flex;align-items:center;gap:16px;padding:20px 22px">
+    <div style="width:46px;height:46px;background:#f0fdf4;border-radius:12px;
+                display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="bi bi-map" style="color:#16a34a;font-size:20px"></i>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:600;color:var(--at-muted);
+                  text-transform:uppercase;letter-spacing:.6px">Rutas</div>
+      <div style="font-size:26px;font-weight:700;color:var(--at-text);line-height:1.1">
+        {% if metricas.total_rutas is not none %}
+          {{ "{:,}".format(metricas.total_rutas) }}
+        {% else %}
+          <span style="font-size:14px;color:var(--at-muted)">Sin datos</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Recent flights table ────────────────────────────────────────────── -->
+<div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">
+      <i class="bi bi-airplane me-1" style="color:var(--at-coral)"></i>
+      Vuelos Recientes
+    </span>
+    <div class="d-flex align-items-center gap-2">
+      <span style="font-size:12px;color:var(--at-muted)">Mostrando los últimos 10 registros</span>
+      <a href="/fact_vuelo" class="btn-at-ghost" id="btn-ver-todos">
+        <i class="bi bi-arrow-right"></i> Ver todos
+      </a>
+    </div>
+  </div>
+
+  {% if vuelos_recientes %}
+  <div class="at-table-scroll">
+    <table class="at-table" id="dashboard-table">
+      <thead>
+        <tr>
+          {% for col in cols_vuelos %}
+          <th>{{ col }}</th>
+          {% endfor %}
+          <th style="text-align:right">ACCIONES</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in vuelos_recientes %}
+        <tr>
+          {% for col in cols_vuelos %}
+          <td title="{{ row[col] }}">
+            {% if col == 'pk_vuelo' %}
+            <span class="badge-pk">{{ row[col] }}</span>
+            {% else %}
+            {{ row[col] if row[col] is not none else '—' }}
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="actions-col" style="text-align:right">
+            <a href="/fact_vuelo/{{ row['pk_vuelo'] }}/ver"
+               class="btn-icon view me-1"
+               title="Ver detalle">
+              <i class="bi bi-eye"></i>
+            </a>
+            <a href="/fact_vuelo/{{ row['pk_vuelo'] }}/editar"
+               class="btn-icon edit me-1"
+               title="Editar">
+              <i class="bi bi-pencil"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--at-muted)">
+    <i class="bi bi-inbox" style="font-size:32px;display:block;margin-bottom:10px"></i>
+    No hay datos en <strong>fact_vuelo</strong>. Verifica que el Parquet exista en MinIO.
+  </div>
+  {% endif %}
+
+  <!-- Footer link -->
+  <div style="padding:12px 20px;border-top:1px solid var(--at-border);
+              display:flex;align-items:center;justify-content:space-between;
+              font-size:13px;color:var(--at-muted)">
+    <span>Mostrando <strong>{{ vuelos_recientes|length }}</strong> registros recientes</span>
+    <a href="/fact_vuelo" style="color:var(--at-navy);font-weight:600;text-decoration:none;font-size:13px"
+       id="link-fact-vuelo">
+      Ver tabla completa <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+</div>
+
+<!-- ── Tables status grid ─────────────────────────────────────────────── -->
+<div style="margin-top:24px">
+  <h6 style="font-size:13px;font-weight:600;color:var(--at-muted);
+             text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px">
+    Tablas del sistema
+  </h6>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px">
+    {% for nombre, info in tablas.items() %}
+    <a href="/{{ nombre }}"
+       style="background:var(--at-surface);border:1px solid var(--at-border);
+              border-radius:10px;padding:14px 16px;text-decoration:none;
+              display:flex;align-items:center;gap:10px;
+              transition:box-shadow .15s,border-color .15s;"
+       onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.08)';this.style.borderColor='#94a3b8'"
+       onmouseout="this.style.boxShadow='none';this.style.borderColor='var(--at-border)'"
+       id="card-{{ nombre }}">
+      <div style="width:34px;height:34px;background:#eff6ff;border-radius:8px;
+                  display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <i class="bi {{ info.icon }}" style="color:var(--at-navy);font-size:15px"></i>
+      </div>
+      <div>
+        <div style="font-size:12.5px;font-weight:600;color:var(--at-text)">{{ info.label }}</div>
+        <div style="font-size:11px;color:var(--at-muted)">{{ nombre }}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+# AeroTrack Analytics — Dependencias del pipeline ELT
+# Instalar con: pip install -r requirements.txt
+
+python-dotenv>=1.0.0
+pandas>=2.0.0
+pyarrow>=14.0.0
+minio>=7.2.0
+requests>=2.31.0
+tqdm>=4.66.0
