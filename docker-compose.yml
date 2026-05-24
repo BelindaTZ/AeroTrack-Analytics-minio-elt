@@ -28,8 +28,8 @@ services:
       - "9000:9000"   # API S3
       - "9001:9001"   # Consola web
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: admin1234
+      MINIO_ROOT_USER: ${MINIO_ACCESS}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET}
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -37,11 +37,31 @@ services:
       - elt-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
+      interval: 15s
       timeout: 10s
-      retries: 3
+      retries: 5
+      start_period: 10s
 
-  # ── 2. POCKETBASE ─────────────────────
+  # ── 2. MINIO-INIT (crea los 3 buckets automáticamente) ────
+  minio-init:
+    image: quay.io/minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - elt-network
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ACCESS} ${MINIO_SECRET};
+        mc mb --ignore-existing local/${MINIO_BUCKET_RAW};
+        mc mb --ignore-existing local/${MINIO_BUCKET_DIMS};
+        mc mb --ignore-existing local/${MINIO_BUCKET_EXPORTS};
+        echo 'Buckets listos.';
+      "
+
+  # ── 3. POCKETBASE ─────────────────────
   pocketbase:
     image: ghcr.io/muchobien/pocketbase:0.22.4
     container_name: pocketbase
@@ -51,92 +71,152 @@ services:
       - pocketbase-data:/pb_data
     networks:
       - elt-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  # ── 3. POSTGRES (base de Airflow) ─────
+  # ── 4. POSTGRES (base de Airflow) ─────
   postgres:
     image: postgres:15
     container_name: postgres-airflow
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
       POSTGRES_DB: airflow
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - elt-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # ── 4. AIRFLOW INIT (solo corre una vez)
+  # ── 5. AIRFLOW INIT (solo corre una vez) ──────────────────
   airflow-init:
     image: apache/airflow:2.9.3-python3.12
     container_name: airflow-init
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__FERNET_KEY: 'ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg='
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      _AIRFLOW_WWW_USER_USERNAME: admin
-      _AIRFLOW_WWW_USER_PASSWORD: admin1234
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      PYTHONPATH: /opt/airflow
     command: >
-      bash -c "airflow db init &&
-               airflow users create
-               --username admin
-               --password admin1234
-               --firstname Belinda
-               --lastname España
-               --role Admin
-               --email admin@minio-elt.com"
+      bash -c "
+        airflow db migrate &&
+        airflow users create
+          --username ${AIRFLOW_ADMIN_USER}
+          --password ${AIRFLOW_ADMIN_PASSWORD}
+          --firstname Belinda
+          --lastname Toaquiza
+          --role Admin
+          --email ${PB_EMAIL} || true
+      "
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - ./webapp:/opt/airflow/app
     networks:
       - elt-network
+    restart: "no"
 
-  # ── 5. AIRFLOW WEBSERVER ──────────────
+  # ── 6. AIRFLOW WEBSERVER ──────────────
   airflow-webserver:
     image: apache/airflow:2.9.3-python3.12
     container_name: airflow-webserver
     depends_on:
-      - postgres
-      - airflow-init
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"   # UI en http://localhost:8080
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__FERNET_KEY: 'ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg='
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio"
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      PYTHONPATH: /opt/airflow
     command: webserver
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - ./webapp:/opt/airflow/app
     networks:
       - elt-network
     restart: unless-stopped
 
-  # ── 6. AIRFLOW SCHEDULER ──────────────
+  # ── 7. AIRFLOW SCHEDULER ──────────────
   airflow-scheduler:
     image: apache/airflow:2.9.3-python3.12
     container_name: airflow-scheduler
     depends_on:
-      - postgres
-      - airflow-init
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-      AIRFLOW__CORE__FERNET_KEY: 'ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg='
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=}
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio"
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests pandas pyarrow minio python-dotenv"
+      PYTHONPATH: /opt/airflow
     command: scheduler
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - ./webapp:/opt/airflow/app
     networks:
       - elt-network
     restart: unless-stopped
+
+  # ── 8. FASTAPI (web app AeroTrack) ────
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-app
+    ports:
+      - "8000:8000"   # UI en http://localhost:8000
+    environment:
+      - MINIO_URL_DOCKER=minio:9000
+      - MINIO_ACCESS=${MINIO_ACCESS}
+      - MINIO_SECRET=${MINIO_SECRET}
+      - MINIO_BUCKET_RAW=${MINIO_BUCKET_RAW}
+      - MINIO_BUCKET_DIMS=${MINIO_BUCKET_DIMS}
+      - SECRET_KEY=${SECRET_KEY}
+    volumes:
+      - ./webapp:/app
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - elt-network
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

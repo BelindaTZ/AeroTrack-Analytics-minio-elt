@@ -44,7 +44,15 @@ def extract_pipeline() -> None:
     OBJETO_RAW     = "vuelos_raw.parquet"
     PB_PAGE_SIZE   = 500
 
-    print(f"[EXTRACT] PocketBase: {PB_BASE_URL} | Colección: {PB_COLLECTION}")
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    MAX_WORKERS    = 10
+    MAX_REINTENTOS = 3
+    CAMPOS_INTERNOS = {"id", "collectionId", "collectionName", "created", "updated"}
+
+    print(f"[EXTRACT] PocketBase: {PB_BASE_URL} | Colección: {PB_COLLECTION} | {MAX_WORKERS} workers")
 
     # 1. Autenticar
     def autenticar():
@@ -59,43 +67,70 @@ def extract_pipeline() -> None:
     token   = autenticar()
     headers = {"Authorization": token}
     url     = f"{PB_BASE_URL}/api/collections/{PB_COLLECTION}/records"
-    campos_internos = {"id", "collectionId", "collectionName", "created", "updated"}
 
-    # 2. Paginación
-    todos  = []
-    pagina = 1
-    while True:
-        resp = requests.get(
-            url,
-            headers=headers,
-            params={"page": pagina, "perPage": PB_PAGE_SIZE, "skipTotal": 1},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("items", [])
+    # 2. Primera solicitud: obtiene totalItems y totalPages
+    resp = requests.get(url, headers=headers, params={"page": 1, "perPage": PB_PAGE_SIZE}, timeout=30)
+    resp.raise_for_status()
+    data         = resp.json()
+    total_items  = data.get("totalItems", 0)
+    total_pages  = data.get("totalPages", 1)
+    primera_pag  = data.get("items", [])
 
-        if not items:
-            break
+    if total_items == 0:
+        raise RuntimeError("No hay registros en PocketBase. Ejecuta primero el setup inicial.")
 
-        for item in items:
-            todos.append({k: v for k, v in item.items() if k not in campos_internos})
+    print(f"[EXTRACT] {total_items:,} registros | {total_pages:,} páginas → ~{total_pages // MAX_WORKERS} rondas")
 
-        if pagina % 20 == 0 or len(items) < PB_PAGE_SIZE:
-            print(f"  Página {pagina:,} | Acumulado: {len(todos):,}")
+    # 3. Worker que descarga una página con reintentos
+    def fetch_pagina(args):
+        num_pagina, _url, _headers, page_size = args
+        for intento in range(MAX_REINTENTOS):
+            try:
+                r = requests.get(
+                    _url,
+                    headers=_headers,
+                    params={"page": num_pagina, "perPage": page_size, "skipTotal": 1},
+                    timeout=30,
+                )
+                r.raise_for_status()
+                return num_pagina, r.json().get("items", [])
+            except Exception:
+                if intento == MAX_REINTENTOS - 1:
+                    raise
+                time.sleep(1 * (intento + 1))
+        return num_pagina, []
 
-        if len(items) < PB_PAGE_SIZE:
-            break
+    # 4. Descargar páginas 2..N concurrentemente (página 1 ya disponible)
+    resultados: dict = {1: primera_pag}
+    completadas  = 1
+    registros_ok = len(primera_pag)
+    lock         = threading.Lock()
 
-        pagina += 1
-        if pagina % 500 == 0:
-            print("  Renovando token...")
-            token   = autenticar()
-            headers = {"Authorization": token}
+    args_lista = [(p, url, headers, PB_PAGE_SIZE) for p in range(2, total_pages + 1)]
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futuros = {executor.submit(fetch_pagina, a): a[0] for a in args_lista}
+        for futuro in as_completed(futuros):
+            num_pag, items = futuro.result()
+            resultados[num_pag] = items
+            with lock:
+                completadas  += 1
+                registros_ok += len(items)
+                if completadas % 100 == 0 or completadas == total_pages:
+                    print(
+                        f"[EXTRACT] Páginas completadas: {completadas:,}/{total_pages:,} "
+                        f"| Registros: {registros_ok:,}/{total_items:,}",
+                        flush=True,
+                    )
+
+    # 5. Reensamblar en orden y limpiar campos internos
+    todos_raw = []
+    for p in sorted(resultados.keys()):
+        todos_raw.extend(resultados[p])
+
+    todos = [{k: v for k, v in r.items() if k not in CAMPOS_INTERNOS} for r in todos_raw]
 
     print(f"[EXTRACT] ✅ {len(todos):,} registros extraídos")
-
-    if not todos:
-        raise RuntimeError("No hay registros en PocketBase. Ejecuta primero el setup inicial.")
 
     # 3. Convertir a DataFrame y optimizar
     df = pd.DataFrame(todos)

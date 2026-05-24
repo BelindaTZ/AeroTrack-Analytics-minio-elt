@@ -1,10 +1,18 @@
 # config.py — Configuración global de AeroTrack Analytics
 
+import os
+from dotenv import load_dotenv
+
+# Carga .env para desarrollo local (no-op en Docker donde los vars vienen de docker-compose)
+load_dotenv()
+
 # ── MinIO ──────────────────────────────────────────────────────────────────
-MINIO_ENDPOINT = "localhost:9000"
-MINIO_ACCESS   = "admin"
-MINIO_SECRET   = "admin1234"
-MINIO_BUCKET   = "aerotrack-dims"
+# Dentro de Docker: MINIO_URL_DOCKER=minio:9000 (inyectado por docker-compose)
+# En local:        MINIO_URL=localhost:9000 (desde .env)
+MINIO_ENDPOINT = os.getenv("MINIO_URL_DOCKER", os.getenv("MINIO_URL", "localhost:9000"))
+MINIO_ACCESS   = os.getenv("MINIO_ACCESS",  "admin")
+MINIO_SECRET   = os.getenv("MINIO_SECRET",  "admin1234")
+MINIO_BUCKET   = os.getenv("MINIO_BUCKET_DIMS", "aerotrack-dims")
 SECURE         = False
 
 # ── Tablas disponibles con sus PKs ─────────────────────────────────────────
