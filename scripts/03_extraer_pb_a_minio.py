@@ -2,9 +2,14 @@
 AeroTrack Analytics — Script 03: Extraer PocketBase → Parquet → MinIO
 =======================================================================
 Qué hace:
-  1. EXTRACT  → Extrae todos los registros de PocketBase con paginación
+  1. EXTRACT  → Extrae todos los registros de PocketBase en PARALELO
+               (10 workers simultáneos, ~10× más rápido que secuencial)
   2. LOAD     → Convierte los datos a formato Parquet (temporal)
   3. UPLOAD   → Sube el Parquet al bucket 'aerotrack-raw' en MinIO
+
+Rendimiento esperado con 2M registros / 4000 páginas:
+  Secuencial (1 worker):  ~60-90 minutos
+  Concurrente (10 workers): ~6-10 minutos
 
 Cómo ejecutar:
     python scripts/03_extraer_pb_a_minio.py
@@ -13,13 +18,15 @@ Cómo ejecutar:
 import os
 import sys
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import requests
 from minio import Minio
-from minio.error import S3Error
 
 sys.path.insert(0, os.path.dirname(__file__))
 import config
@@ -32,68 +39,107 @@ MINIO_ENDPOINT  = config.MINIO_ENDPOINT
 MINIO_ACCESS    = config.MINIO_ACCESS
 MINIO_SECRET    = config.MINIO_SECRET
 MINIO_BUCKET    = config.MINIO_BUCKET_RAW
-MINIO_OBJETO    = "vuelos_raw.parquet"   # aerotrack-raw/vuelos_raw.parquet
+MINIO_OBJETO    = "vuelos_raw.parquet"
 
 PB_PAGE_SIZE    = 500
+MAX_WORKERS     = 10
+MAX_REINTENTOS  = 3
 PARQUET_LOCAL   = Path(tempfile.gettempdir()) / "vuelos_raw.parquet"
+_CAMPOS_INTERNOS = {"id", "collectionId", "collectionName", "created", "updated"}
 
 
-# ── PASO 1: EXTRACT ───────────────────────────────────────────
+# ── AUTENTICACIÓN ─────────────────────────────────────────────
 
 def autenticar_pb() -> str:
     resp = requests.post(
         f"{PB_BASE_URL}/api/admins/auth-with-password",
         json={"identity": PB_EMAIL, "password": PB_PASSWORD},
-        timeout=10,
+        timeout=15,
     )
     resp.raise_for_status()
     return resp.json()["token"]
 
 
+# ── WORKER: descarga una página ───────────────────────────────
+
+def _fetch_pagina(args: tuple) -> tuple[int, list]:
+    """Descarga una sola página de PocketBase con reintentos."""
+    num_pagina, url, headers, page_size = args
+    for intento in range(MAX_REINTENTOS):
+        try:
+            resp = requests.get(
+                url,
+                headers=headers,
+                params={"page": num_pagina, "perPage": page_size, "skipTotal": 1},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            return num_pagina, resp.json().get("items", [])
+        except Exception:
+            if intento == MAX_REINTENTOS - 1:
+                raise
+            time.sleep(1 * (intento + 1))
+    return num_pagina, []
+
+
+# ── PASO 1: EXTRACT (concurrente) ─────────────────────────────
+
 def extraer_de_pocketbase() -> pd.DataFrame:
-    """Extrae TODOS los registros de PocketBase usando paginación."""
-    print("\n[PASO 1] Extrayendo datos de PocketBase...")
+    """Extrae TODOS los registros con 10 workers en paralelo."""
+    print(f"\n[PASO 1] Extrayendo datos de PocketBase (concurrente, {MAX_WORKERS} workers)...")
     print(f"  URL: {PB_BASE_URL} | Colección: {PB_COLLECTION}")
+
     token   = autenticar_pb()
     headers = {"Authorization": token}
     url     = f"{PB_BASE_URL}/api/collections/{PB_COLLECTION}/records"
 
+    # Primera solicitud: obtiene totalItems y totalPages (sin skipTotal para el COUNT)
+    resp = requests.get(url, headers=headers, params={"page": 1, "perPage": PB_PAGE_SIZE}, timeout=30)
+    resp.raise_for_status()
+    data         = resp.json()
+    total_items  = data.get("totalItems", 0)
+    total_pages  = data.get("totalPages", 1)
+    primera_pag  = data.get("items", [])
+
+    if total_items == 0:
+        print("  ⚠️  Colección vacía.")
+        return pd.DataFrame()
+
+    print(f"  {total_items:,} registros | {total_pages:,} páginas | {MAX_WORKERS} workers → ~{total_pages // MAX_WORKERS} rondas")
+
+    # Resultado de página 1 ya disponible; descargar 2..N concurrentemente
+    resultados: dict[int, list] = {1: primera_pag}
+    completadas   = 1
+    registros_ok  = len(primera_pag)
+    lock          = threading.Lock()
+
+    args_lista = [(p, url, headers, PB_PAGE_SIZE) for p in range(2, total_pages + 1)]
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futuros = {executor.submit(_fetch_pagina, a): a[0] for a in args_lista}
+        for futuro in as_completed(futuros):
+            num_pag, items = futuro.result()
+            resultados[num_pag] = items       # seguro: cada clave es única
+            with lock:
+                completadas  += 1
+                registros_ok += len(items)
+                if completadas % 100 == 0 or completadas == total_pages:
+                    print(
+                        f"  Páginas completadas: {completadas:,}/{total_pages:,} "
+                        f"| Registros: {registros_ok:,}/{total_items:,}",
+                        flush=True,
+                    )
+
+    # Reensamblar en orden de página para garantizar secuencia correcta
     todos_los_registros = []
-    pagina = 1
-
-    while True:
-        params = {"page": pagina, "perPage": PB_PAGE_SIZE, "skipTotal": 1}
-        resp   = requests.get(url, headers=headers, params=params, timeout=30)
-        resp.raise_for_status()
-        items = resp.json().get("items", [])
-
-        if not items:
-            break
-
-        todos_los_registros.extend(items)
-
-        if pagina % 20 == 0 or len(items) < PB_PAGE_SIZE:
-            print(f"  Página {pagina:,} | Total acumulado: {len(todos_los_registros):,}")
-
-        if len(items) < PB_PAGE_SIZE:
-            break
-
-        pagina += 1
-
-        if pagina % 500 == 0:
-            print("  Renovando token de autenticación...")
-            token   = autenticar_pb()
-            headers = {"Authorization": token}
+    for p in sorted(resultados.keys()):
+        todos_los_registros.extend(resultados[p])
 
     total = len(todos_los_registros)
     print(f"  ✅ {total:,} registros extraídos")
 
-    if total == 0:
-        return pd.DataFrame()
-
-    campos_internos = {"id", "collectionId", "collectionName", "created", "updated"}
     registros_limpios = [
-        {k: v for k, v in r.items() if k not in campos_internos}
+        {k: v for k, v in r.items() if k not in _CAMPOS_INTERNOS}
         for r in todos_los_registros
     ]
     df = pd.DataFrame(registros_limpios)
@@ -140,9 +186,8 @@ def subir_a_minio(parquet_path: Path) -> None:
         content_type="application/octet-stream",
     )
 
-    duracion   = max((datetime.now() - inicio).seconds, 1)
-    vel_mb     = (tamanio / (1024 * 1024)) / duracion
-
+    duracion = max((datetime.now() - inicio).seconds, 1)
+    vel_mb   = (tamanio / (1024 * 1024)) / duracion
     print(f"  ✅ Subido a: s3://{MINIO_BUCKET}/{MINIO_OBJETO}")
     print(f"  Velocidad: {vel_mb:.1f} MB/s | Consola: http://localhost:9001")
 

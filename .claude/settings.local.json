@@ -3,7 +3,15 @@
     "allow": [
       "PowerShell(Stop-Process -Name \"uvicorn\" -Force -ErrorAction SilentlyContinue)",
       "PowerShell(cd \"c:\\\\proyectos\\\\minio-elt\\\\webapp\"; Start-Process -NoNewWindow -FilePath \"uvicorn\" -ArgumentList \"main:app --port 8000 --reload\" -PassThru | Select-Object Id; Start-Sleep 4; try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/\" -TimeoutSec 5; Write-Host \"Dashboard: $\\($r.StatusCode\\)\"; $r2 = Invoke-WebRequest -Uri \"http://localhost:8000/dim_aerolinea\" -TimeoutSec 5; Write-Host \"dim_aerolinea: $\\($r2.StatusCode\\)\"; $r3 = Invoke-WebRequest -Uri \"http://localhost:8000/dim_ruta\" -TimeoutSec 5; Write-Host \"dim_ruta: $\\($r3.StatusCode\\)\" } catch { $_.Exception.Message })",
-      "PowerShell($tablas = @\\(\"dim_aerolinea\",\"dim_aeropuerto\",\"dim_avion\",\"fact_vuelo\",\"dim_tiempo\",\"dim_ruta\"\\); foreach \\($t in $tablas\\) { try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/$t\" -TimeoutSec 5; Write-Host \"$t : $\\($r.StatusCode\\)\" } catch { Write-Host \"$t : ERROR - $\\($_.Exception.Message\\)\" } })"
+      "PowerShell($tablas = @\\(\"dim_aerolinea\",\"dim_aeropuerto\",\"dim_avion\",\"fact_vuelo\",\"dim_tiempo\",\"dim_ruta\"\\); foreach \\($t in $tablas\\) { try { $r = Invoke-WebRequest -Uri \"http://localhost:8000/$t\" -TimeoutSec 5; Write-Host \"$t : $\\($r.StatusCode\\)\" } catch { Write-Host \"$t : ERROR - $\\($_.Exception.Message\\)\" } })",
+      "Bash(curl -s -X POST \"http://localhost:8090/api/admins/auth-with-password\" -H \"Content-Type: application/json\" -d \"{\\\\\"identity\\\\\":\\\\\"btoaquizaz@uteq.edu.ec\\\\\",\\\\\"password\\\\\":\\\\\"admin12345\\\\\"}\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('TOKEN:', d.get\\('token','ERROR'\\)[:40]+'...' if d.get\\('token'\\) else d\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('token','NO TOKEN'\\)[:50] if d.get\\('token'\\) else d\\)\")",
+      "Bash(python -c \"import sys,json; cols=json.load\\(sys.stdin\\); [print\\(f\\\\\"  - {c['name']} \\(type={c['type']}, fields={len\\(c.get\\('fields',[]\\)\\)}\\\\\"\\) for c in cols.get\\('items',[]\\)]\")",
+      "Bash(curl -s \"http://localhost:9000/minio/health/live\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f\\\\\"  {r.get\\('clave','?'\\)} = {r.get\\('valor','?'\\)}\\\\\"\\) for r in d.get\\('items',[]\\)]\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(r\\) for r in d.get\\('items',[]\\)]\")"
     ]
   }
 }

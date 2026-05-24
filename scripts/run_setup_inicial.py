@@ -41,7 +41,7 @@ def main():
     print("=" * 62)
 
     # ── PASO 1: Crear colección en PocketBase ─────────────────
-    print("\n━━━ PASO 1/2: Crear colección en PocketBase ━━━")
+    print("\n━━━ PASO 1/3: Crear colección en PocketBase ━━━")
     try:
         script_01 = _cargar_modulo("01_crear_coleccion_pb.py")
         script_01.main()
@@ -55,7 +55,7 @@ def main():
         sys.exit(1)
 
     # ── PASO 2: Cargar CSV en PocketBase (con auto-detección) ─
-    print("\n━━━ PASO 2/2: Cargar CSV en PocketBase ━━━")
+    print("\n━━━ PASO 2/3: Cargar CSV en PocketBase ━━━")
     print("  (Se salta automáticamente si ya hay datos cargados)")
     try:
         script_02 = _cargar_modulo("02_cargar_csv_a_pb.py")
@@ -67,6 +67,19 @@ def main():
             sys.exit(e.code)
     except Exception as e:
         print(f"❌ Error en carga de CSV: {e}")
+        sys.exit(1)
+
+    # ── PASO 3: Configurar colecciones de administración ──────
+    print("\n━━━ PASO 3/3: Configurando colecciones de administración... ━━━")
+    try:
+        script_admin = _cargar_modulo("setup_pocketbase_admin.py")
+        script_admin.main()
+    except SystemExit as e:
+        if e.code != 0:
+            print(f"❌ Script de admin terminó con error (código {e.code}). Abortando.")
+            sys.exit(e.code)
+    except Exception as e:
+        print(f"❌ Error en setup de administración: {e}")
         sys.exit(1)
 
     # ── Instrucciones finales ─────────────────────────────────
