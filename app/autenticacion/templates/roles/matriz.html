@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Matriz de permisos — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Administración › <a href="/auth/roles" style="color:var(--at-muted);text-decoration:none">Roles</a> › Matriz{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-table" style="color:var(--at-coral);margin-right:8px"></i>Matriz de permisos</h1>
+  <p>Vista global de permisos por rol y módulo.</p>
+</div>
+<div class="at-table-wrapper">
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead>
+        <tr>
+          <th style="min-width:160px">Módulo</th>
+          {% for rol in roles %}<th style="text-align:center;min-width:120px">{{ rol.nombre }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for modulo in modulos %}
+        <tr>
+          <td><strong>{{ modulo.nombre_display }}</strong></td>
+          {% for rol in roles %}
+          <td style="text-align:center">
+            {% set acciones = matriz.get(rol.id, {}).get(modulo.clave, []) %}
+            {% if acciones %}
+            <a href="/auth/roles/{{ rol.id }}/permisos" title="{{ acciones|join(', ') }}"
+               style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 6px;border-radius:8px;text-decoration:none">
+              {{ acciones|join(' · ') }}
+            </a>
+            {% else %}
+            <span style="color:var(--at-border);font-size:18px">—</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Validación de Integridad — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}<a href="/modelo" style="color:var(--at-muted);text-decoration:none">Modelo Dimensional</a> › Validar integridad{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-shield-check" style="color:var(--at-coral);margin-right:8px"></i>Validar integridad del modelo</h1>
+  <p>Verifica FKs en fact_vuelo, NULLs y rows pk=0 en dimensiones opcionales.</p>
+</div>
+
+{% if resultado is none %}
+<div class="at-card" style="max-width:480px;text-align:center;padding:40px">
+  <i class="bi bi-shield-check" style="font-size:48px;color:var(--at-muted);opacity:.4;display:block;margin-bottom:16px"></i>
+  <p style="color:var(--at-muted);margin-bottom:20px">Ejecuta la validación para verificar la integridad referencial del modelo dimensional.</p>
+  <form action="/modelo/validar" method="post">
+    <button type="submit" class="btn-at-primary">
+      <i class="bi bi-play-fill"></i> Ejecutar validación
+    </button>
+  </form>
+</div>
+{% else %}
+
+<div class="d-flex align-items-center gap-3 mb-4">
+  {% if resultado.ok %}
+  <div style="background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;padding:12px 20px;border-radius:10px;display:flex;align-items:center;gap:10px">
+    <i class="bi bi-check-circle-fill" style="font-size:20px"></i>
+    <strong>Sin problemas de integridad — {{ resultado.tablas_verificadas }} FKs verificadas</strong>
+  </div>
+  {% else %}
+  <div style="background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:12px 20px;border-radius:10px;display:flex;align-items:center;gap:10px">
+    <i class="bi bi-exclamation-triangle-fill" style="font-size:20px"></i>
+    <strong>{{ resultado.errores|length }} problema(s) detectado(s)</strong>
+  </div>
+  {% endif %}
+  <div class="d-flex gap-2 ms-auto">
+    <form action="/modelo/validar" method="post" style="display:inline">
+      <button type="submit" class="btn-at-ghost"><i class="bi bi-arrow-repeat"></i> Re-validar</button>
+    </form>
+    {% if resultado.errores %}
+    <a href="/modelo/validar/export" class="btn-at-ghost"><i class="bi bi-download"></i> Exportar CSV</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if resultado.errores %}
+<div class="at-table-wrapper">
+  <div class="at-table-header"><span class="at-table-title">Errores encontrados</span></div>
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead><tr><th>Tabla</th><th>Columna</th><th>Tipo</th><th>Descripción</th></tr></thead>
+      <tbody>
+        {% for err in resultado.errores %}
+        <tr>
+          <td><code>{{ err.tabla }}</code></td>
+          <td><code>{{ err.get('columna', '—') }}</code></td>
+          <td>
+            <span style="font-size:11px;padding:2px 8px;border-radius:20px;
+              {% if err.tipo == 'FK_HUERFANA' %}background:#fef2f2;color:#991b1b
+              {% elif err.tipo == 'NULL_FK' %}background:#fffbeb;color:#92400e
+              {% else %}background:#f8fafc;color:#64748b{% endif %}">
+              {{ err.tipo }}
+            </span>
+          </td>
+          <td style="font-size:13px;color:var(--at-muted)">{{ err.descripcion }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

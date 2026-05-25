@@ -15,7 +15,9 @@
       "Bash(python scripts/setup_pocketbase_admin.py)",
       "Bash(dir \"c:\\\\proyectos\\\\minio-elt\" /b)",
       "Bash(mkdir -p /c/proyectos/minio-elt/.kiro/steering /c/proyectos/minio-elt/.kiro/specs/aerotrack && echo \"Directories created\")",
-      "PowerShell(Get-ChildItem \"c:\\\\proyectos\\\\minio-elt\\\\app\" -Recurse | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\(\"c:\\\\proyectos\\\\minio-elt\\\\app\\\\\",\"app\\\\\"\\) })"
+      "PowerShell(Get-ChildItem \"c:\\\\proyectos\\\\minio-elt\\\\app\" -Recurse | Select-Object FullName | ForEach-Object { $_.FullName.Replace\\(\"c:\\\\proyectos\\\\minio-elt\\\\app\\\\\",\"app\\\\\"\\) })",
+      "Bash(git mv *)",
+      "Bash(git -C \"c:/proyectos/minio-elt\" show 2923050 --stat)"
     ],
     "additionalDirectories": [
       "C:\\proyectos\\minio-elt\\.kiro"

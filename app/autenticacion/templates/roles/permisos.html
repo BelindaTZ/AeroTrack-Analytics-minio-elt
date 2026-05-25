@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Permisos de {{ rol.nombre }} — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Administración › <a href="/auth/roles" style="color:var(--at-muted);text-decoration:none">Roles</a> › {{ rol.nombre }} › Permisos{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-key-fill" style="color:var(--at-coral);margin-right:8px"></i>Permisos — {{ rol.nombre }}</h1>
+  <p>Selecciona los permisos disponibles para este rol.</p>
+</div>
+
+<form action="/auth/roles/{{ rol.id }}/permisos" method="post">
+  <div class="at-table-wrapper">
+    <div class="at-table-header">
+      <span class="at-table-title">Matriz de permisos</span>
+      <button type="submit" class="btn-at-primary"><i class="bi bi-floppy-fill"></i> Guardar permisos</button>
+    </div>
+    <div class="at-table-scroll">
+      <table class="at-table">
+        <thead>
+          <tr>
+            <th style="min-width:160px">Módulo</th>
+            {% for accion in todas_acciones %}<th style="text-align:center;min-width:80px">{{ accion }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for modulo in modulos %}
+          <tr>
+            <td><strong>{{ modulo.nombre_display }}</strong></td>
+            {% for accion in todas_acciones %}
+            {% set tiene = accion in (permisos_actuales.get(modulo.clave) or []) %}
+            {% set disponible = namespace(found=false) %}
+            {% for p in permisos_disponibles %}
+              {% set mod_exp = p.expand.modulo_id if p.expand else {} %}
+              {% if mod_exp.clave == modulo.clave and p.accion == accion %}
+                {% set disponible.found = true %}
+              {% endif %}
+            {% endfor %}
+            <td style="text-align:center">
+              {% if disponible.found %}
+              <input type="checkbox" name="perm_{{ modulo.clave }}_{{ accion }}"
+                     style="width:16px;height:16px;cursor:pointer"
+                     {% if tiene %}checked{% endif %} />
+              {% else %}
+              <span style="color:#e2e8f0;font-size:14px">—</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div style="margin-top:16px;display:flex;gap:8px">
+    <button type="submit" class="btn-at-primary"><i class="bi bi-floppy-fill"></i> Guardar permisos</button>
+    <a href="/auth/roles" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Volver</a>
+  </div>
+</form>
+{% endblock %}

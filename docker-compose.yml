@@ -226,19 +226,20 @@ services:
     container_name: fastapi-app
     ports:
       - "8000:8000"   # UI en http://localhost:8000
+    env_file:
+      - .env
     environment:
       - MINIO_URL_DOCKER=minio:9000
-      - MINIO_ACCESS=${MINIO_ACCESS}
-      - MINIO_SECRET=${MINIO_SECRET}
-      - MINIO_BUCKET_RAW=${MINIO_BUCKET_RAW}
-      - MINIO_BUCKET_DIMS=${MINIO_BUCKET_DIMS}
-      - SECRET_KEY=${SECRET_KEY}
+      - PB_URL_DOCKER=http://pocketbase:8090
+      - AIRFLOW_URL=http://airflow-webserver:8080
     volumes:
-      - ./webapp:/app
+      - ./app:/code/app
     depends_on:
       minio-init:
         condition: service_completed_successfully
+      pocketbase:
+        condition: service_healthy
     networks:
       - elt-network
     restart: unless-stopped
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

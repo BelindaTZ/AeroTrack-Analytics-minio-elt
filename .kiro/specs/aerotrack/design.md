@@ -148,6 +148,94 @@ El sistema usa dos capas de configuración:
 
 \* `sensible=true` → enmascarado con •••• en UI
 
+### Application Package Structure
+
+Cada subdirectorio de `app/` es un paquete Python independiente con responsabilidad única. La regla general: **ningún archivo Python vive suelto en la raíz del módulo** — todo se agrupa en subcarpetas por función. Las templates HTML van **dentro del módulo al que pertenecen**, no en un directorio centralizado.
+
+#### Convención de subcarpetas por módulo
+
+| Carpeta dentro del módulo | Contenido |
+|---|---|
+| `router.py` | Punto de entrada del módulo — registra todos los endpoints. Importa desde las subcarpetas. |
+| `<función>/` | Subcarpeta con un `__init__.py` que agrupa archivos relacionados (ej. `jwt/`, `rbac/`, `clients/`, `data/`) |
+| `templates/` | Templates Jinja2 propios del módulo. Sin `__init__.py` — no es paquete Python. |
+
+#### Estructura real de Entrega 1
+
+```
+app/
+├── config.py                       # Variables de entorno centralizadas
+├── main.py                         # FastAPI app — registra routers de todos los módulos
+│
+├── autenticacion/                  # Seguridad: JWT, RBAC, usuarios, roles
+│   ├── router.py                   # login, logout, perfil
+│   ├── jwt/
+│   │   └── service.py              # crear_token(), verificar_token()
+│   ├── rbac/
+│   │   ├── permisos.py             # endpoints /auth/permisos y /auth/roles/{id}/permisos
+│   │   └── roles_admin.py          # endpoints /auth/roles CRUD
+│   ├── usuarios/
+│   │   └── usuarios.py             # endpoints /auth/usuarios CRUD
+│   └── templates/
+│       ├── login.html / perfil.html
+│       ├── roles/  (form, lista, matriz, permisos)
+│       └── usuarios/  (form, lista)
+│
+├── pipeline_elt/                   # Control del DAG Airflow desde la UI
+│   ├── router.py                   # endpoints /pipeline/*
+│   ├── clients/
+│   │   └── airflow_client.py       # httpx async — Airflow REST API
+│   └── templates/pipeline/  (panel, historial, logs)
+│
+├── modelo_dimensional/             # CRUD Parquet de las 12 tablas del modelo estrella
+│   ├── router.py                   # endpoints /modelo/*
+│   ├── data/
+│   │   └── service.py              # read/write Parquet, paginación, validación FK
+│   └── templates/modelo_dimensional/  (lista_tablas, lista_registros, form, detalle, validacion)
+│
+└── shared/                         # Código reutilizable — NO contiene rutas ni lógica de negocio
+    ├── deps.py                     # Dependencias FastAPI: get_current_user, require_permission, render()
+    ├── templates.py                # Instancia Jinja2 multi-directorio + TABLAS + MODULOS_SIDEBAR
+    ├── clients/
+    │   ├── pb_client.py            # Cliente HTTP síncrono para PocketBase REST API
+    │   └── minio_client.py         # read_parquet, write_parquet, stat_parquet
+    ├── utils/
+    │   ├── audit.py                # registrar() — INSERT-only en pb_auditoria
+    │   ├── email_utils.py          # send_welcome_email() via SMTP
+    │   └── password_utils.py       # generar_contrasena_temporal()
+    └── templates/
+        ├── base.html               # Layout base Bootstrap 5 con sidebar dinámico
+        └── error.html              # Página de error genérica (403, 404, 500)
+```
+
+#### El módulo `shared/` — código compartido sin duplicar
+
+`shared/` es la única carpeta que **todos los módulos pueden importar**. Su propósito es evitar duplicación de código transversal. Las reglas de lo que pertenece aquí:
+
+- **`shared/clients/`** — clientes de servicios externos (PocketBase, MinIO). Un solo cliente por servicio, importado por cualquier módulo que lo necesite. Ningún módulo crea su propio cliente HTTP.
+- **`shared/utils/`** — funciones utilitarias sin estado que no pertenecen a ningún módulo en particular: auditoría, email, contraseñas.
+- **`shared/deps.py`** — dependencias FastAPI reutilizables: decodificación JWT, verificación de permisos, helper `render()` que inyecta el sidebar automáticamente.
+- **`shared/templates.py`** — única fuente de verdad para: instancia `Jinja2Templates`, catálogo de tablas (`TABLAS`), módulos del sidebar (`MODULOS_SIDEBAR`), tamaño de página (`PAGE_SIZE`).
+- **`shared/templates/`** — templates base compartidos entre módulos (`base.html`, `error.html`). Los módulos los heredan con `{% extends "base.html" %}`.
+
+Lo que **no** pertenece en `shared/`: routers, lógica de negocio específica de un módulo, modelos de datos de un dominio concreto.
+
+#### Carga de templates multi-directorio
+
+Jinja2 busca templates en este orden de directorios:
+
+```python
+# shared/templates.py
+templates.env.loader = FileSystemLoader([
+    "shared/templates",              # base.html, error.html (1º — mayor prioridad)
+    "autenticacion/templates",       # login.html, perfil.html, roles/, usuarios/
+    "pipeline_elt/templates",        # pipeline/panel.html, historial.html, logs.html
+    "modelo_dimensional/templates",  # modelo_dimensional/*.html
+])
+```
+
+Los nombres de template en el código (`render(request, "roles/lista.html", ...)`) se resuelven contra esta lista. Al agregar módulos en Entregas 2-3 se añade su directorio al loader.
+
 ### Delivery Plan
 
 | Package | Entrega | Status | Dependencies |

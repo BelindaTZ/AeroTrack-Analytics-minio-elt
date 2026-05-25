@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{% if modo == 'crear' %}Nuevo registro{% else %}Editar registro{% endif %} — {{ tabla_info.label }}{% endblock %}
+{% block breadcrumb %}
+  <a href="/modelo" style="color:var(--at-muted);text-decoration:none">Modelo Dimensional</a> ›
+  <a href="/modelo/{{ tabla }}" style="color:var(--at-muted);text-decoration:none">{{ tabla_info.label }}</a> ›
+  {% if modo == 'crear' %}Nuevo{% else %}Editar{% endif %}
+{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1>
+    <i class="bi {% if modo == 'crear' %}bi-plus-square-fill{% else %}bi-pencil-square{% endif %}" style="color:var(--at-coral);margin-right:8px"></i>
+    {% if modo == 'crear' %}Nuevo registro{% else %}Editar registro{% endif %} — {{ tabla_info.label }}
+  </h1>
+</div>
+
+{% if error %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div></div>{% endif %}
+
+<div class="at-card" style="max-width:720px">
+  <form action="/modelo/{{ tabla }}/{% if modo == 'crear' %}nuevo{% else %}{{ pk_val }}/editar{% endif %}" method="post">
+    <div class="row g-3">
+      {% for col in columnas %}
+      <div class="col-sm-6">
+        <label class="form-label-at">{{ col }}</label>
+        {% if col == pk %}
+        <input type="text" name="{{ col }}" class="form-control-at"
+               value="{{ registro.get(col, '') }}"
+               {% if modo == 'editar' %}disabled{% else %}placeholder="Auto"{% endif %} />
+        {% elif 'int' in dtypes[col] or 'float' in dtypes[col] %}
+        <input type="number" name="{{ col }}" class="form-control-at"
+               value="{{ registro.get(col, '') }}"
+               {% if 'float' in dtypes[col] %}step="any"{% endif %} />
+        {% else %}
+        <input type="text" name="{{ col }}" class="form-control-at"
+               value="{{ registro.get(col, '') }}" />
+        {% endif %}
+        <span style="font-size:10px;color:var(--at-muted)">{{ dtypes[col] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn-at-primary">
+        <i class="bi bi-floppy-fill"></i>
+        {% if modo == 'crear' %}Crear registro{% else %}Guardar cambios{% endif %}
+      </button>
+      <a href="/modelo/{{ tabla }}" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
