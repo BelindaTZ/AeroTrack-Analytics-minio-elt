@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Pipeline ELT — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Pipeline ELT{% endblock %}
+{% block head_extra %}
+<style>
+  .task-card{background:var(--at-surface);border:1px solid var(--at-border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px}
+  .task-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .task-icon.running{background:#eff6ff;color:#2563eb}
+  .task-icon.success{background:#ecfdf5;color:#16a34a}
+  .task-icon.failed{background:#fef2f2;color:#dc2626}
+  .task-icon.queued{background:#fffbeb;color:#d97706}
+  .task-icon.none{background:#f8fafc;color:#94a3b8}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-gear-fill" style="color:var(--at-coral);margin-right:8px"></i>Pipeline ELT</h1>
+  <p>Control y monitoreo del DAG <code>{{ dag_id }}</code>.</p>
+</div>
+
+{% set state = estado.state if estado else 'no_runs' %}
+{% set is_running = state in ('running', 'queued') %}
+
+<!-- Estado actual -->
+<div class="row g-3 mb-4" id="estado-panel">
+  <div class="col-md-8">
+    <div class="at-card">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 style="font-size:15px;font-weight:700;margin:0">Estado actual</h5>
+        <span style="font-size:12px;color:var(--at-muted)">Auto-refresh cada 10s</span>
+      </div>
+      {% if state == 'no_runs' %}
+      <div style="text-align:center;padding:24px;color:var(--at-muted)">
+        <i class="bi bi-hourglass" style="font-size:32px;display:block;margin-bottom:8px;opacity:.4"></i>
+        Sin ejecuciones anteriores. Ejecuta el pipeline para comenzar.
+      </div>
+      {% else %}
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <span class="dot dot-{{ state }}" style="width:12px;height:12px"></span>
+        <strong style="font-size:16px;text-transform:capitalize">{{ state }}</strong>
+        <span style="font-size:13px;color:var(--at-muted)">{{ estado.dag_run_id or '' }}</span>
+      </div>
+      {% if estado.task_instances %}
+      <div class="d-flex flex-column gap-2">
+        {% for task in estado.task_instances %}
+        {% set ts = task.state or 'none' %}
+        <div class="task-card">
+          <div class="task-icon {{ ts }}">
+            <i class="bi bi-{% if ts == 'running' %}arrow-repeat{% elif ts == 'success' %}check-lg{% elif ts == 'failed' %}x-lg{% elif ts == 'queued' %}clock{% else %}dash{% endif %}"></i>
+          </div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px">{{ task.task_id }}</div>
+            <div style="font-size:12px;color:var(--at-muted)">{{ ts }}</div>
+          </div>
+          {% if ts == 'failed' %}
+          <a href="/pipeline/logs/{{ estado.dag_run_id }}/{{ task.task_id }}" class="btn-at-ghost" style="font-size:12px">
+            <i class="bi bi-bug"></i> Ver error
+          </a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="at-card d-flex flex-column gap-3">
+      <h5 style="font-size:15px;font-weight:700;margin:0">Acciones</h5>
+      <form action="/pipeline/trigger" method="post">
+        <button type="submit" class="btn-at-coral w-100 justify-content-center"
+                id="btn-trigger" {% if is_running %}disabled{% endif %}>
+          <i class="bi bi-play-fill"></i>
+          {% if is_running %}En ejecución…{% else %}Ejecutar ahora{% endif %}
+        </button>
+        {% if is_running %}
+        <p style="font-size:12px;color:var(--at-muted);margin-top:8px;text-align:center">
+          El pipeline ya está en ejecución. Espera a que finalice.
+        </p>
+        {% endif %}
+      </form>
+      <a href="/pipeline/historial" class="btn-at-ghost justify-content-center">
+        <i class="bi bi-clock-history"></i> Ver historial
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Últimas ejecuciones -->
+{% if historial %}
+<div class="at-table-wrapper">
+  <div class="at-table-header"><span class="at-table-title">Últimas ejecuciones</span></div>
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead><tr><th>Run ID</th><th>Estado</th><th>Inicio</th><th>Fin</th></tr></thead>
+      <tbody>
+        {% for run in historial %}
+        <tr>
+          <td style="font-size:12px;font-family:monospace">{{ run.dag_run_id }}</td>
+          <td>
+            <span class="dot dot-{{ run.state }}"></span>{{ run.state }}
+          </td>
+          <td style="font-size:12px;color:var(--at-muted)">{{ (run.start_date or '')[:19] }}</td>
+          <td style="font-size:12px;color:var(--at-muted)">{{ (run.end_date or '')[:19] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  // Auto-refresh estado cada 10 segundos
+  const isRunning = {{ 'true' if is_running else 'false' }};
+  if (isRunning) {
+    setTimeout(() => location.reload(), 10000);
+  } else {
+    setInterval(async () => {
+      const r = await fetch('/pipeline/estado');
+      const data = await r.json();
+      if (data.state && ['running','queued'].includes(data.state)) {
+        location.reload();
+      }
+    }, 10000);
+  }
+</script>
+{% endblock %}

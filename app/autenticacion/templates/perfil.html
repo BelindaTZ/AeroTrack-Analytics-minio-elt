@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Mi Perfil — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Mi Perfil{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-person-circle" style="color:var(--at-coral);margin-right:8px"></i>Mi Perfil</h1>
+  <p>Información de tu cuenta y cambio de contraseña.</p>
+</div>
+
+{% if msg %}<div class="flash-bar"><div class="flash-success"><i class="bi bi-check-circle-fill"></i> {{ msg }}</div></div>{% endif %}
+{% if error %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div></div>{% endif %}
+
+<div class="row g-4">
+  <!-- Datos del perfil -->
+  <div class="col-lg-6">
+    <div class="at-card">
+      <h5 style="font-size:15px;font-weight:700;margin-bottom:20px">
+        <i class="bi bi-person-badge me-2" style="color:var(--at-coral)"></i>Información de la cuenta
+      </h5>
+      <div class="detail-grid">
+        <div class="detail-field">
+          <div class="key">Nombre</div>
+          <div class="val">{{ record.nombre if record else '—' }}</div>
+        </div>
+        <div class="detail-field">
+          <div class="key">Email</div>
+          <div class="val">{{ record.email if record else '—' }}</div>
+        </div>
+        <div class="detail-field">
+          <div class="key">Rol</div>
+          <div class="val">{{ rol.nombre if rol else '—' }}</div>
+        </div>
+        <div class="detail-field">
+          <div class="key">Estado</div>
+          <div class="val">
+            {% if record and record.activo %}
+            <span class="badge-active"><i class="bi bi-check-circle me-1"></i>Activo</span>
+            {% else %}
+            <span class="badge-inactive"><i class="bi bi-x-circle me-1"></i>Inactivo</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="detail-field">
+          <div class="key">Miembro desde</div>
+          <div class="val">{{ record.created[:10] if record and record.created else '—' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cambio de contraseña -->
+  <div class="col-lg-6">
+    <div class="at-card">
+      <h5 style="font-size:15px;font-weight:700;margin-bottom:20px">
+        <i class="bi bi-key-fill me-2" style="color:var(--at-coral)"></i>Cambiar contraseña
+      </h5>
+      <form action="/auth/perfil/password" method="post">
+        <div style="margin-bottom:14px">
+          <label class="form-label-at">Contraseña actual</label>
+          <input type="password" name="password_actual" class="form-control-at" required />
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="form-label-at">Nueva contraseña</label>
+          <input type="password" name="password_nuevo" class="form-control-at" required minlength="8" />
+        </div>
+        <div style="margin-bottom:20px">
+          <label class="form-label-at">Confirmar nueva contraseña</label>
+          <input type="password" name="password_confirm" class="form-control-at" required minlength="8" />
+        </div>
+        <button type="submit" class="btn-at-primary">
+          <i class="bi bi-floppy-fill"></i> Actualizar contraseña
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

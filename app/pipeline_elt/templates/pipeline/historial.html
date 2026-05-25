@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Historial Pipeline — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}<a href="/pipeline" style="color:var(--at-muted);text-decoration:none">Pipeline ELT</a> › Historial{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-clock-history" style="color:var(--at-coral);margin-right:8px"></i>Historial de ejecuciones</h1>
+  <p>Registro de las últimas 50 ejecuciones del DAG <code>{{ dag_id }}</code>.</p>
+</div>
+
+{% if runs %}
+<div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">Ejecuciones ({{ runs|length }})</span>
+    <form action="/pipeline/trigger" method="post">
+      <button type="submit" class="btn-at-coral"><i class="bi bi-play-fill"></i> Nueva ejecución</button>
+    </form>
+  </div>
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead><tr><th>Run ID</th><th>Estado</th><th>Inicio</th><th>Fin</th><th>Duración</th><th style="text-align:right">Logs</th></tr></thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td style="font-size:11px;font-family:monospace;max-width:280px">{{ run.dag_run_id }}</td>
+          <td><span class="dot dot-{{ run.state }}"></span>{{ run.state }}</td>
+          <td style="font-size:12px;color:var(--at-muted)">{{ (run.start_date or '')[:19].replace('T',' ') }}</td>
+          <td style="font-size:12px;color:var(--at-muted)">{{ (run.end_date or '')[:19].replace('T',' ') }}</td>
+          <td style="font-size:12px;color:var(--at-muted)">
+            {% if run.start_date and run.end_date %}
+            {{ ((run.end_date[:19]|replace('T',' '))|string) }}
+            {% else %}—{% endif %}
+          </td>
+          <td style="text-align:right">
+            <a href="/pipeline/logs/{{ run.dag_run_id }}/extract" class="btn-icon view me-1" title="Log extract">
+              <i class="bi bi-file-text"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="at-card" style="text-align:center;padding:60px">
+  <i class="bi bi-clock-history" style="font-size:40px;display:block;margin-bottom:12px;opacity:.4;color:var(--at-muted)"></i>
+  <strong>Sin ejecuciones disponibles</strong>
+  <p style="color:var(--at-muted);margin-top:8px;font-size:13px">Ejecuta el pipeline para ver el historial.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ tabla_info.label }} — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}<a href="/modelo" style="color:var(--at-muted);text-decoration:none">Modelo Dimensional</a> › {{ tabla_info.label }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi {{ tabla_info.icon }}" style="color:var(--at-coral);margin-right:6px"></i>{{ tabla_info.label }}</h1>
+  <p>Tabla <code>{{ tabla }}</code> — {{ total }} registros en total</p>
+</div>
+
+<div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">Registros</span>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <form method="get" action="/modelo/{{ tabla }}" id="search-form">
+        <div class="at-search-wrap">
+          <i class="bi bi-search"></i>
+          <input type="text" name="q" class="at-search" placeholder="Buscar…" value="{{ q }}" id="search-input" autocomplete="off" />
+        </div>
+      </form>
+      {% if q %}<a href="/modelo/{{ tabla }}" class="btn-at-ghost"><i class="bi bi-x"></i> Limpiar</a>{% endif %}
+    </div>
+  </div>
+
+  {% if rows %}
+  <div class="at-table-scroll">
+    <table class="at-table" id="data-table">
+      <thead>
+        <tr>
+          {% for col in columnas %}<th>{{ col }}</th>{% endfor %}
+          <th style="text-align:right;width:100px">ACCIONES</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% for col in columnas %}
+          <td title="{{ row[col] }}">
+            {% if col == tabla_info.pk %}<span class="badge-pk">{{ row[col] }}</span>
+            {% else %}{{ row[col] if row[col] is not none else '—' }}{% endif %}
+          </td>
+          {% endfor %}
+          <td class="actions-col" style="text-align:right">
+            <a href="/modelo/{{ tabla }}/{{ row[tabla_info.pk] }}/ver" class="btn-icon view me-1" title="Ver"><i class="bi bi-eye"></i></a>
+            <a href="/modelo/{{ tabla }}/{{ row[tabla_info.pk] }}/editar" class="btn-icon edit me-1" title="Editar"><i class="bi bi-pencil"></i></a>
+            <button class="btn-icon danger" title="Eliminar"
+                    onclick="confirmarEliminar('{{ row[tabla_info.pk] }}')">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="at-pagination">
+    <span>Mostrando <strong>{{ (page-1)*page_size+1 }}</strong> a <strong>{{ [page*page_size, total]|min }}</strong> de <strong>{{ total }}</strong>{% if q %} · filtrado por "{{ q }}"{% endif %}</span>
+    <div class="pag-btns">
+      <a href="/modelo/{{ tabla }}?page={{ page-1 }}{% if q %}&q={{ q }}{% endif %}" class="pag-btn {% if page==1 %}disabled{% endif %}"><i class="bi bi-chevron-left"></i></a>
+      {% set sp=[1,page-2]|max %} {% set ep=[total_pages,page+2]|min %}
+      {% if sp>1 %}<a href="/modelo/{{ tabla }}?page=1{% if q %}&q={{ q }}{% endif %}" class="pag-btn">1</a>{% if sp>2 %}<span class="pag-btn disabled">…</span>{% endif %}{% endif %}
+      {% for p in range(sp,ep+1) %}<a href="/modelo/{{ tabla }}?page={{ p }}{% if q %}&q={{ q }}{% endif %}" class="pag-btn {% if p==page %}active{% endif %}">{{ p }}</a>{% endfor %}
+      {% if ep<total_pages %}{% if ep<total_pages-1 %}<span class="pag-btn disabled">…</span>{% endif %}<a href="/modelo/{{ tabla }}?page={{ total_pages }}{% if q %}&q={{ q }}{% endif %}" class="pag-btn">{{ total_pages }}</a>{% endif %}
+      <a href="/modelo/{{ tabla }}?page={{ page+1 }}{% if q %}&q={{ q }}{% endif %}" class="pag-btn {% if page==total_pages %}disabled{% endif %}"><i class="bi bi-chevron-right"></i></a>
+    </div>
+  </div>
+  {% else %}
+  <div style="padding:60px;text-align:center;color:var(--at-muted)">
+    <i class="bi bi-inbox" style="font-size:40px;display:block;margin-bottom:12px;opacity:.4"></i>
+    <strong>No se encontraron registros</strong>
+    {% if q %}<p style="margin-top:6px;font-size:13px">No hay resultados para "<em>{{ q }}</em>". <a href="/modelo/{{ tabla }}" style="color:var(--at-navy)">Limpiar</a></p>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<a href="/modelo/{{ tabla }}/nuevo" class="fab"><i class="bi bi-plus-lg"></i> Nuevo registro</a>
+
+<!-- Modal eliminación -->
+<div class="modal fade" id="modalEliminar" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.15)">
+      <div class="modal-header" style="border-bottom:1px solid var(--at-border);padding:18px 24px">
+        <h5 class="modal-title" style="font-size:16px;font-weight:700"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar eliminación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="padding:20px 24px;font-size:14px;color:var(--at-muted)">
+        ¿Eliminar el registro <strong id="modal-id-text" style="color:var(--at-text)"></strong>? Esta acción no se puede deshacer.
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--at-border);padding:14px 24px;gap:8px">
+        <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+        <form id="form-eliminar" method="post" action="">
+          <button type="submit" class="btn-at-coral" style="background:#dc2626"><i class="bi bi-trash3"></i> Sí, eliminar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const searchInput=document.getElementById('search-input');
+let timer;
+if(searchInput){searchInput.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>document.getElementById('search-form').submit(),400)})}
+function confirmarEliminar(id){
+  document.getElementById('modal-id-text').textContent=id;
+  document.getElementById('form-eliminar').action='/modelo/{{ tabla }}/'+id+'/eliminar';
+  new bootstrap.Modal(document.getElementById('modalEliminar')).show();
+}
+</script>
+{% endblock %}

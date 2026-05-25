@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Usuarios — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Administración › Usuarios{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-people-fill" style="color:var(--at-coral);margin-right:8px"></i>Usuarios</h1>
+  <p>Gestión de cuentas de usuario del sistema.</p>
+</div>
+
+{% if error_crear %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error_crear }}</div></div>{% endif %}
+
+<div class="at-table-wrapper mb-4">
+  <div class="at-table-header">
+    <span class="at-table-title">Lista de usuarios ({{ total }})</span>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <form method="get" class="d-flex gap-2 align-items-center">
+        <div class="at-search-wrap">
+          <i class="bi bi-search"></i>
+          <input type="text" name="q" class="at-search" placeholder="Buscar…" value="{{ q }}" />
+        </div>
+        <select name="rol_id" class="form-control-at" style="width:140px">
+          <option value="">Todos los roles</option>
+          {% for rol in roles %}<option value="{{ rol.id }}" {% if filtro_rol == rol.id %}selected{% endif %}>{{ rol.nombre }}</option>{% endfor %}
+        </select>
+        <select name="activo" class="form-control-at" style="width:110px">
+          <option value="">Todos</option>
+          <option value="true" {% if filtro_activo == 'true' %}selected{% endif %}>Activos</option>
+          <option value="false" {% if filtro_activo == 'false' %}selected{% endif %}>Inactivos</option>
+        </select>
+        <button type="submit" class="btn-at-primary" style="padding:7px 12px"><i class="bi bi-funnel"></i></button>
+      </form>
+      <button class="btn-at-coral" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+        <i class="bi bi-plus-lg"></i> Nuevo usuario
+      </button>
+    </div>
+  </div>
+
+  {% if usuarios %}
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Creado</th><th style="text-align:right">Acciones</th></tr></thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td><strong>{{ u.nombre }}</strong></td>
+          <td style="color:var(--at-muted)">{{ u.email }}</td>
+          <td>
+            {% set rol_u = u.expand.rol_id if u.expand else {} %}
+            <span style="font-size:12px;background:#f1f5f9;padding:2px 8px;border-radius:20px">{{ rol_u.nombre if rol_u else u.rol_id }}</span>
+          </td>
+          <td>
+            {% if u.activo %}<span class="badge-active">Activo</span>{% else %}<span class="badge-inactive">Inactivo</span>{% endif %}
+          </td>
+          <td style="color:var(--at-muted);font-size:12px">{{ u.created[:10] if u.created else '—' }}</td>
+          <td class="actions-col" style="text-align:right">
+            <a href="/auth/usuarios/{{ u.id }}" class="btn-icon edit me-1" title="Editar"><i class="bi bi-pencil"></i></a>
+            <form action="/auth/usuarios/{{ u.id }}/estado" method="post" style="display:inline">
+              <button type="submit" class="btn-icon {% if u.activo %}danger{% else %}view{% endif %}" title="{% if u.activo %}Desactivar{% else %}Activar{% endif %}">
+                <i class="bi bi-{% if u.activo %}toggle-on{% else %}toggle-off{% endif %}"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="at-pagination">
+    <span>Mostrando {{ (page-1)*per_page+1 }}–{{ [page*per_page, total]|min }} de {{ total }}</span>
+    <div class="pag-btns">
+      <a href="?page={{ page-1 }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}" class="pag-btn {% if page==1 %}disabled{% endif %}"><i class="bi bi-chevron-left"></i></a>
+      {% for p in range(1, total_pages+1) %}<a href="?page={{ p }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}" class="pag-btn {% if p==page %}active{% endif %}">{{ p }}</a>{% endfor %}
+      <a href="?page={{ page+1 }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}" class="pag-btn {% if page==total_pages %}disabled{% endif %}"><i class="bi bi-chevron-right"></i></a>
+    </div>
+  </div>
+  {% else %}
+  <div style="padding:60px;text-align:center;color:var(--at-muted)">
+    <i class="bi bi-people" style="font-size:40px;display:block;margin-bottom:12px;opacity:.4"></i>
+    <strong>No se encontraron usuarios</strong>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal nuevo usuario -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.15)">
+      <div class="modal-header" style="border-bottom:1px solid var(--at-border);padding:18px 24px">
+        <h5 class="modal-title" style="font-size:16px;font-weight:700"><i class="bi bi-person-plus-fill text-primary me-2"></i>Nuevo usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="/auth/usuarios" method="post">
+        <div class="modal-body" style="padding:20px 24px">
+          <div style="margin-bottom:14px">
+            <label class="form-label-at">Nombre completo</label>
+            <input type="text" name="nombre" class="form-control-at" required />
+          </div>
+          <div style="margin-bottom:14px">
+            <label class="form-label-at">Email</label>
+            <input type="email" name="email" class="form-control-at" required />
+          </div>
+          <div style="margin-bottom:6px">
+            <label class="form-label-at">Rol</label>
+            <select name="rol_id" class="form-control-at" required>
+              {% for rol in roles %}<option value="{{ rol.id }}">{{ rol.nombre }}</option>{% endfor %}
+            </select>
+          </div>
+          <p style="font-size:12px;color:var(--at-muted);margin-top:8px">
+            <i class="bi bi-info-circle me-1"></i>Se generará una contraseña temporal y se enviará por email.
+          </p>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid var(--at-border);padding:14px 24px;gap:8px">
+          <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-at-primary"><i class="bi bi-person-check-fill"></i> Crear usuario</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

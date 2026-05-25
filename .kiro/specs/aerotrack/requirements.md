@@ -76,8 +76,21 @@ THE SYSTEM SHALL NOT display any option to modify their own role
 WHEN an Administrator accesses Administración → Usuarios
 THE SYSTEM SHALL display a paginated table of all users with search and filters by role and status
 
-WHEN an Administrator submits a new user form with name, email, temporary password, and role
-THE SYSTEM SHALL create the user in PocketBase's `app_users` collection and confirm success
+WHEN an Administrator submits a new user form with name, email, and role
+THE SYSTEM SHALL auto-generate a temporary password using the following algorithm:
+take the first 4 characters of the user's first name (lowercase, ASCII-normalized, diacritics stripped),
+append 4 random digits, append 1 random uppercase ASCII letter, append the literal character "!";
+resulting in a 10-character password that satisfies complexity requirements
+(e.g., name "Belinda" → "beli4829R!")
+THE SYSTEM SHALL then create the user in PocketBase's `app_users` collection and confirm success
+
+WHEN a new user is successfully created
+THE SYSTEM SHALL send a welcome email to the new user's address using the SMTP configuration
+from `configuracion_sistema`, including: the platform name, their assigned email, the auto-generated
+temporary password, and a direct link to /login;
+if the SMTP service is not configured or the send fails,
+THE SYSTEM SHALL still confirm user creation but display a non-blocking warning
+"Usuario creado. No se pudo enviar el email de bienvenida — verifique la configuración SMTP"
 
 WHEN an Administrator edits an existing user
 THE SYSTEM SHALL allow modifying name, email, or role, and persist the changes in PocketBase
@@ -694,3 +707,77 @@ THE SYSTEM SHALL require only changing the endpoint URLs in `.env` with no code 
 | PocketBase collection creation | Use `"schema"` field (not `"fields"`) when creating collections via API v0.22.4 |
 | Setup scripts are one-shot | Scripts 01, 02, and setup_pocketbase_admin run once during initialization only |
 | pk=0 rows are immutable | Special rows with pk=0 in optional dimensions cannot be deleted (CU-15) |
+
+---
+
+## Glossary
+
+### Domain Terms
+
+| Term | Definition |
+|---|---|
+| **Actor** | Role with specific system access: Administrator, Data Analyst, or System (automated) |
+| **BTS** | Bureau of Transportation Statistics — US government source of the airline on-time performance dataset |
+| **OTP** | On-Time Performance — percentage of flights arriving no more than 15 minutes late (ArrDel15 == 0) |
+| **FAA** | Federal Aviation Administration — US aviation authority that defines cancellation cause codes |
+| **FAA Cancellation Code** | A = airline/carrier, B = weather, C = NAS (National Airspace System), D = security |
+| **ELT** | Extract → Load → Transform: raw data lands first in MinIO, then is transformed into the star schema |
+| **DAG** | Directed Acyclic Graph — Airflow workflow unit; `aerotrack_elt_pipeline` has two tasks: extract and transform |
+| **Star schema (Kimball)** | Dimensional modeling pattern: one central fact table joined to multiple dimension tables |
+| **fact_vuelo** | Central fact table with ~2M rows; holds FK references to all 11 dimensions and flight metrics |
+| **dim_\* tables** | 11 dimension tables (tiempo, aerolinea, aeropuerto, avion, ruta, distancia, horario, cancelacion, clasificacion_retraso, retraso_causa, desvio) |
+| **pk=0 row** | Sentinel row present in optional dimensions (retraso_causa, cancelacion, desvio) to represent "no value"; immutable |
+| **Parquet** | Apache columnar binary file format; allows reading only required columns without loading full file into RAM |
+| **JWT** | JSON Web Token — signed token issued on login, stored in HttpOnly cookie, verified on every protected request |
+| **RBAC** | Role-Based Access Control — permissions enforced at application layer (FastAPI), not via SQL GRANTs or MinIO policies |
+| **KPI** | Key Performance Indicator — dashboard metrics: global OTP, total flights, cancellation rate, average delay |
+| **RAG** | Retrieval-Augmented Generation — AI assistant pattern: query Parquet data → build context → call LLM → return justified answer |
+| **LLM** | Large Language Model — configurable AI provider (OpenAI, Anthropic, Gemini, or custom endpoint) used by the AI assistant |
+| **EARS** | Easy Approach to Requirements Syntax — notation used in this document: WHEN [condition] THE SYSTEM SHALL [behavior] |
+| **pb_auditoria** | Immutable audit log collection in PocketBase — INSERT only, no UPDATE or DELETE allowed |
+| **configuracion_sistema** | PocketBase collection storing all dynamic system parameters (SMTP, alert thresholds, pipeline, IA config) |
+| **sensible** | Flag on `configuracion_sistema` rows — when true, value is masked as `••••` in the UI |
+| **aerotrack-raw** | MinIO bucket for raw extracted data (`vuelos_raw.parquet`) written by the extract DAG task |
+| **aerotrack-dims** | MinIO bucket for the transformed star schema (12 Parquet files) written by the transform DAG task |
+| **aerotrack-exports** | MinIO bucket for user-generated exports (PDF reports, executive summaries) |
+| **elt-network** | Docker bridge network shared by all services; services communicate via Docker service name, not localhost |
+
+### Python Dependencies
+
+Organized by layer. All version constraints are minimums (`>=`).
+
+#### Pipeline ELT layer
+
+| Package | Version | Purpose |
+|---|---|---|
+| `python-dotenv` | ≥ 1.0.0 | Load `.env` variables into `os.environ` at runtime in scripts and DAG tasks |
+| `pandas` | ≥ 2.0.0 | DataFrame operations for ELT transforms: drop_duplicates, map, concat, vectorized column ops |
+| `pyarrow` | ≥ 14.0.0 | Parquet read/write backend for pandas; enables columnar storage and snappy compression |
+| `minio` | ≥ 7.2.0 | MinIO S3-compatible client for PUT/GET Parquet files to/from all three buckets |
+| `requests` | ≥ 2.31.0 | HTTP client for PocketBase REST API calls (auth, paginated record fetch) |
+| `tqdm` | ≥ 4.66.0 | Progress bars for batch page extraction (~4000 pages of 500 records each) |
+
+#### Web application layer
+
+| Package | Version | Purpose |
+|---|---|---|
+| `fastapi` | ≥ 0.111.0 | Async web framework; provides OpenAPI, dependency injection, and HTTP routing |
+| `uvicorn[standard]` | ≥ 0.29.0 | ASGI server that runs the FastAPI app; `[standard]` adds WebSocket and HTTP/2 support |
+| `jinja2` | ≥ 3.1.0 | Server-side HTML templating for all views (login, dashboard, CRUD forms, sidebar) |
+| `python-multipart` | ≥ 0.0.9 | Required by FastAPI to parse HTML form submissions (login form, config forms) |
+
+#### Security layer
+
+| Package | Version | Purpose |
+|---|---|---|
+| `python-jose[cryptography]` | ≥ 3.3.0 | JWT creation (`jose.jwt.encode`) and validation (`jose.jwt.decode`) using HS256 with SECRET_KEY |
+| `passlib[bcrypt]` | ≥ 1.7.4 | bcrypt password hashing — used as reference; PocketBase manages its own hashes internally |
+
+#### Analytical & export layer (Entrega 2–3)
+
+| Package | Version | Purpose |
+|---|---|---|
+| `duckdb` | ≥ 0.10.0 | In-process SQL engine for columnar Parquet queries without loading full file into RAM |
+| `reportlab` | ≥ 4.0.0 | PDF generation for CU-27 (analysis exports) and CU-38 (executive report) |
+| `openpyxl` | ≥ 3.1.0 | Excel `.xlsx` generation with multiple sheets for CU-28 |
+| `statsmodels` | ≥ 0.14.0 | Time-series forecasting for OTP projections in the predictive module (CU-35) |

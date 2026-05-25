@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Modelo Dimensional — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Modelo Dimensional{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-database-fill" style="color:var(--at-coral);margin-right:8px"></i>Modelo Dimensional</h1>
+  <p>12 tablas del esquema en estrella — almacenadas en MinIO como Parquet.</p>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+  <a href="/modelo/validar" class="btn-at-ghost">
+    <i class="bi bi-shield-check"></i> Validar integridad
+  </a>
+</div>
+
+<div class="row g-3">
+  {% for t in tablas %}
+  <div class="col-sm-6 col-md-4 col-lg-3">
+    {% if t.disponible %}
+    <a href="/modelo/{{ t.nombre }}" style="text-decoration:none">
+      <div class="at-card" style="height:100%;transition:box-shadow .15s;cursor:pointer"
+           onmouseover="this.style.boxShadow='0 4px 16px rgba(27,58,107,.12)'"
+           onmouseout="this.style.boxShadow='none'">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div style="width:38px;height:38px;background:#eff6ff;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="bi {{ t.icon }}" style="color:var(--at-navy);font-size:18px"></i>
+          </div>
+          <div>
+            <div style="font-weight:600;font-size:13px;color:var(--at-text)">{{ t.label }}</div>
+            <div style="font-size:10.5px;color:var(--at-muted);font-family:monospace">{{ t.nombre }}</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--at-muted)">
+          <span><i class="bi bi-table me-1"></i>{{ '{:,}'.format(t.count) if t.count else '—' }} filas</span>
+          <span>{{ t.size_mb }} MB</span>
+        </div>
+        {% if t.modified %}
+        <div style="font-size:11px;color:var(--at-muted);margin-top:6px">
+          <i class="bi bi-clock me-1"></i>{{ t.modified.strftime('%Y-%m-%d %H:%M') if t.modified else '' }}
+        </div>
+        {% endif %}
+      </div>
+    </a>
+    {% else %}
+    <div class="at-card" style="height:100%;opacity:.5">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:38px;height:38px;background:#f8fafc;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="bi {{ t.icon }}" style="color:#94a3b8;font-size:18px"></i>
+        </div>
+        <div>
+          <div style="font-weight:600;font-size:13px;color:var(--at-muted)">{{ t.label }}</div>
+          <div style="font-size:10.5px;color:var(--at-muted);font-family:monospace">{{ t.nombre }}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--at-muted);text-align:center;padding:8px 0">
+        <i class="bi bi-cloud-slash me-1"></i> No disponible — ejecuta el pipeline
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

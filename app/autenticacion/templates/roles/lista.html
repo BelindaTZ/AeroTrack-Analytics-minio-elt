@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Roles — AeroTrack Analytics{% endblock %}
+{% block breadcrumb %}Administración › Roles{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1><i class="bi bi-shield-fill" style="color:var(--at-coral);margin-right:8px"></i>Roles</h1>
+  <p>Gestión de roles del sistema y sus permisos.</p>
+</div>
+
+{% if error %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div></div>{% endif %}
+
+<div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">Roles del sistema</span>
+    <button class="btn-at-coral" data-bs-toggle="modal" data-bs-target="#modalNuevo">
+      <i class="bi bi-plus-lg"></i> Nuevo rol
+    </button>
+  </div>
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead><tr><th>Nombre</th><th>Descripción</th><th>Tipo</th><th>Usuarios</th><th style="text-align:right">Acciones</th></tr></thead>
+      <tbody>
+        {% for rol in roles %}
+        <tr>
+          <td><strong>{{ rol.nombre }}</strong></td>
+          <td style="color:var(--at-muted)">{{ rol.descripcion or '—' }}</td>
+          <td>
+            {% if rol.es_sistema %}<span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:20px;font-weight:600">Sistema</span>
+            {% else %}<span style="font-size:11px;background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:20px">Personalizado</span>{% endif %}
+          </td>
+          <td>{{ rol._count_usuarios }}</td>
+          <td class="actions-col" style="text-align:right">
+            <a href="/auth/roles/{{ rol.id }}/permisos" class="btn-icon view me-1" title="Gestionar permisos"><i class="bi bi-key"></i></a>
+            {% if not rol.es_sistema %}
+            <a href="/auth/roles/{{ rol.id }}" class="btn-icon edit me-1" title="Editar"><i class="bi bi-pencil"></i></a>
+            <form action="/auth/roles/{{ rol.id }}/eliminar" method="post" style="display:inline"
+                  onsubmit="return confirm('¿Eliminar el rol {{ rol.nombre }}?')">
+              <button type="submit" class="btn-icon danger" title="Eliminar"><i class="bi bi-trash3"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div style="padding:10px 20px;border-top:1px solid var(--at-border)">
+    <a href="/auth/permisos/matriz" class="btn-at-ghost" style="font-size:12px">
+      <i class="bi bi-table"></i> Ver matriz de permisos
+    </a>
+  </div>
+</div>
+
+<!-- Modal nuevo rol -->
+<div class="modal fade" id="modalNuevo" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.15)">
+      <div class="modal-header" style="border-bottom:1px solid var(--at-border);padding:18px 24px">
+        <h5 class="modal-title" style="font-size:16px;font-weight:700"><i class="bi bi-shield-plus me-2 text-primary"></i>Nuevo rol</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form action="/auth/roles" method="post">
+        <div class="modal-body" style="padding:20px 24px">
+          <div style="margin-bottom:14px">
+            <label class="form-label-at">Nombre del rol</label>
+            <input type="text" name="nombre" class="form-control-at" required />
+          </div>
+          <div>
+            <label class="form-label-at">Descripción</label>
+            <input type="text" name="descripcion" class="form-control-at" />
+          </div>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid var(--at-border);padding:14px 24px;gap:8px">
+          <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-at-primary"><i class="bi bi-check-lg"></i> Crear rol</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

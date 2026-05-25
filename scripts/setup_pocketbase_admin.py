@@ -204,6 +204,14 @@ def schema_config(app_users_id=""):
 def schema_app_users(roles_col_id):
     return {
         "name": "app_users", "type": "auth",
+        "options": {
+            "allowEmailAuth":    True,   # ← necesario para login con email/contraseña
+            "allowUsernameAuth": False,
+            "allowOAuth2Auth":   False,
+            "minPasswordLength": 8,
+            "onlyVerified":      False,
+            "requireEmail":      False,
+        },
         "schema": [
             {"name": "nombre", "type": "text", "required": True,  "options": {}},
             {"name": "rol_id", "type": "relation", "required": True,
