@@ -1,0 +1,165 @@
+@startuml diagrama_componentes
+title AeroTrack Analytics — Diagrama de Componentes
+
+skinparam linetype ortho
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+skinparam defaultFontSize 10
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #333333
+skinparam ArrowFontSize 9
+skinparam ArrowFontColor #333333
+skinparam shadowing false
+
+skinparam package {
+    BorderColor #555555
+    BackgroundColor #F8F8F8
+    FontStyle bold
+    FontSize 11
+}
+skinparam component {
+    BackgroundColor #FFFFFF
+    BorderColor #333333
+    FontColor #111111
+}
+skinparam database {
+    BackgroundColor #EFEFEF
+    BorderColor #333333
+    FontColor #111111
+}
+skinparam cloud {
+    BackgroundColor #F0F0F0
+    BorderColor #888888
+    FontColor #444444
+}
+skinparam actor {
+    BorderColor #333333
+    BackgroundColor #FFFFFF
+    FontColor #111111
+}
+
+skinparam component<<service>> {
+    BackgroundColor #DDDDDD
+    BorderColor #111111
+    FontStyle bold
+}
+skinparam component<<module>> {
+    BackgroundColor #F5F5F5
+    BorderColor #555555
+}
+skinparam component<<script>> {
+    BackgroundColor #EBEBEB
+    BorderColor #444444
+    FontStyle italic
+}
+
+' ═══════════════════════════════════════
+' ACTORES EXTERNOS
+' ═══════════════════════════════════════
+actor "Administrador" as Admin
+actor "Analista de Datos" as Analista
+cloud "«external»\nLLM API" as LLMCloud
+
+' ═══════════════════════════════════════
+' ALMACENAMIENTO  (base — abajo)
+' ═══════════════════════════════════════
+package "«subsystem» Almacenamiento" as SubStore {
+
+    database "«datastore»\nPocketBase  :8090\n─────────────────\nvuelos\nusuarios · roles · permisos\nauditoria · configuracion" as PB
+
+    database "«objectstore»\nMinIO  :9000\n─────────────────\naerotrack-raw\naerotrack-dims\naerotrack-exports" as Minio
+
+    database "«database»\nPostgreSQL  :5432\n─────────────────\n(metadatos Airflow)" as PG
+}
+
+' ═══════════════════════════════════════
+' PIPELINE ELT — SETUP (izquierda)
+' ═══════════════════════════════════════
+package "«subsystem»\nPipeline ELT Scripts\n(inicialización)" as SubScripts {
+    component "«script»\nCarga Inicial\nCSV → PocketBase" <<script>> as ScriptCarga
+    component "«script»\nSetup Administrativo\nColecciones · Roles · Admin" <<script>> as ScriptAdmin
+}
+
+' ═══════════════════════════════════════
+' ORQUESTACIÓN ELT — (derecha)
+' ═══════════════════════════════════════
+package "«subsystem» Orquestación ELT  :8080" as SubAirflow {
+
+    component "«service»\nAirflow\nWebserver · Scheduler" <<service>> as Airflow
+
+    package "«DAG» aerotrack_elt_pipeline" as DAGpkg {
+        component "«task»\nExtract\nPocketBase → MinIO raw" <<module>> as ExtTask
+        component "«task»\nTransform\nMinIO raw → dims" <<module>> as TrfTask
+    }
+}
+
+' ═══════════════════════════════════════
+' WEB APPLICATION — (centro)
+' ═══════════════════════════════════════
+package "«subsystem» Web Application  :8000" as SubWeb {
+
+    component "«service»\nFastAPI App" <<service>> as FastAPI
+
+    package "Módulos" as AppMods {
+        component "«module»\nAutenticación\nJWT · Roles · Permisos" <<module>> as ModAuth
+        component "«module»\nControl Pipeline ELT\nTrigger · Monitor · Logs" <<module>> as ModPipeline
+        component "«module»\nModelo Dimensional\nConsulta Parquet" <<module>> as ModModelo
+        component "«module»\nAnalítica de Vuelos\nKPIs · OTP · Rutas · Cancelaciones" <<module>> as ModAnalytica
+        component "«module»\nReportes\nPDF · Excel" <<module>> as ModReportes
+        component "«module»\nConfiguración\nParámetros dinámicos" <<module>> as ModConfig
+        component "«module»\nAuditoría\nLog inmutable" <<module>> as ModAudit
+        component "«module»\nAsistente IA\nChatbot RAG" <<module>> as ModIA
+    }
+}
+
+' ═══════════════════════════════════════
+' RELACIONES — ACTORES → WEB
+' ═══════════════════════════════════════
+Admin    --> FastAPI : «HTTP»
+Analista --> FastAPI : «HTTP»
+
+' ═══════════════════════════════════════
+' RELACIONES — FASTAPI → MÓDULOS
+' ═══════════════════════════════════════
+FastAPI --> ModAuth
+FastAPI --> ModPipeline
+FastAPI --> ModModelo
+FastAPI --> ModAnalytica
+FastAPI --> ModReportes
+FastAPI --> ModConfig
+FastAPI --> ModAudit
+FastAPI --> ModIA
+
+' ═══════════════════════════════════════
+' RELACIONES — WEB → ALMACENAMIENTO
+' ═══════════════════════════════════════
+FastAPI --> PB    : «REST»\nauth · auditoría · config
+FastAPI --> Minio : «S3»\nlectura dims · escritura exports
+
+' ═══════════════════════════════════════
+' RELACIONES — WEB → AIRFLOW
+' ═══════════════════════════════════════
+ModPipeline --> Airflow : «REST Airflow API»\ntrigger · monitor DAG
+
+' ═══════════════════════════════════════
+' RELACIONES — MÓDULO IA → LLM
+' ═══════════════════════════════════════
+ModIA ..> LLMCloud : «HTTP»
+
+' ═══════════════════════════════════════
+' RELACIONES — DAG → ALMACENAMIENTO
+' ═══════════════════════════════════════
+Airflow  --> ExtTask  : trigger
+ExtTask  --> TrfTask  : >>
+ExtTask  --> PB       : «REST» extrae vuelos
+ExtTask  --> Minio    : «S3» escribe raw
+TrfTask  --> Minio    : «S3» lee raw · escribe dims
+Airflow  --> PG       : metadatos internos
+
+' ═══════════════════════════════════════
+' RELACIONES — SCRIPTS → POCKETBASE
+' ═══════════════════════════════════════
+ScriptCarga --> PB : «REST» carga inicial
+ScriptAdmin --> PB : «REST» setup admin
+
+@enduml

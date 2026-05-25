@@ -1,0 +1,62 @@
+@startuml
+title AeroTrack Analytics — Diagrama de Despliegue\n(Entorno de Desarrollo)
+
+skinparam componentStyle uml2
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+skinparam monochrome true
+skinparam shadowing true
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 80
+
+' ==================== NODOS ====================
+
+node "Máquina Local\n(Docker Desktop)" as Local <<device>> {
+    
+    node "Contenedor Airflow" as AirflowNode <<executionEnvironment>> {
+        component "Airflow Web\n:8080" as AirflowWeb
+        component "Scheduler" as Scheduler
+    }
+
+    node "Contenedor PocketBase" as PBNode <<executionEnvironment>> {
+        component "PocketBase\n:8090" as PB
+    }
+
+    node "Contenedor MinIO" as MinIONode <<executionEnvironment>> {
+        component "MinIO Server\n:9000" as MINIO
+        component "MinIO Console\n:9001" as Console
+    }
+
+    node "Contenedor FastAPI" as AppNode <<executionEnvironment>> {
+        component "FastAPI Application\n:8000" as FASTAPI
+    }
+}
+
+database "Volúmenes Docker\n(Persistencia)" as Volumes <<database>>
+
+' ==================== ACTOR ====================
+actor "Analista" as USER
+
+' ==================== CONEXIONES ====================
+
+USER --> AirflowWeb : HTTP
+USER --> FASTAPI : HTTP
+USER --> PB : REST
+USER --> MINIO : S3 + Console
+
+FASTAPI --> MINIO : Cliente S3
+FASTAPI --> PB : REST API
+
+Scheduler --> PB : Ejecuta scripts
+Scheduler --> MINIO : Orquesta pipeline
+
+' Conexiones internas Docker
+AirflowNode -[hidden]--> PBNode
+PBNode -[hidden]--> MinIONode
+MinIONode -[hidden]--> AppNode
+
+Volumes <--> MINIO
+Volumes <--> PB
+
+@enduml
