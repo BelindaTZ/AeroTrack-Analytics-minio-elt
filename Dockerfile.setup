@@ -1,0 +1,15 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Instalar dependencias del pipeline ELT una sola vez (en el build)
+RUN pip install --no-cache-dir \
+    python-dotenv \
+    requests \
+    pandas \
+    pyarrow \
+    minio \
+    tqdm
+
+# Los scripts y datos se montan como volúmenes en runtime
+CMD ["python", "scripts/run_setup_inicial.py"]
