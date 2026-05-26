@@ -8,7 +8,7 @@ _BASE = Path(__file__).parent.parent
 templates = Jinja2Templates(directory=str(_BASE / "shared" / "templates"))
 templates.env.loader = FileSystemLoader([
     str(_BASE / "shared" / "templates"),
-    str(_BASE / "autenticacion" / "templates"),
+    str(_BASE / "seguridad" / "templates"),
     str(_BASE / "pipeline_elt" / "templates"),
     str(_BASE / "modelo_dimensional" / "templates"),
 ])

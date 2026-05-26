@@ -15,7 +15,7 @@ minio-elt/                          ← Raíz del proyecto
 ├── app/                            ← FastAPI — módulos por paquete CU
 │   ├── main.py                     ← Punto de entrada, registro de routers
 │   ├── config.py                   ← Detecta Docker/local automáticamente
-│   ├── autenticacion/              ← JWT, RBAC, middleware — E1 [CU-01..09]
+│   ├── seguridad/                  ← JWT, RBAC, middleware — E1 [CU-01..09]
 │   │   ├── router.py
 │   │   ├── service.py
 │   │   └── templates/
@@ -83,7 +83,7 @@ minio-elt/                          ← Raíz del proyecto
 | Módulo | Directorio | Entrega | Estado |
 |---|---|---|---|
 | CRUD Parquet (prototipo) | `webapp/` | — | Implementado (presentación inicial) |
-| Autenticación + RBAC | `app/autenticacion/` | E1 | Por implementar |
+| Autenticación + RBAC | `app/seguridad/` | E1 | Por implementar |
 | Pipeline ELT UI | `app/pipeline_elt/` | E1 | Por implementar |
 | Modelo Dimensional UI | `app/modelo_dimensional/` | E1 | Por implementar |
 | Dashboard KPIs | `app/dashboard/` | E2 | Por implementar |

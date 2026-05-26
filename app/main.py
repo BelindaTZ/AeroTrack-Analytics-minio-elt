@@ -1,10 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 
-from app.autenticacion.router import router as auth_router
-from app.autenticacion.usuarios.usuarios import router as usuarios_router
-from app.autenticacion.rbac.roles_admin import router as roles_router
-from app.autenticacion.rbac.permisos import router as permisos_router
+from app.seguridad.router import router as auth_router
+from app.seguridad.usuarios.usuarios import router as usuarios_router
+from app.seguridad.rbac.roles_admin import router as roles_router
+from app.seguridad.rbac.permisos import router as permisos_router
 from app.pipeline_elt.router import router as pipeline_router
 from app.modelo_dimensional.router import router as modelo_router
 from app.shared.deps import _redirect_to_login, get_current_user, render
