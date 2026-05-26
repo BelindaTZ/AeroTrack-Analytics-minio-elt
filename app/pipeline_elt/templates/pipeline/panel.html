@@ -116,13 +116,13 @@
   // Auto-refresh estado cada 10 segundos
   const isRunning = {{ 'true' if is_running else 'false' }};
   if (isRunning) {
-    setTimeout(() => location.reload(), 10000);
+    setTimeout(() => window.location.href = '/pipeline', 10000);
   } else {
     setInterval(async () => {
       const r = await fetch('/pipeline/estado');
       const data = await r.json();
       if (data.state && ['running','queued'].includes(data.state)) {
-        location.reload();
+        window.location.href = '/pipeline';
       }
     }, 10000);
   }

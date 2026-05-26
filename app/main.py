@@ -14,8 +14,8 @@ app = FastAPI(title="AeroTrack Analytics", version="1.0.0")
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router,     prefix="/auth",          tags=["auth"])
 app.include_router(usuarios_router, prefix="/auth/usuarios", tags=["usuarios"])
+app.include_router(permisos_router, prefix="/auth/roles",    tags=["permisos"])
 app.include_router(roles_router,    prefix="/auth/roles",    tags=["roles"])
-app.include_router(permisos_router, prefix="/auth",          tags=["permisos"])
 app.include_router(pipeline_router, prefix="/pipeline",      tags=["pipeline"])
 app.include_router(modelo_router,   prefix="/modelo",        tags=["modelo"])
 

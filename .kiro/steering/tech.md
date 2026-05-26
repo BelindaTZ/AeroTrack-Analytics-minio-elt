@@ -112,6 +112,61 @@ Todas las credenciales en `.env` (excluido del repositorio con `.gitignore`). El
 - Los scripts de setup deben ser idempotentes (verificar existencia antes de crear)
 - Autenticación: endpoint `/api/admins/auth-with-password` para el admin
 
+## Restricciones y gotchas de Airflow 2.9.3
+
+### Auth backend de la API REST — CRÍTICO
+La imagen oficial `apache/airflow:2.9.3` trae por defecto `auth_backends = airflow.api.auth.backend.session` (solo cookies de sesión del navegador). Cualquier cliente programático (FastAPI, curl, scripts) necesita basic auth. La variable **debe** declararse explícitamente:
+
+```yaml
+AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+```
+
+Esta variable debe estar en los tres servicios: `airflow-init`, `airflow-webserver` y `airflow-scheduler`. Sin ella, toda llamada a `/api/v1/...` devuelve `403 FORBIDDEN` aunque las credenciales sean correctas y el rol Admin tenga todos los permisos FAB.
+
+### Sincronización de permisos FAB (`AIRFLOW__FAB__UPDATE_FAB_PERMS`)
+La clave `[webserver] update_fab_perms` fue deprecada en 2.9.3; se renombró a `[fab] update_fab_perms`. Declarar:
+
+```yaml
+AIRFLOW__FAB__UPDATE_FAB_PERMS: 'true'
+```
+
+en `airflow-webserver` garantiza que los permisos FAB del rol Admin se sincronicen en cada arranque, evitando errores 403 por permisos desactualizados tras recrear el contenedor.
+
+### `docker-compose restart` NO aplica nuevas variables de entorno
+`docker-compose restart` reinicia el proceso dentro del contenedor existente — **no** re-lee `docker-compose.yml`. Si se agrega o modifica una variable `AIRFLOW__*` después de haber levantado los servicios, el contenedor seguirá usando la configuración antigua hasta que sea recreado:
+
+```bash
+# correcto — recrea el contenedor con la nueva config
+docker-compose up -d --force-recreate airflow-webserver
+
+# incorrecto — el contenedor ignora los cambios nuevos en docker-compose.yml
+docker-compose restart airflow-webserver
+```
+
+Verificar que una variable está activa dentro del contenedor antes de depurar más:
+
+```bash
+docker exec airflow-webserver bash -c "echo \$AIRFLOW__API__AUTH_BACKENDS"
+docker exec airflow-webserver airflow config get-value api auth_backends
+```
+
+## Restricciones del frontend — auto-refresh con query params
+
+### `location.reload()` conserva `?error=` en la URL
+Cuando un POST redirige a `/pipeline?error=<mensaje>` y la página tiene auto-refresh con `location.reload()`, el error fantasma vuelve a aparecer en cada ciclo porque `location.reload()` recarga la URL completa incluyendo los query params.
+
+Patrón correcto para auto-refresh que limpia la URL:
+
+```javascript
+// MAL — conserva ?error= o ?msg= en cada recarga
+setTimeout(() => location.reload(), 10000);
+
+// BIEN — navega a la URL limpia, descarta query params anteriores
+setTimeout(() => window.location.href = '/pipeline', 10000);
+```
+
+Aplicar el mismo patrón en el `setInterval` del polling AJAX cuando se detecta un cambio de estado que requiere recargar la página.
+
 ## Portabilidad
 
 - **Docker-first:** funciona en Windows, macOS y Linux sin cambios de código
