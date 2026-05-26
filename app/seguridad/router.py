@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.autenticacion.jwt.service import crear_token
+from app.seguridad.jwt.service import crear_token
 from app.shared.clients import pb_client
 from app.shared.utils import audit
 from app.shared.deps import get_current_user, render, require_user

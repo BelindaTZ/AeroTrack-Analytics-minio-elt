@@ -25,7 +25,7 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   **Description:** Implementar endpoints FastAPI para login/logout usando
   app_users de PocketBase. Generar y validar JWT firmado con SECRET_KEY.
   Incluir middleware de verificación de token en cada request protegido.
-  **Files:** app/autenticacion/login.py, app/autenticacion/jwt.py,
+  **Files:** app/seguridad/login.py, app/seguridad/jwt.py,
   app/templates/login.html, app/main.py (rutas auth)
   **Dependencies:** None
   **Requirements:** CU-01, CU-02
@@ -40,7 +40,7 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   **Description:** Crear el decorador/dependencia FastAPI que verifica que
   el usuario autenticado tenga el permiso requerido (módulo + acción)
   consultando roles_permisos en PocketBase. Retornar HTTP 403 si no tiene acceso.
-  **Files:** app/autenticacion/roles.py, app/autenticacion/permisos.py
+  **Files:** app/seguridad/roles.py, app/seguridad/permisos.py
   **Dependencies:** None
   **Requirements:** CU-08, CU-09
 
@@ -52,7 +52,7 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   **Description:** Endpoints y templates para que el Admin pueda crear,
   editar, activar/desactivar y resetear contraseña de usuarios en app_users
   de PocketBase.
-  **Files:** app/autenticacion/usuarios.py, app/templates/usuarios/
+  **Files:** app/seguridad/usuarios.py, app/templates/usuarios/
   **Dependencies:** None
   **Requirements:** CU-04
 
@@ -69,7 +69,7 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   **Description:** Endpoints para que el Admin gestione roles (crear, editar,
   eliminar con verificación de usuarios asignados) y asigne permisos
   por módulo usando la colección roles_permisos de PocketBase.
-  **Files:** app/autenticacion/roles_admin.py, app/templates/roles/
+  **Files:** app/seguridad/roles_admin.py, app/templates/roles/
   **Dependencies:** None
   **Requirements:** CU-05, CU-06, CU-07, CU-08, CU-09
 
@@ -84,7 +84,7 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
 - [x] 5. Implementar perfil de usuario
   **Description:** Página de perfil propio con visualización de datos y
   cambio de contraseña con verificación de la actual.
-  **Files:** app/autenticacion/perfil.py, app/templates/perfil.html
+  **Files:** app/seguridad/perfil.py, app/templates/perfil.html
   **Dependencies:** None
   **Requirements:** CU-03
 

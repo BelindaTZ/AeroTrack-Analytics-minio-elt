@@ -7,7 +7,7 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from jose import JWTError
 
-from app.autenticacion.jwt.service import verificar_token
+from app.seguridad.jwt.service import verificar_token
 from app.shared.clients import pb_client
 from app.shared.templates import templates, MODULOS_SIDEBAR, MODULOS_ADMIN
 

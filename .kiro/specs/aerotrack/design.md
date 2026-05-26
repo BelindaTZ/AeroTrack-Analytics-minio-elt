@@ -19,7 +19,7 @@ graph TD
   subgraph WebApp["Web Application  :8000"]
     FastAPI["FastAPI App\nJinja2 + Bootstrap 5"]
     subgraph Modulos["Módulos"]
-      ModAuth["autenticacion\nJWT · RBAC · roles"]
+      ModAuth["seguridad\nJWT · RBAC · roles"]
       ModPipe["pipeline_elt\ntrigger · monitor · logs"]
       ModDim["modelo_dimensional\nCRUD Parquet"]
       ModDash["dashboard\nKPIs · alertas"]
@@ -167,7 +167,7 @@ app/
 ├── config.py                       # Variables de entorno centralizadas
 ├── main.py                         # FastAPI app — registra routers de todos los módulos
 │
-├── autenticacion/                  # Seguridad: JWT, RBAC, usuarios, roles
+├── seguridad/                      # Seguridad: JWT, RBAC, usuarios, roles
 │   ├── router.py                   # login, logout, perfil
 │   ├── jwt/
 │   │   └── service.py              # crear_token(), verificar_token()
@@ -228,7 +228,7 @@ Jinja2 busca templates en este orden de directorios:
 # shared/templates.py
 templates.env.loader = FileSystemLoader([
     "shared/templates",              # base.html, error.html (1º — mayor prioridad)
-    "autenticacion/templates",       # login.html, perfil.html, roles/, usuarios/
+    "seguridad/templates",           # login.html, perfil.html, roles/, usuarios/
     "pipeline_elt/templates",        # pipeline/panel.html, historial.html, logs.html
     "modelo_dimensional/templates",  # modelo_dimensional/*.html
 ])
@@ -264,21 +264,21 @@ Prefijos registrados en `app/main.py`: `/auth`, `/pipeline`, `/modelo`, `/dashbo
 
 | Method | Route | Auth | Package | CU | Description |
 |--------|-------|------|---------|-----|-------------|
-| `POST` | `/auth/login` | No | autenticacion | CU-01 | Validate credentials vs PocketBase, return JWT cookie |
-| `POST` | `/auth/logout` | JWT | autenticacion | CU-02 | Invalidate token, clear session cookie |
-| `GET` | `/auth/perfil` | JWT | autenticacion | CU-03 | Get own profile |
-| `PUT` | `/auth/perfil/password` | JWT | autenticacion | CU-03 | Change own password (requires current password) |
-| `GET` | `/auth/usuarios` | Admin+ver | autenticacion | CU-04 | List users with pagination and filters |
-| `POST` | `/auth/usuarios` | Admin+crear | autenticacion | CU-04 | Create user |
-| `PUT` | `/auth/usuarios/{id}` | Admin+editar | autenticacion | CU-04 | Edit user name/email/role |
-| `PUT` | `/auth/usuarios/{id}/estado` | Admin+editar | autenticacion | CU-04 | Toggle activo with modal confirmation |
-| `GET` | `/auth/roles` | Admin+ver | autenticacion | CU-05..07 | List roles |
-| `POST` | `/auth/roles` | Admin+crear | autenticacion | CU-05 | Create role (empty permissions) |
-| `PUT` | `/auth/roles/{id}` | Admin+editar | autenticacion | CU-06 | Edit role name/description |
-| `DELETE` | `/auth/roles/{id}` | Admin+eliminar | autenticacion | CU-07 | Delete role (blocked if users assigned) |
-| `GET` | `/auth/roles/{id}/permisos` | Admin+ver | autenticacion | CU-08..09 | Get role permissions grid |
-| `PUT` | `/auth/roles/{id}/permisos` | Admin+configurar | autenticacion | CU-08 | Save role permissions |
-| `GET` | `/auth/permisos/matriz` | Admin+ver | autenticacion | CU-09 | Read-only permission matrix |
+| `POST` | `/auth/login` | No | seguridad | CU-01 | Validate credentials vs PocketBase, return JWT cookie |
+| `POST` | `/auth/logout` | JWT | seguridad | CU-02 | Invalidate token, clear session cookie |
+| `GET` | `/auth/perfil` | JWT | seguridad | CU-03 | Get own profile |
+| `PUT` | `/auth/perfil/password` | JWT | seguridad | CU-03 | Change own password (requires current password) |
+| `GET` | `/auth/usuarios` | Admin+ver | seguridad | CU-04 | List users with pagination and filters |
+| `POST` | `/auth/usuarios` | Admin+crear | seguridad | CU-04 | Create user |
+| `PUT` | `/auth/usuarios/{id}` | Admin+editar | seguridad | CU-04 | Edit user name/email/role |
+| `PUT` | `/auth/usuarios/{id}/estado` | Admin+editar | seguridad | CU-04 | Toggle activo with modal confirmation |
+| `GET` | `/auth/roles` | Admin+ver | seguridad | CU-05..07 | List roles |
+| `POST` | `/auth/roles` | Admin+crear | seguridad | CU-05 | Create role (empty permissions) |
+| `PUT` | `/auth/roles/{id}` | Admin+editar | seguridad | CU-06 | Edit role name/description |
+| `DELETE` | `/auth/roles/{id}` | Admin+eliminar | seguridad | CU-07 | Delete role (blocked if users assigned) |
+| `GET` | `/auth/roles/{id}/permisos` | Admin+ver | seguridad | CU-08..09 | Get role permissions grid |
+| `PUT` | `/auth/roles/{id}/permisos` | Admin+configurar | seguridad | CU-08 | Save role permissions |
+| `GET` | `/auth/permisos/matriz` | Admin+ver | seguridad | CU-09 | Read-only permission matrix |
 | `POST` | `/pipeline/trigger` | Admin+ejecutar | pipeline_elt | CU-10 | Trigger `aerotrack_elt_pipeline` DAG via Airflow REST |
 | `GET` | `/pipeline/estado` | Admin+ver | pipeline_elt | CU-11 | Current DAG run status |
 | `GET` | `/pipeline/historial` | Admin+ver | pipeline_elt | CU-12 | DAG run history table |
