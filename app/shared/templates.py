@@ -47,7 +47,7 @@ MODULOS_SIDEBAR = [
 MODULOS_ADMIN = [
     {"label": "Usuarios",      "icon": "bi-people-fill",     "url": "/auth/usuarios"},
     {"label": "Roles",         "icon": "bi-shield-lock-fill","url": "/auth/roles"},
-    {"label": "Permisos",      "icon": "bi-key-fill",        "url": "/auth/permisos/matriz"},
+    {"label": "Permisos",      "icon": "bi-key-fill",        "url": "/auth/roles/matriz"},
     {"label": "Configuración", "icon": "bi-sliders",         "url": "/configuracion"},
     {"label": "Auditoría",     "icon": "bi-journal-text",    "url": "/auditoria"},
 ]
