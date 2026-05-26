@@ -21,7 +21,8 @@
       "Bash(docker exec *)",
       "Bash(docker-compose up *)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - DAGs:', [x['dag_id'] for x in d.get\\('dags',[]\\)]\\)\")",
-      "Bash(python scripts/configure_email.py)"
+      "Bash(python scripts/configure_email.py)",
+      "Bash(Remove-Item -Recurse -Force \"c:/proyectos/minio-elt/app/autenticacion\")"
     ],
     "additionalDirectories": [
       "C:\\proyectos\\minio-elt\\.kiro"
