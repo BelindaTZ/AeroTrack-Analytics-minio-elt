@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.seguridad.router import router as auth_router
 from app.seguridad.usuarios.usuarios import router as usuarios_router
@@ -10,6 +13,10 @@ from app.modelo_dimensional.router import router as modelo_router
 from app.shared.deps import _redirect_to_login, get_current_user, render
 
 app = FastAPI(title="AeroTrack Analytics", version="1.0.0")
+
+_STATIC = Path(__file__).parent.parent / "static"
+_STATIC.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router,     prefix="/auth",          tags=["auth"])

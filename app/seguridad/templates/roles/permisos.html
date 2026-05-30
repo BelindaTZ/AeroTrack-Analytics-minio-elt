@@ -1,30 +1,226 @@
 {% extends "base.html" %}
 {% block title %}Permisos de {{ rol.nombre }} — AeroTrack Analytics{% endblock %}
-{% block breadcrumb %}Administración › <a href="/auth/roles" style="color:var(--at-muted);text-decoration:none">Roles</a> › {{ rol.nombre }} › Permisos{% endblock %}
+
+{% block breadcrumb %}
+<a href="/auth/roles" class="bc-link">Roles</a>
+<span class="bc-sep" aria-hidden="true">›</span>
+<span style="color:var(--at-muted)">{{ rol.nombre }}</span>
+<span class="bc-sep" aria-hidden="true">›</span>
+<span class="bc-current">Permisos</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* ── Permission matrix ── */
+  .perm-matrix-wrap {
+    background: var(--at-surface);
+    border: 1px solid var(--at-border);
+    border-radius: var(--at-r-lg);
+    overflow: hidden;
+    box-shadow: var(--at-shadow-sm);
+  }
+
+  .perm-matrix-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--at-border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+  }
+
+  .perm-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  .perm-table thead th {
+    background: #f8fafc;
+    padding: 10px 18px;
+    text-align: center;
+    font-size: 10.5px; font-weight: 700;
+    color: var(--at-sub); letter-spacing: .7px; text-transform: uppercase;
+    border-bottom: 1px solid var(--at-border);
+    white-space: nowrap;
+    position: sticky; top: var(--topbar-h); z-index: 5;
+  }
+  .perm-table thead th:first-child { text-align: left; min-width: 200px; }
+  .perm-table thead th.action-col { min-width: 90px; }
+
+  .perm-table tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background var(--at-dur-fast);
+  }
+  .perm-table tbody tr:last-child { border-bottom: none; }
+  .perm-table tbody tr:hover { background: #f8fafc; }
+
+  .perm-table tbody td {
+    padding: 12px 18px;
+    vertical-align: middle;
+    text-align: center;
+  }
+  .perm-table tbody td:first-child { text-align: left; }
+
+  /* Module label cell */
+  .mod-cell { display: flex; align-items: center; gap: 10px; }
+  .mod-icon {
+    width: 30px; height: 30px;
+    border-radius: var(--at-r-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+    background: var(--at-running-bg); color: var(--at-blue-500);
+  }
+  .mod-name { font-weight: 600; font-size: 13.5px; color: var(--at-text); }
+
+  /* Checkbox cell — NA state */
+  .perm-na {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    background: #f1f5f9;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--at-border); font-size: 10px;
+    margin: 0 auto;
+    border: 1.5px dashed var(--at-border);
+  }
+
+  /* Action column header color coding */
+  .th-ver    { color: #0891b2 !important; }
+  .th-crear  { color: var(--at-success-fg) !important; }
+  .th-editar { color: #d97706 !important; }
+  .th-eliminar { color: var(--at-failed-fg) !important; }
+  .th-ejecutar { color: var(--at-indigo-500) !important; }
+
+  /* Role info card */
+  .role-info-card {
+    background: var(--at-surface);
+    border: 1px solid var(--at-border);
+    border-radius: var(--at-r-lg);
+    padding: 18px 24px;
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    box-shadow: var(--at-shadow-sm);
+  }
+  .role-badge-large {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, rgba(13,110,253,.1), rgba(99,102,241,.1));
+    border: 1px solid rgba(99,102,241,.22);
+    color: var(--at-indigo-500);
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 14px; font-weight: 700;
+  }
+  .perm-count-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--at-success-bg); color: var(--at-success-fg);
+    border: 1px solid rgba(25,135,84,.18);
+    padding: 3px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+  }
+  #perm-active-count { font-family: 'JetBrains Mono', monospace; }
+
+  /* Select all row */
+  .select-all-row td { background: #f8fafc; border-bottom: 2px solid var(--at-border) !important; }
+  .select-all-row td:first-child { color: var(--at-muted); font-size: 12px; font-style: italic; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-heading">
-  <h1><i class="bi bi-key-fill" style="color:var(--at-coral);margin-right:8px"></i>Permisos — {{ rol.nombre }}</h1>
-  <p>Selecciona los permisos disponibles para este rol.</p>
+  <h1>
+    <span class="heading-icon indigo" aria-hidden="true"><i class="bi bi-key-fill"></i></span>
+    Permisos — {{ rol.nombre }}
+  </h1>
+  <p>Selecciona los permisos activos para este rol. Los cambios son inmediatos al guardar.</p>
 </div>
 
-<form action="/auth/roles/{{ rol.id }}/permisos" method="post">
-  <div class="at-table-wrapper">
-    <div class="at-table-header">
-      <span class="at-table-title">Matriz de permisos</span>
-      <button type="submit" class="btn-at-primary"><i class="bi bi-floppy-fill"></i> Guardar permisos</button>
+<!-- Role info bar -->
+<div class="role-info-card">
+  <span class="role-badge-large">
+    <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+    {{ rol.nombre }}
+  </span>
+  {% if rol.descripcion %}
+  <span style="font-size:13.5px;color:var(--at-muted)">{{ rol.descripcion }}</span>
+  {% endif %}
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="perm-count-chip">
+      <i class="bi bi-check2-square" aria-hidden="true"></i>
+      <span id="perm-active-count">{{ permisos_disponibles | length }}</span> permisos activos
+    </span>
+  </div>
+</div>
+
+<form action="/auth/roles/{{ rol.id }}/permisos" method="post" id="perms-form">
+  <!-- Save buttons (top) -->
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button type="submit" class="btn-at-primary">
+      <i class="bi bi-floppy-fill" aria-hidden="true"></i> Guardar permisos
+    </button>
+    <a href="/auth/roles" class="btn-at-ghost">
+      <i class="bi bi-arrow-left" aria-hidden="true"></i> Volver
+    </a>
+  </div>
+
+  <!-- Permission matrix -->
+  <div class="perm-matrix-wrap">
+    <div class="perm-matrix-header">
+      <span class="at-table-title">
+        <i class="bi bi-table me-2" style="color:var(--at-muted)" aria-hidden="true"></i>
+        Matriz de permisos por módulo
+      </span>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        {% for accion in todas_acciones %}
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--at-muted)">
+          <span style="width:8px;height:8px;border-radius:50%;background:
+            {% if accion == 'ver' %}#0891b2
+            {% elif accion == 'crear' %}var(--at-green-500)
+            {% elif accion == 'editar' %}#d97706
+            {% elif accion == 'eliminar' %}var(--at-red-500)
+            {% elif accion == 'ejecutar' %}var(--at-indigo-500)
+            {% else %}var(--at-muted){% endif %}
+          " aria-hidden="true"></span>
+          {{ accion | capitalize }}
+        </span>
+        {% endfor %}
+      </div>
     </div>
+
     <div class="at-table-scroll">
-      <table class="at-table">
+      <table class="perm-table" role="grid" aria-label="Matriz de permisos para {{ rol.nombre }}">
         <thead>
           <tr>
-            <th style="min-width:160px">Módulo</th>
-            {% for accion in todas_acciones %}<th style="text-align:center;min-width:80px">{{ accion }}</th>{% endfor %}
+            <th scope="col">Módulo</th>
+            {% for accion in todas_acciones %}
+            <th scope="col" class="action-col th-{{ accion }}">{{ accion | capitalize }}</th>
+            {% endfor %}
           </tr>
         </thead>
         <tbody>
+          <!-- Select-all helper row -->
+          <tr class="select-all-row">
+            <td>Seleccionar todo</td>
+            {% for accion in todas_acciones %}
+            <td style="text-align:center">
+              <input type="checkbox"
+                     class="perm-toggle"
+                     data-select-all="{{ accion }}"
+                     aria-label="Seleccionar todos los permisos de {{ accion }}"
+                     title="Marcar/desmarcar toda la columna {{ accion }}" />
+            </td>
+            {% endfor %}
+          </tr>
+
           {% for modulo in modulos %}
           <tr>
-            <td><strong>{{ modulo.nombre_display }}</strong></td>
+            <!-- Module name + icon -->
+            <td>
+              <div class="mod-cell">
+                <div class="mod-icon" aria-hidden="true">
+                  <i class="bi bi-box-seam"></i>
+                </div>
+                <div>
+                  <div class="mod-name">{{ modulo.nombre_display }}</div>
+                  <div style="font-size:10.5px;color:var(--at-sub);font-family:'JetBrains Mono',monospace">{{ modulo.clave }}</div>
+                </div>
+              </div>
+            </td>
+
             {% for accion in todas_acciones %}
             {% set tiene = accion in (permisos_actuales.get(modulo.clave) or []) %}
             {% set disponible = namespace(found=false) %}
@@ -34,13 +230,23 @@
                 {% set disponible.found = true %}
               {% endif %}
             {% endfor %}
-            <td style="text-align:center">
+            <td>
               {% if disponible.found %}
-              <input type="checkbox" name="perm_{{ modulo.clave }}_{{ accion }}"
-                     style="width:16px;height:16px;cursor:pointer"
-                     {% if tiene %}checked{% endif %} />
+              <div style="display:flex;justify-content:center">
+                <input type="checkbox"
+                       class="perm-toggle"
+                       name="perm_{{ modulo.clave }}_{{ accion }}"
+                       data-action="{{ accion }}"
+                       {% if tiene %}checked{% endif %}
+                       aria-label="{{ accion | capitalize }} en {{ modulo.nombre_display }}"
+                       title="{{ accion | capitalize }}: {{ modulo.nombre_display }}" />
+              </div>
               {% else %}
-              <span style="color:#e2e8f0;font-size:14px">—</span>
+              <div style="display:flex;justify-content:center">
+                <div class="perm-na" aria-label="No aplicable" title="No disponible para este módulo">
+                  <i class="bi bi-dash" aria-hidden="true"></i>
+                </div>
+              </div>
               {% endif %}
             </td>
             {% endfor %}
@@ -50,9 +256,52 @@
       </table>
     </div>
   </div>
-  <div style="margin-top:16px;display:flex;gap:8px">
-    <button type="submit" class="btn-at-primary"><i class="bi bi-floppy-fill"></i> Guardar permisos</button>
-    <a href="/auth/roles" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Volver</a>
+
+  <!-- Save buttons (bottom) -->
+  <div style="display:flex;gap:8px;margin-top:16px">
+    <button type="submit" class="btn-at-primary">
+      <i class="bi bi-floppy-fill" aria-hidden="true"></i> Guardar permisos
+    </button>
+    <a href="/auth/roles" class="btn-at-ghost">
+      <i class="bi bi-arrow-left" aria-hidden="true"></i> Volver a roles
+    </a>
   </div>
 </form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  /* ── Select-all column toggles ── */
+  document.querySelectorAll('[data-select-all]').forEach(function (selectAll) {
+    var action = selectAll.getAttribute('data-select-all');
+    var colBoxes = document.querySelectorAll('.perm-toggle[data-action="' + action + '"]');
+
+    /* Init: check if all are checked */
+    selectAll.checked = Array.from(colBoxes).every(function (cb) { return cb.checked; });
+    selectAll.indeterminate = !selectAll.checked && Array.from(colBoxes).some(function (cb) { return cb.checked; });
+
+    selectAll.addEventListener('change', function () {
+      colBoxes.forEach(function (cb) { cb.checked = selectAll.checked; });
+      updateCount();
+    });
+    colBoxes.forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        selectAll.checked = Array.from(colBoxes).every(function (c) { return c.checked; });
+        selectAll.indeterminate = !selectAll.checked && Array.from(colBoxes).some(function (c) { return c.checked; });
+        updateCount();
+      });
+    });
+  });
+
+  /* ── Live count badge ── */
+  function updateCount() {
+    var checked = document.querySelectorAll('.perm-toggle[data-action]:checked').length;
+    var el = document.getElementById('perm-active-count');
+    if (el) el.textContent = checked;
+  }
+  updateCount();
+})();
+</script>
 {% endblock %}
