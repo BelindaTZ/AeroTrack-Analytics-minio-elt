@@ -7,6 +7,7 @@ from app.seguridad.jwt.service import crear_token
 from app.shared.clients import pb_client
 from app.shared.utils import audit
 from app.shared.deps import get_current_user, render, require_user
+from app.utils.login_stats import get_login_stats
 
 router = APIRouter()
 
@@ -17,7 +18,8 @@ router = APIRouter()
 async def login_form(request: Request):
     if get_current_user(request):
         return RedirectResponse("/pipeline", status_code=302)
-    return render(request, "login.html", {"error": None, "current_user": None, "user_permissions": {}})
+    stats = await get_login_stats()
+    return render(request, "login.html", {"error": None, "current_user": None, "user_permissions": {}, "stats": stats})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -33,17 +35,19 @@ async def login_post(
         audit.registrar("", email, "login_fallido", "seguridad",
                         ip_address=ip, resultado="fallido",
                         detalle="Credenciales inválidas")
+        stats = await get_login_stats()
         return render(request, "login.html",
                       {"error": "Credenciales incorrectas. Verifique su email y contraseña.",
-                       "current_user": None, "user_permissions": {}})
+                       "current_user": None, "user_permissions": {}, "stats": stats})
 
     if not record.get("activo", True):
         audit.registrar(record["id"], email, "login_fallido", "seguridad",
                         ip_address=ip, resultado="fallido",
                         detalle="Cuenta desactivada")
+        stats = await get_login_stats()
         return render(request, "login.html",
                       {"error": "Cuenta desactivada. Contacte al administrador.",
-                       "current_user": None, "user_permissions": {}})
+                       "current_user": None, "user_permissions": {}, "stats": stats})
 
     token_payload = {
         "sub": record["id"],

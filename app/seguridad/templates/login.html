@@ -6,85 +6,276 @@
   <title>Iniciar sesión — AeroTrack Analytics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+  <link href="/static/css/aerotrack-theme.css" rel="stylesheet" />
   <style>
-    :root{--at-navy:#1B3A6B;--at-coral:#E05A4E;--at-bg:#F4F6F9}
-    body{font-family:'Inter',system-ui,sans-serif;background:var(--at-bg);min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .login-card{background:#fff;border-radius:16px;padding:44px 40px;width:100%;max-width:420px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-    .brand{display:flex;align-items:center;gap:12px;margin-bottom:32px}
-    .brand-icon{width:44px;height:44px;background:var(--at-coral);border-radius:10px;display:flex;align-items:center;justify-content:center}
-    .brand-icon i{color:#fff;font-size:22px}
-    .brand-name{font-size:20px;font-weight:700;color:var(--at-navy)}
-    .brand-sub{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1.5px}
-    .form-label-at{font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:block}
-    .form-control-at{width:100%;padding:11px 14px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;color:#1e293b;background:#fff;outline:none;transition:border-color .2s,box-shadow .2s;font-family:'Inter',sans-serif}
-    .form-control-at:focus{border-color:var(--at-navy);box-shadow:0 0 0 3px rgba(27,58,107,.1)}
-    .btn-login{width:100%;background:var(--at-navy);color:#fff;border:none;padding:12px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px}
-    .btn-login:hover{background:#132d54}
-    .error-box{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:16px}
-    .msg-box{background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;border-radius:8px;padding:10px 14px;font-size:13.5px;display:flex;align-items:center;gap:8px;margin-bottom:16px}
-    .pass-wrap{position:relative}
-    .pass-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;font-size:16px}
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { font-family: 'Inter', system-ui, sans-serif; display: flex; }
+
+    /* ── Dark left panel ── */
+    .lp-content {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      justify-content: space-between;
+      height: 100%; width: 100%;
+    }
+    .lp-brand {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 48px;
+    }
+    .lp-brand-icon {
+      width: 48px; height: 48px;
+      background: var(--at-sidebar-logo-grad);
+      border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 20px rgba(13,110,253,.45);
+      flex-shrink: 0;
+    }
+    .lp-brand-icon i { color: #fff; font-size: 24px; }
+    .lp-brand-name  { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: .1px; }
+    .lp-brand-suite { font-size: 10px; font-weight: 500; color: rgba(255,255,255,.4); letter-spacing: 1.8px; text-transform: uppercase; }
+
+    .lp-headline {
+      font-size: 32px; font-weight: 700; color: #fff;
+      line-height: 1.2; letter-spacing: -.4px;
+      margin-bottom: 16px;
+    }
+    .lp-headline span {
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .lp-tagline { font-size: 14px; color: rgba(255,255,255,.55); line-height: 1.65; max-width: 320px; }
+
+    .lp-stats {
+      display: flex; gap: 28px; margin-top: 48px;
+    }
+    .lp-stat-item .lp-stat-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px; font-weight: 600; color: #fff;
+      letter-spacing: -.5px; line-height: 1;
+    }
+    .lp-stat-item .lp-stat-label {
+      font-size: 11px; color: rgba(255,255,255,.4);
+      margin-top: 4px; letter-spacing: .3px;
+    }
+    .lp-stat-divider { width: 1px; background: rgba(255,255,255,.1); align-self: stretch; }
+
+    /* ── Right login panel ── */
+    .rp-inner {
+      width: 100%; max-width: 400px;
+    }
+    .rp-heading { font-size: 22px; font-weight: 700; color: var(--at-text); margin-bottom: 6px; }
+    .rp-sub     { font-size: 13.5px; color: var(--at-muted); margin-bottom: 32px; }
+
+    .login-input-wrap { position: relative; }
+    .login-input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--at-muted); font-size: 15px; pointer-events: none;
+    }
+    .login-input {
+      width: 100%; padding: 11px 14px 11px 38px;
+      border: 1.5px solid var(--at-border); border-radius: var(--at-r-md);
+      font-size: 14px; color: var(--at-text); background: var(--at-surface);
+      font-family: 'Inter', sans-serif; outline: none;
+      transition: border-color var(--at-dur-base), box-shadow var(--at-dur-base);
+    }
+    .login-input:focus {
+      border-color: var(--at-blue-500);
+      box-shadow: 0 0 0 3px rgba(13,110,253,.13);
+    }
+    .pass-toggle {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--at-muted);
+      cursor: pointer; font-size: 16px; padding: 0 2px;
+      transition: color var(--at-dur-fast);
+    }
+    .pass-toggle:hover { color: var(--at-text); }
+
+    .btn-login {
+      width: 100%; background: linear-gradient(135deg, var(--at-blue-500) 0%, var(--at-indigo-500) 100%);
+      color: #fff; border: none; padding: 13px;
+      border-radius: var(--at-r-md); font-size: 15px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: transform var(--at-dur-base) var(--at-ease),
+                  box-shadow var(--at-dur-base) var(--at-ease);
+      box-shadow: 0 4px 16px rgba(13,110,253,.35);
+      position: relative; overflow: hidden;
+    }
+    .btn-login::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.12) 0%, transparent 55%);
+      pointer-events: none;
+    }
+    .btn-login:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(13,110,253,.45); }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { background: #64748b; box-shadow: none; cursor: not-allowed; transform: none; }
+
+    .error-box {
+      background: var(--at-failed-bg); border: 1px solid rgba(220,53,69,.22);
+      color: #7f1d1d; border-radius: var(--at-r-md);
+      padding: 10px 14px; font-size: 13.5px;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 18px;
+      animation: at-slide-down var(--at-dur-base) var(--at-ease);
+    }
+    .msg-box {
+      background: var(--at-success-bg); border: 1px solid rgba(25,135,84,.22);
+      color: #0a5233; border-radius: var(--at-r-md);
+      padding: 10px 14px; font-size: 13.5px;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 18px;
+    }
+
+    /* Floating grid orbs on dark panel */
+    .orb {
+      position: absolute; border-radius: 50%;
+      filter: blur(60px); opacity: .25; pointer-events: none;
+      animation: at-orb-drift 8s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 320px; height: 320px; background: #3b82f6; top: -80px; right: -60px; animation-delay: 0s; }
+    .orb-2 { width: 200px; height: 200px; background: #6366f1; bottom: 40px; left: -40px; animation-delay: -3s; }
+    .orb-3 { width: 160px; height: 160px; background: #22d3ee; top: 45%; right: 10%; animation-delay: -5s; }
+    @keyframes at-orb-drift {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(20px, -20px) scale(1.08); }
+    }
   </style>
 </head>
 <body>
-<div class="login-card">
-  <div class="brand">
-    <div class="brand-icon"><i class="bi bi-airplane-fill"></i></div>
-    <div>
-      <div class="brand-name">AeroTrack</div>
-      <div class="brand-sub">Analytics Suite</div>
+
+<div class="login-split" style="width:100%;overflow:hidden">
+
+  <!-- ── Dark panel (left) ── -->
+  <div class="login-dark-panel" style="min-height:100vh">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="lp-content">
+      <div>
+        <div class="lp-brand">
+          <div class="lp-brand-icon"><i class="bi bi-airplane-fill"></i></div>
+          <div>
+            <div class="lp-brand-name">AeroTrack</div>
+            <div class="lp-brand-suite">Analytics Suite</div>
+          </div>
+        </div>
+
+        <h1 class="lp-headline">
+          Datos de vuelo.<br>
+          <span>Decisiones claras.</span>
+        </h1>
+        <p class="lp-tagline">
+          Inteligencia operacional para el sector aéreo de EE. UU.
+        </p>
+
+        <div class="lp-stats">
+          <div class="lp-stat-item">
+            <div class="lp-stat-num">{{ stats.vuelos | default("—") }}</div>
+            <div class="lp-stat-label">Vuelos procesados</div>
+          </div>
+          <div class="lp-stat-divider"></div>
+          <div class="lp-stat-item">
+            <div class="lp-stat-num">{{ stats.disponibilidad | default("—") }}</div>
+            <div class="lp-stat-label">Disponibilidad del sistema</div>
+          </div>
+          <div class="lp-stat-divider"></div>
+          <div class="lp-stat-item">
+            <div class="lp-stat-num">{{ stats.aerolineas | default("—") }}</div>
+            <div class="lp-stat-label">Aerolíneas monitoreadas</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <h2 style="font-size:18px;font-weight:700;margin-bottom:6px;color:#1e293b">Iniciar sesión</h2>
-  <p style="font-size:13px;color:#64748b;margin-bottom:24px">Ingresa tus credenciales para continuar.</p>
+  <!-- ── Light panel (right) ── -->
+  <div class="login-light-panel">
+    <div class="rp-inner">
 
-  {% set msg = request.query_params.get('msg', '') %}
-  {% if msg == 'sesion_cerrada' %}
-  <div class="msg-box"><i class="bi bi-check-circle-fill"></i> Sesión cerrada correctamente.</div>
-  {% endif %}
+      <h2 class="rp-heading">Bienvenido de nuevo</h2>
+      <p class="rp-sub">Ingresa tus credenciales para acceder al panel.</p>
 
-  {% if error %}
-  <div class="error-box"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div>
-  {% endif %}
-
-  <form action="/auth/login" method="post" id="login-form">
-    <div style="margin-bottom:16px">
-      <label class="form-label-at" for="email">Email</label>
-      <input type="email" id="email" name="email" class="form-control-at"
-             placeholder="usuario@ejemplo.com" required autocomplete="email" />
-    </div>
-    <div style="margin-bottom:24px">
-      <label class="form-label-at" for="password">Contraseña</label>
-      <div class="pass-wrap">
-        <input type="password" id="password" name="password" class="form-control-at"
-               placeholder="••••••••" required autocomplete="current-password" />
-        <button type="button" class="pass-toggle" onclick="togglePass()" id="btn-toggle-pass">
-          <i class="bi bi-eye" id="eye-icon"></i>
-        </button>
+      {% set _qmsg = request.query_params.get('msg', '') %}
+      {% if _qmsg == 'sesion_cerrada' %}
+      <div class="msg-box" role="status">
+        <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+        Sesión cerrada correctamente.
       </div>
+      {% endif %}
+
+      {% if error %}
+      <div class="error-box" role="alert">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <form action="/auth/login" method="post" id="login-form" novalidate>
+        <div style="margin-bottom:18px">
+          <label class="form-label-at" for="email">Correo electrónico</label>
+          <div class="login-input-wrap">
+            <i class="bi bi-envelope login-input-icon" aria-hidden="true"></i>
+            <input type="email" id="email" name="email"
+                   class="login-input"
+                   placeholder="usuario@ejemplo.com"
+                   required autocomplete="email"
+                   autofocus />
+          </div>
+        </div>
+
+        <div style="margin-bottom:28px">
+          <label class="form-label-at" for="password">Contraseña</label>
+          <div class="login-input-wrap">
+            <i class="bi bi-lock login-input-icon" aria-hidden="true"></i>
+            <input type="password" id="password" name="password"
+                   class="login-input" style="padding-right:40px"
+                   placeholder="••••••••"
+                   required autocomplete="current-password" />
+            <button type="button" class="pass-toggle" id="btn-pass-toggle"
+                    aria-label="Mostrar u ocultar contraseña"
+                    onclick="atTogglePass()">
+              <i class="bi bi-eye" id="pass-eye-icon" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login" id="btn-submit">
+          <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
+          Ingresar
+        </button>
+      </form>
+
+      <p style="font-size:12px;color:var(--at-sub);text-align:center;margin-top:24px">
+        Sistema restringido a usuarios autorizados.<br>
+        Acceso monitoreado y auditado.
+      </p>
     </div>
-    <button type="submit" class="btn-login" id="btn-submit">
-      <i class="bi bi-box-arrow-in-right"></i> Ingresar
-    </button>
-  </form>
+  </div>
+
 </div>
 
 <script>
-function togglePass(){
-  const inp=document.getElementById('password');
-  const ico=document.getElementById('eye-icon');
-  if(inp.type==='password'){inp.type='text';ico.className='bi bi-eye-slash'}
-  else{inp.type='password';ico.className='bi bi-eye'}
-}
-document.getElementById('login-form').addEventListener('submit',function(){
-  const btn=document.getElementById('btn-submit');
-  btn.disabled=true;
-  btn.innerHTML='<span class="spinner-border spinner-border-sm me-2"></span> Ingresando…';
-})
+  function atTogglePass() {
+    var inp = document.getElementById('password');
+    var ico = document.getElementById('pass-eye-icon');
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      ico.className = 'bi bi-eye-slash';
+    } else {
+      inp.type = 'password';
+      ico.className = 'bi bi-eye';
+    }
+  }
+
+  document.getElementById('login-form').addEventListener('submit', function () {
+    var btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Ingresando…';
+  });
 </script>
 </body>
 </html>

@@ -1,120 +1,299 @@
 {% extends "base.html" %}
 {% block title %}Usuarios — AeroTrack Analytics{% endblock %}
-{% block breadcrumb %}Administración › Usuarios{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-sep" aria-hidden="true">›</span>
+<span class="bc-current">Usuarios</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* Avatar color palette — cycles through 6 colors */
+  .av-0 { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+  .av-1 { background: linear-gradient(135deg, #10b981, #059669); }
+  .av-2 { background: linear-gradient(135deg, #f59e0b, #d97706); }
+  .av-3 { background: linear-gradient(135deg, #ec4899, #be185d); }
+  .av-4 { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+  .av-5 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+
+  /* Toggle switch */
+  .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--at-border); border-radius: 20px;
+    cursor: pointer;
+    transition: background var(--at-dur-base) var(--at-ease);
+  }
+  .toggle-track::before {
+    content: '';
+    position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%;
+    transition: transform var(--at-dur-base) var(--at-ease);
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  }
+  .toggle-switch input:checked + .toggle-track { background: var(--at-green-500); }
+  .toggle-switch input:checked + .toggle-track::before { transform: translateX(16px); }
+  .toggle-switch input:focus + .toggle-track { outline: 2px solid rgba(13,110,253,.4); outline-offset: 2px; }
+
+  /* Action dropdown button */
+  .actions-dropdown-btn {
+    width: 30px; height: 30px;
+    border: 1px solid var(--at-border); border-radius: var(--at-r-sm);
+    background: transparent; color: var(--at-muted); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    transition: all var(--at-dur-fast);
+  }
+  .actions-dropdown-btn:hover { background: var(--at-bg); color: var(--at-text); border-color: #cbd5e1; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-heading">
-  <h1><i class="bi bi-people-fill" style="color:var(--at-coral);margin-right:8px"></i>Usuarios</h1>
-  <p>Gestión de cuentas de usuario del sistema.</p>
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-people-fill"></i></span>
+    Usuarios
+  </h1>
+  <p>Gestión de cuentas de acceso al sistema ({{ total }} en total).</p>
 </div>
 
-{% if error_crear %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error_crear }}</div></div>{% endif %}
+{% if error_crear %}
+<div class="flash-bar" role="alert">
+  <div class="flash-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> {{ error_crear }}</div>
+</div>
+{% endif %}
 
-<div class="at-table-wrapper mb-4">
+<div class="at-table-wrapper">
+  <!-- Table header: search + filters + create -->
   <div class="at-table-header">
-    <span class="at-table-title">Lista de usuarios ({{ total }})</span>
+    <span class="at-table-title">
+      Lista de usuarios
+      <span style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">({{ total }})</span>
+    </span>
     <div class="d-flex gap-2 flex-wrap align-items-center">
-      <form method="get" class="d-flex gap-2 align-items-center">
+      <form method="get" class="d-flex gap-2 align-items-center flex-wrap" role="search" aria-label="Filtrar usuarios">
         <div class="at-search-wrap">
-          <i class="bi bi-search"></i>
-          <input type="text" name="q" class="at-search" placeholder="Buscar…" value="{{ q }}" />
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <input type="text" name="q" class="at-search"
+                 placeholder="Buscar nombre o email…"
+                 value="{{ q }}"
+                 aria-label="Buscar usuarios" />
         </div>
-        <select name="rol_id" class="form-control-at" style="width:140px">
+
+        <select name="rol_id" class="form-control-at" style="width:150px" aria-label="Filtrar por rol">
           <option value="">Todos los roles</option>
-          {% for rol in roles %}<option value="{{ rol.id }}" {% if filtro_rol == rol.id %}selected{% endif %}>{{ rol.nombre }}</option>{% endfor %}
+          {% for rol in roles %}
+          <option value="{{ rol.id }}" {% if filtro_rol == rol.id %}selected{% endif %}>{{ rol.nombre }}</option>
+          {% endfor %}
         </select>
-        <select name="activo" class="form-control-at" style="width:110px">
+
+        <select name="activo" class="form-control-at" style="width:120px" aria-label="Filtrar por estado">
           <option value="">Todos</option>
-          <option value="true" {% if filtro_activo == 'true' %}selected{% endif %}>Activos</option>
+          <option value="true"  {% if filtro_activo == 'true'  %}selected{% endif %}>Activos</option>
           <option value="false" {% if filtro_activo == 'false' %}selected{% endif %}>Inactivos</option>
         </select>
-        <button type="submit" class="btn-at-primary" style="padding:7px 12px"><i class="bi bi-funnel"></i></button>
+
+        <button type="submit" class="btn-at-primary" style="padding:7px 12px" aria-label="Aplicar filtros">
+          <i class="bi bi-funnel" aria-hidden="true"></i>
+        </button>
       </form>
-      <button class="btn-at-coral" data-bs-toggle="modal" data-bs-target="#modalNuevo">
-        <i class="bi bi-plus-lg"></i> Nuevo usuario
+
+      <button class="btn-at-primary"
+              data-bs-toggle="modal" data-bs-target="#modalNuevo"
+              aria-haspopup="dialog">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> Nuevo usuario
       </button>
     </div>
   </div>
 
   {% if usuarios %}
   <div class="at-table-scroll">
-    <table class="at-table">
-      <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Creado</th><th style="text-align:right">Acciones</th></tr></thead>
+    <table class="at-table" aria-label="Lista de usuarios">
+      <thead>
+        <tr>
+          <th scope="col">Usuario</th>
+          <th scope="col">Email</th>
+          <th scope="col">Rol</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Creado</th>
+          <th scope="col" style="text-align:right">Acciones</th>
+        </tr>
+      </thead>
       <tbody>
         {% for u in usuarios %}
+        {% set av_idx = loop.index0 % 6 %}
+        {% set initial = (u.nombre or u.email or 'U')[:1].upper() %}
+        {% set rol_u = u.expand.rol_id if u.expand else {} %}
         <tr>
-          <td><strong>{{ u.nombre }}</strong></td>
-          <td style="color:var(--at-muted)">{{ u.email }}</td>
-          <td>
-            {% set rol_u = u.expand.rol_id if u.expand else {} %}
-            <span style="font-size:12px;background:#f1f5f9;padding:2px 8px;border-radius:20px">{{ rol_u.nombre if rol_u else u.rol_id }}</span>
+          <!-- Avatar + name -->
+          <td style="min-width:180px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="user-avatar-initials av-{{ av_idx }}" aria-hidden="true">{{ initial }}</div>
+              <div>
+                <div style="font-weight:600;font-size:13.5px">{{ u.nombre or '—' }}</div>
+                <div style="font-size:11px;color:var(--at-sub)">ID: {{ u.id[:8] }}…</div>
+              </div>
+            </div>
           </td>
+
+          <!-- Email -->
+          <td style="color:var(--at-muted);font-size:13px">{{ u.email }}</td>
+
+          <!-- Role chip -->
           <td>
-            {% if u.activo %}<span class="badge-active">Activo</span>{% else %}<span class="badge-inactive">Inactivo</span>{% endif %}
+            <span class="role-chip">
+              <i class="bi bi-shield-check" aria-hidden="true"></i>
+              {{ rol_u.nombre if rol_u else '—' }}
+            </span>
           </td>
-          <td style="color:var(--at-muted);font-size:12px">{{ u.created[:10] if u.created else '—' }}</td>
-          <td class="actions-col" style="text-align:right">
-            <a href="/auth/usuarios/{{ u.id }}" class="btn-icon edit me-1" title="Editar"><i class="bi bi-pencil"></i></a>
-            <form action="/auth/usuarios/{{ u.id }}/estado" method="post" style="display:inline">
-              <button type="submit" class="btn-icon {% if u.activo %}danger{% else %}view{% endif %}" title="{% if u.activo %}Desactivar{% else %}Activar{% endif %}">
-                <i class="bi bi-{% if u.activo %}toggle-on{% else %}toggle-off{% endif %}"></i>
-              </button>
+
+          <!-- Toggle status -->
+          <td>
+            <form action="/auth/usuarios/{{ u.id }}/estado" method="post"
+                  style="display:inline"
+                  onsubmit="return AT.confirm(event, '{{ 'Desactivar' if u.activo else 'Activar' }} a {{ u.nombre or u.email }}', '¿Confirmas este cambio de estado?')">
+              <label class="toggle-switch" title="{% if u.activo %}Activo — clic para desactivar{% else %}Inactivo — clic para activar{% endif %}">
+                <input type="checkbox"
+                       {% if u.activo %}checked{% endif %}
+                       onchange="this.form.submit()"
+                       aria-label="Estado de {{ u.nombre or u.email }}: {% if u.activo %}activo{% else %}inactivo{% endif %}" />
+                <span class="toggle-track"></span>
+              </label>
             </form>
+            <span style="font-size:11px;margin-left:6px;color:var(--at-muted)">
+              {% if u.activo %}Activo{% else %}Inactivo{% endif %}
+            </span>
+          </td>
+
+          <!-- Created date -->
+          <td class="at-code" style="font-size:12px;color:var(--at-muted)">
+            {{ u.created[:10] if u.created else '—' }}
+          </td>
+
+          <!-- Row actions dropdown -->
+          <td class="actions-col" style="text-align:right">
+            <div class="dropdown d-inline-block">
+              <button class="actions-dropdown-btn"
+                      type="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                      aria-label="Acciones para {{ u.nombre or u.email }}">
+                <i class="bi bi-three-dots-vertical" aria-hidden="true"></i>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end"
+                  style="font-size:13px;border-radius:10px;border:1px solid var(--at-border);box-shadow:var(--at-shadow-lg);padding:6px;min-width:160px">
+                <li>
+                  <a class="dropdown-item" href="/auth/usuarios/{{ u.id }}"
+                     style="border-radius:7px;padding:7px 12px;display:flex;align-items:center;gap:8px">
+                    <i class="bi bi-pencil" style="color:var(--at-blue-500)" aria-hidden="true"></i>
+                    Editar
+                  </a>
+                </li>
+                <li>
+                  <form action="/auth/usuarios/{{ u.id }}/estado" method="post" class="m-0"
+                        onsubmit="return AT.confirm(event, '{{ 'Desactivar' if u.activo else 'Activar' }} usuario', '¿Confirmas este cambio?')">
+                    <button type="submit" class="dropdown-item"
+                            style="border-radius:7px;padding:7px 12px;display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;cursor:pointer;font-size:13px;color:{% if u.activo %}var(--at-red-500){% else %}var(--at-green-500){% endif %}">
+                      <i class="bi bi-toggle-{% if u.activo %}off{% else %}on{% endif %}" aria-hidden="true"></i>
+                      {% if u.activo %}Desactivar{% else %}Activar{% endif %}
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </div>
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <div class="at-pagination">
-    <span>Mostrando {{ (page-1)*per_page+1 }}–{{ [page*per_page, total]|min }} de {{ total }}</span>
-    <div class="pag-btns">
-      <a href="?page={{ page-1 }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}" class="pag-btn {% if page==1 %}disabled{% endif %}"><i class="bi bi-chevron-left"></i></a>
-      {% for p in range(1, total_pages+1) %}<a href="?page={{ p }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}" class="pag-btn {% if p==page %}active{% endif %}">{{ p }}</a>{% endfor %}
-      <a href="?page={{ page+1 }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}" class="pag-btn {% if page==total_pages %}disabled{% endif %}"><i class="bi bi-chevron-right"></i></a>
+
+  <!-- Pagination -->
+  <nav class="at-pagination" aria-label="Paginación de usuarios">
+    <span>
+      Mostrando {{ (page-1)*per_page+1 }}–{{ [page*per_page, total]|min }} de {{ total }}
+    </span>
+    <div class="pag-btns" role="list">
+      <a href="?page={{ page-1 }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}"
+         class="pag-btn {% if page==1 %}disabled{% endif %}"
+         aria-label="Página anterior" {% if page==1 %}aria-disabled="true" tabindex="-1"{% endif %}>
+        <i class="bi bi-chevron-left" aria-hidden="true"></i>
+      </a>
+      {% for p in range(1, total_pages+1) %}
+      <a href="?page={{ p }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}"
+         class="pag-btn {% if p==page %}active{% endif %}"
+         aria-label="Página {{ p }}"
+         {% if p==page %}aria-current="page"{% endif %}>{{ p }}</a>
+      {% endfor %}
+      <a href="?page={{ page+1 }}&q={{ q }}&rol_id={{ filtro_rol }}&activo={{ filtro_activo }}"
+         class="pag-btn {% if page==total_pages %}disabled{% endif %}"
+         aria-label="Página siguiente" {% if page==total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>
+        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+      </a>
     </div>
-  </div>
+  </nav>
+
   {% else %}
-  <div style="padding:60px;text-align:center;color:var(--at-muted)">
-    <i class="bi bi-people" style="font-size:40px;display:block;margin-bottom:12px;opacity:.4"></i>
+  <div class="at-empty" role="status">
+    <i class="bi bi-people at-empty-icon" aria-hidden="true"></i>
     <strong>No se encontraron usuarios</strong>
+    <p>Ajusta los filtros o crea un nuevo usuario.</p>
   </div>
   {% endif %}
 </div>
 
-<!-- Modal nuevo usuario -->
-<div class="modal fade" id="modalNuevo" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content" style="border-radius:14px;border:none;box-shadow:0 20px 60px rgba(0,0,0,.15)">
+<!-- ── Modal: nuevo usuario ── -->
+<div class="modal fade" id="modalNuevo" tabindex="-1"
+     aria-labelledby="modalNuevoTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:440px">
+    <div class="modal-content" style="border-radius:var(--at-r-xl);border:none;box-shadow:var(--at-shadow-lift)">
       <div class="modal-header" style="border-bottom:1px solid var(--at-border);padding:18px 24px">
-        <h5 class="modal-title" style="font-size:16px;font-weight:700"><i class="bi bi-person-plus-fill text-primary me-2"></i>Nuevo usuario</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <h5 class="modal-title" id="modalNuevoTitle"
+            style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px">
+          <span style="width:28px;height:28px;background:var(--at-running-bg);border-radius:7px;display:inline-flex;align-items:center;justify-content:center;color:var(--at-blue-500);font-size:13px">
+            <i class="bi bi-person-plus-fill" aria-hidden="true"></i>
+          </span>
+          Nuevo usuario
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
+
       <form action="/auth/usuarios" method="post">
-        <div class="modal-body" style="padding:20px 24px">
-          <div style="margin-bottom:14px">
-            <label class="form-label-at">Nombre completo</label>
-            <input type="text" name="nombre" class="form-control-at" required />
+        <div class="modal-body" style="padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label class="form-label-at" for="nu-nombre">Nombre completo</label>
+            <input type="text" id="nu-nombre" name="nombre" class="form-control-at"
+                   placeholder="Ej. Ana García" required autocomplete="name" />
           </div>
-          <div style="margin-bottom:14px">
-            <label class="form-label-at">Email</label>
-            <input type="email" name="email" class="form-control-at" required />
+          <div>
+            <label class="form-label-at" for="nu-email">Correo electrónico</label>
+            <input type="email" id="nu-email" name="email" class="form-control-at"
+                   placeholder="usuario@ejemplo.com" required autocomplete="email" />
           </div>
-          <div style="margin-bottom:6px">
-            <label class="form-label-at">Rol</label>
-            <select name="rol_id" class="form-control-at" required>
-              {% for rol in roles %}<option value="{{ rol.id }}">{{ rol.nombre }}</option>{% endfor %}
+          <div>
+            <label class="form-label-at" for="nu-rol">Rol</label>
+            <select id="nu-rol" name="rol_id" class="form-control-at" required>
+              <option value="" disabled selected>Selecciona un rol…</option>
+              {% for rol in roles %}
+              <option value="{{ rol.id }}">{{ rol.nombre }}</option>
+              {% endfor %}
             </select>
           </div>
-          <p style="font-size:12px;color:var(--at-muted);margin-top:8px">
-            <i class="bi bi-info-circle me-1"></i>Se generará una contraseña temporal y se enviará por email.
+          <p style="font-size:12px;color:var(--at-muted);margin:0;display:flex;align-items:flex-start;gap:6px">
+            <i class="bi bi-info-circle" aria-hidden="true" style="margin-top:1px;flex-shrink:0"></i>
+            Se generará una contraseña temporal que el usuario deberá cambiar al primer inicio de sesión.
           </p>
         </div>
         <div class="modal-footer" style="border-top:1px solid var(--at-border);padding:14px 24px;gap:8px">
           <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn-at-primary"><i class="bi bi-person-check-fill"></i> Crear usuario</button>
+          <button type="submit" class="btn-at-primary">
+            <i class="bi bi-person-check-fill" aria-hidden="true"></i> Crear usuario
+          </button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
 {% endblock %}

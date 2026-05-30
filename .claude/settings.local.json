@@ -22,10 +22,16 @@
       "Bash(docker-compose up *)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('OK - DAGs:', [x['dag_id'] for x in d.get\\('dags',[]\\)]\\)\")",
       "Bash(python scripts/configure_email.py)",
-      "Bash(Remove-Item -Recurse -Force \"c:/proyectos/minio-elt/app/autenticacion\")"
+      "Bash(Remove-Item -Recurse -Force \"c:/proyectos/minio-elt/app/autenticacion\")",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"enterprise analytics BI admin dashboard dark mode\" --design-system -p \"AeroTrack Analytics\" -f markdown)",
+      "Bash(Get-ChildItem -Recurse \"c:\\\\proyectos\\\\minio-elt\\\\.claude\\\\skills\\\\ui-ux-pro-max\")",
+      "Bash(Select-Object FullName, Length)",
+      "PowerShell(Get-ChildItem -Recurse \"c:\\\\proyectos\\\\minio-elt\\\\static\" | Select-Object FullName, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}})",
+      "Bash(mkdir -p c:/proyectos/minio-elt/app/utils 2>/dev/null; echo done)"
     ],
     "additionalDirectories": [
-      "C:\\proyectos\\minio-elt\\.kiro"
+      "C:\\proyectos\\minio-elt\\.kiro",
+      "c:\\proyectos\\minio-elt\\app"
     ]
   }
 }
