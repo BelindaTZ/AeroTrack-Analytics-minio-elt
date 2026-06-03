@@ -15,7 +15,7 @@
 
 {% if error %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div></div>{% endif %}
 
-<div class="at-card" style="max-width:720px">
+<div class="at-card">
   <form action="/modelo/{{ tabla }}/{% if modo == 'crear' %}nuevo{% else %}{{ pk_val }}/editar{% endif %}" method="post">
     <div class="row g-3">
       {% for col in columnas %}
