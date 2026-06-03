@@ -21,6 +21,7 @@
     </div>
   </div>
 
+  <div id="modelo-results">
   {% if rows %}
   <div class="at-table-scroll">
     <table class="at-table" id="data-table">
@@ -70,6 +71,7 @@
     {% if q %}<p style="margin-top:6px;font-size:13px">No hay resultados para "<em>{{ q }}</em>". <a href="/modelo/{{ tabla }}" style="color:var(--at-navy)">Limpiar</a></p>{% endif %}
   </div>
   {% endif %}
+  </div><!-- #modelo-results -->
 </div>
 
 <a href="/modelo/{{ tabla }}/nuevo" class="fab"><i class="bi bi-plus-lg"></i> Nuevo registro</a>
@@ -97,9 +99,27 @@
 {% endblock %}
 {% block scripts %}
 <script>
-const searchInput=document.getElementById('search-input');
+const searchInput = document.getElementById('search-input');
+const resultsBox  = document.getElementById('modelo-results');
 let timer;
-if(searchInput){searchInput.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>document.getElementById('search-form').submit(),400)})}
+if (searchInput && resultsBox) {
+  searchInput.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const url = '/modelo/{{ tabla }}?q=' + encodeURIComponent(searchInput.value);
+      fetch(url)
+        .then(r => r.text())
+        .then(html => {
+          const doc    = new DOMParser().parseFromString(html, 'text/html');
+          const newBox = doc.getElementById('modelo-results');
+          if (newBox) {
+            resultsBox.innerHTML = newBox.innerHTML;
+            history.replaceState(null, '', url);
+          }
+        });
+    }, 400);
+  });
+}
 function confirmarEliminar(id){
   document.getElementById('modal-id-text').textContent=id;
   document.getElementById('form-eliminar').action='/modelo/{{ tabla }}/'+id+'/eliminar';
