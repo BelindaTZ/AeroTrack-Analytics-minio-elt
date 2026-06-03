@@ -1,130 +1,456 @@
 {% extends "base.html" %}
 {% block title %}Pipeline ELT — AeroTrack Analytics{% endblock %}
-{% block breadcrumb %}Pipeline ELT{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-current">Pipeline ELT</span>
+{% endblock %}
+
 {% block head_extra %}
 <style>
-  .task-card{background:var(--at-surface);border:1px solid var(--at-border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:14px}
-  .task-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-  .task-icon.running{background:#eff6ff;color:#2563eb}
-  .task-icon.success{background:#ecfdf5;color:#16a34a}
-  .task-icon.failed{background:#fef2f2;color:#dc2626}
-  .task-icon.queued{background:#fffbeb;color:#d97706}
-  .task-icon.none{background:#f8fafc;color:#94a3b8}
+  /* ── Hero execute section ── */
+  .pipeline-hero {
+    background: linear-gradient(135deg, #0f1117 0%, #141822 60%, #0d1a2e 100%);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 20px;
+    padding: 40px 44px;
+    position: relative; overflow: hidden;
+    display: flex; align-items: center; gap: 40px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.22);
+  }
+  .pipeline-hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 5% 50%, rgba(13,110,253,.14) 0%, transparent 50%),
+      radial-gradient(ellipse at 95% 20%, rgba(99,102,241,.10) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .pipeline-hero::after {
+    content: '';
+    position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(13,110,253,.5), rgba(99,102,241,.5), transparent);
+  }
+
+  .hero-icon-ring {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(13,110,253,.2), rgba(99,102,241,.2));
+    border: 1px solid rgba(13,110,253,.3);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; position: relative; z-index: 1;
+    box-shadow: 0 0 0 8px rgba(13,110,253,.06), 0 0 0 16px rgba(13,110,253,.03);
+  }
+  .hero-icon-ring.active {
+    animation: at-ring-pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes at-ring-pulse {
+    0%,100% { box-shadow: 0 0 0 8px rgba(13,110,253,.06), 0 0 0 16px rgba(13,110,253,.03); }
+    50%      { box-shadow: 0 0 0 12px rgba(13,110,253,.10), 0 0 0 24px rgba(13,110,253,.04); }
+  }
+  .hero-icon-ring i { font-size: 32px; color: #60a5fa; }
+  .hero-icon-ring.active i { animation: at-spin 1.8s linear infinite; }
+
+  .hero-copy { flex: 1; position: relative; z-index: 1; }
+  .hero-dag-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    color: rgba(255,255,255,.4); letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .hero-title {
+    font-size: 24px; font-weight: 700; color: #fff;
+    letter-spacing: -.3px; margin: 0 0 10px;
+    line-height: 1.2;
+  }
+  .hero-meta {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .hero-meta-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12.5px; color: rgba(255,255,255,.5);
+  }
+  .hero-meta-item i { font-size: 13px; }
+
+  .hero-actions { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+
+  /* ── Progress bar track ── */
+  .pipeline-progress-section {
+    background: var(--at-surface);
+    border: 1px solid var(--at-border);
+    border-radius: var(--at-r-lg);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--at-shadow-sm);
+  }
+  .progress-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .progress-label { font-size: 13px; font-weight: 600; color: var(--at-text); }
+  .progress-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600; color: var(--at-blue-500);
+  }
+
+  /* ── Task timeline ── */
+  .task-timeline { display: flex; flex-direction: column; gap: 10px; }
+  .task-timeline-item {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: var(--at-r-lg);
+    border: 1px solid var(--at-border);
+    background: var(--at-surface);
+    box-shadow: var(--at-shadow-xs);
+    transition: border-color var(--at-dur-base) var(--at-ease),
+                box-shadow var(--at-dur-base) var(--at-ease),
+                transform var(--at-dur-base) var(--at-ease);
+    position: relative;
+    overflow: hidden;
+  }
+  .task-timeline-item::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    border-radius: 0 2px 2px 0;
+    opacity: 0;
+    transition: opacity var(--at-dur-base);
+  }
+  .task-timeline-item.step-running  { border-color: rgba(13,110,253,.3);  box-shadow: 0 0 0 3px rgba(13,110,253,.06), var(--at-shadow-sm); }
+  .task-timeline-item.step-success  { border-color: rgba(25,135,84,.3); }
+  .task-timeline-item.step-failed   { border-color: rgba(220,53,69,.3);   box-shadow: 0 0 0 3px rgba(220,53,69,.05); }
+  .task-timeline-item.step-running::before  { background: var(--at-blue-500);  opacity: 1; }
+  .task-timeline-item.step-success::before  { background: var(--at-green-500); opacity: 1; }
+  .task-timeline-item.step-failed::before   { background: var(--at-red-500);   opacity: 1; }
+
+  .task-node {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .task-node.running { background: var(--at-running-bg); color: var(--at-running-fg); }
+  .task-node.success { background: var(--at-success-bg); color: var(--at-success-fg); }
+  .task-node.failed  { background: var(--at-failed-bg);  color: var(--at-failed-fg); }
+  .task-node.queued  { background: var(--at-warning-bg); color: var(--at-warning-fg); }
+  .task-node.none,
+  .task-node.skipped { background: #f1f5f9; color: var(--at-sub); }
+  .task-node.running i { animation: at-spin 1s linear infinite; }
+
+  .task-info { min-width: 0; }
+  .task-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 600; color: var(--at-text);
+    letter-spacing: -.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .task-state-label { font-size: 12px; color: var(--at-muted); margin-top: 3px; text-transform: capitalize; }
+  .task-elapsed {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--at-sub); display: block; margin-top: 2px;
+  }
+  .task-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  /* ── Recent runs mini-table ── */
+  .runs-section { margin-top: 24px; }
+
+  /* ── Elapsed counter ── */
+  .at-elapsed-counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 500; color: var(--at-blue-500);
+  }
 </style>
 {% endblock %}
-{% block content %}
-<div class="page-heading">
-  <h1><i class="bi bi-gear-fill" style="color:var(--at-coral);margin-right:8px"></i>Pipeline ELT</h1>
-  <p>Control y monitoreo del DAG <code>{{ dag_id }}</code>.</p>
-</div>
 
+{% block content %}
 {% set state = estado.state if estado else 'no_runs' %}
 {% set is_running = state in ('running', 'queued') %}
+{% set is_success = state == 'success' %}
+{% set is_failed  = state == 'failed' %}
+{% set has_tasks  = estado.task_instances is defined and estado.task_instances %}
+{% set task_list  = estado.task_instances if has_tasks else [] %}
 
-<!-- Estado actual -->
-<div class="row g-3 mb-4" id="estado-panel">
-  <div class="col-md-8">
-    <div class="at-card">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <h5 style="font-size:15px;font-weight:700;margin:0">Estado actual</h5>
-        <span style="font-size:12px;color:var(--at-muted)">Auto-refresh cada 10s</span>
-      </div>
-      {% if state == 'no_runs' %}
-      <div style="text-align:center;padding:24px;color:var(--at-muted)">
-        <i class="bi bi-hourglass" style="font-size:32px;display:block;margin-bottom:8px;opacity:.4"></i>
-        Sin ejecuciones anteriores. Ejecuta el pipeline para comenzar.
-      </div>
-      {% else %}
-      <div class="d-flex align-items-center gap-3 mb-3">
-        <span class="dot dot-{{ state }}" style="width:12px;height:12px"></span>
-        <strong style="font-size:16px;text-transform:capitalize">{{ state }}</strong>
-        <span style="font-size:13px;color:var(--at-muted)">{{ estado.dag_run_id or '' }}</span>
-      </div>
-      {% if estado.task_instances %}
-      <div class="d-flex flex-column gap-2">
-        {% for task in estado.task_instances %}
-        {% set ts = task.state or 'none' %}
-        <div class="task-card">
-          <div class="task-icon {{ ts }}">
-            <i class="bi bi-{% if ts == 'running' %}arrow-repeat{% elif ts == 'success' %}check-lg{% elif ts == 'failed' %}x-lg{% elif ts == 'queued' %}clock{% else %}dash{% endif %}"></i>
-          </div>
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:14px">{{ task.task_id }}</div>
-            <div style="font-size:12px;color:var(--at-muted)">{{ ts }}</div>
-          </div>
-          {% if ts == 'failed' %}
-          <a href="/pipeline/logs/{{ estado.dag_run_id }}/{{ task.task_id }}" class="btn-at-ghost" style="font-size:12px">
-            <i class="bi bi-bug"></i> Ver error
-          </a>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
+{# Compute progress pct from task states #}
+{% set total_tasks = task_list | length %}
+{% set done_tasks  = task_list | selectattr('state', 'in', ['success', 'failed', 'skipped']) | list | length %}
+{% set pct = ((done_tasks / total_tasks * 100) | int) if total_tasks > 0 else (100 if is_success else 0) %}
+
+<!-- ══════════════════════════════════
+     HERO EXECUTE CARD
+════════════════════════════════════ -->
+<div class="pipeline-hero" id="pipeline-hero">
+
+  <!-- Animated ring icon -->
+  <div class="hero-icon-ring {% if is_running %}active{% endif %}" aria-hidden="true">
+    <i class="bi bi-{% if is_running %}arrow-repeat{% elif is_success %}check-circle{% elif is_failed %}exclamation-circle{% else %}gear{% endif %}"></i>
+  </div>
+
+  <!-- Copy block -->
+  <div class="hero-copy">
+    <div class="hero-dag-id">DAG / {{ dag_id }}</div>
+    <h1 class="hero-title">
+      {% if is_running %}Ejecutando pipeline…
+      {% elif is_success %}Ejecución completada
+      {% elif is_failed %}Ejecución fallida
+      {% elif state == 'no_runs' %}Listo para ejecutar
+      {% else %}{{ state | capitalize }}
       {% endif %}
+    </h1>
+    <div class="hero-meta">
+      <!-- Current status badge -->
+      <span class="at-badge
+        {% if is_running %}at-badge-running
+        {% elif is_success %}at-badge-success
+        {% elif is_failed %}at-badge-failed
+        {% else %}at-badge-pending{% endif %}">
+        <span class="badge-dot" aria-hidden="true"></span>
+        {% if is_running %}En ejecución
+        {% elif is_success %}Completado
+        {% elif is_failed %}Error
+        {% else %}Sin ejecución{% endif %}
+      </span>
+      <!-- Run ID -->
+      {% if estado and estado.dag_run_id %}
+      <span class="hero-meta-item">
+        <i class="bi bi-hash" aria-hidden="true"></i>
+        <span class="at-mono" style="font-size:12px">{{ estado.dag_run_id[:36] }}</span>
+      </span>
       {% endif %}
+      <!-- Auto refresh indicator -->
+      <span class="hero-meta-item">
+        <span class="at-refresh-dot" aria-hidden="true"></span>
+        <span>Auto-refresh en <span class="at-refresh-countdown at-elapsed-counter" id="refresh-countdown">10</span>s</span>
+      </span>
     </div>
   </div>
 
-  <div class="col-md-4">
-    <div class="at-card d-flex flex-column gap-3">
-      <h5 style="font-size:15px;font-weight:700;margin:0">Acciones</h5>
-      <form action="/pipeline/trigger" method="post">
-        <button type="submit" class="btn-at-coral w-100 justify-content-center"
-                id="btn-trigger" {% if is_running %}disabled{% endif %}>
-          <i class="bi bi-play-fill"></i>
-          {% if is_running %}En ejecución…{% else %}Ejecutar ahora{% endif %}
-        </button>
-        {% if is_running %}
-        <p style="font-size:12px;color:var(--at-muted);margin-top:8px;text-align:center">
-          El pipeline ya está en ejecución. Espera a que finalice.
-        </p>
-        {% endif %}
-      </form>
-      <a href="/pipeline/historial" class="btn-at-ghost justify-content-center">
-        <i class="bi bi-clock-history"></i> Ver historial
-      </a>
-    </div>
+  <!-- CTA -->
+  <div class="hero-actions">
+    <form action="/pipeline/trigger" method="post" id="trigger-form">
+      <button type="submit"
+              class="btn-at-hero"
+              id="btn-trigger"
+              {% if is_running %}disabled{% endif %}
+              aria-label="{% if is_running %}Pipeline en ejecución{% else %}Ejecutar pipeline ahora{% endif %}">
+        <i class="bi bi-{% if is_running %}hourglass-split{% else %}play-fill{% endif %}" aria-hidden="true"></i>
+        {% if is_running %}En ejecución…{% else %}Ejecutar ahora{% endif %}
+      </button>
+    </form>
+    <a href="/pipeline/historial" class="btn-at-ghost" style="font-size:12px">
+      <i class="bi bi-clock-history" aria-hidden="true"></i> Historial
+    </a>
   </div>
 </div>
 
-<!-- Últimas ejecuciones -->
-{% if historial %}
-<div class="at-table-wrapper">
-  <div class="at-table-header"><span class="at-table-title">Últimas ejecuciones</span></div>
-  <div class="at-table-scroll">
-    <table class="at-table">
-      <thead><tr><th>Run ID</th><th>Estado</th><th>Inicio</th><th>Fin</th></tr></thead>
-      <tbody>
-        {% for run in historial %}
-        <tr>
-          <td style="font-size:12px;font-family:monospace">{{ run.dag_run_id }}</td>
-          <td>
-            <span class="dot dot-{{ run.state }}"></span>{{ run.state }}
-          </td>
-          <td style="font-size:12px;color:var(--at-muted)">{{ (run.start_date or '')[:19] }}</td>
-          <td style="font-size:12px;color:var(--at-muted)">{{ (run.end_date or '')[:19] }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<!-- ══════════════════════════════════
+     PROGRESS TRACK
+════════════════════════════════════ -->
+{% if state != 'no_runs' %}
+<div class="pipeline-progress-section">
+  <div class="progress-header">
+    <span class="progress-label">
+      <i class="bi bi-activity me-2" style="color:var(--at-blue-500)" aria-hidden="true"></i>
+      Progreso de ejecución
+    </span>
+    <span class="progress-pct" aria-label="{{ pct }}% completado">{{ pct }}%</span>
+  </div>
+  <div class="at-progress-wrap" role="progressbar" aria-valuenow="{{ pct }}" aria-valuemin="0" aria-valuemax="100">
+    <div class="at-progress-bar {% if is_running %}anim{% endif %}" style="width:{{ pct }}%"></div>
+  </div>
+  {% if total_tasks > 0 %}
+  <div style="margin-top:8px;font-size:12px;color:var(--at-muted)">
+    {{ done_tasks }} de {{ total_tasks }} tareas completadas
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════
+     TASK TIMELINE
+════════════════════════════════════ -->
+{% if task_list %}
+<div class="at-card" style="margin-bottom:24px;padding:20px 24px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h2 style="font-size:14.5px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px">
+      <span style="width:28px;height:28px;background:var(--at-running-bg);border-radius:7px;display:inline-flex;align-items:center;justify-content:center;color:var(--at-blue-500);font-size:13px" aria-hidden="true">
+        <i class="bi bi-list-task"></i>
+      </span>
+      Tareas del pipeline
+    </h2>
+    <span style="font-size:12px;color:var(--at-muted)">{{ task_list | length }} tarea{{ 's' if task_list | length != 1 }}</span>
+  </div>
+
+  <div class="task-timeline" id="task-timeline">
+    {% for task in task_list %}
+    {% set ts = task.state or 'none' %}
+    <div class="task-timeline-item step-{{ ts }}"
+         role="listitem"
+         aria-label="{{ task.task_id }}: {{ ts }}">
+
+      <!-- Node icon -->
+      <div class="task-node {{ ts }}" aria-hidden="true">
+        <i class="bi bi-{% if ts == 'running' %}arrow-repeat{% elif ts == 'success' %}check-lg{% elif ts == 'failed' %}x-lg{% elif ts == 'queued' %}clock{% elif ts == 'skipped' %}skip-forward{% else %}dash{% endif %}"></i>
+      </div>
+
+      <!-- Task info -->
+      <div class="task-info">
+        <div class="task-id">{{ task.task_id }}</div>
+        <div class="task-state-label">
+          {% if ts == 'running' %}En ejecución
+          {% elif ts == 'success' %}Completado exitosamente
+          {% elif ts == 'failed' %}Falló — ver logs
+          {% elif ts == 'queued' %}En cola de espera
+          {% elif ts == 'skipped' %}Omitido
+          {% else %}Pendiente{% endif %}
+        </div>
+        {% if ts == 'running' %}
+        <span class="task-elapsed" aria-live="polite">
+          Tiempo: <span class="at-elapsed-counter" data-elapsed="true">0:00</span>
+        </span>
+        {% endif %}
+      </div>
+
+      <!-- Actions -->
+      <div class="task-actions">
+        {% if ts == 'failed' and estado and estado.dag_run_id %}
+        <a href="/pipeline/logs/{{ estado.dag_run_id }}/{{ task.task_id }}"
+           class="btn-at-ghost" style="font-size:12px"
+           aria-label="Ver logs de error de {{ task.task_id }}">
+          <i class="bi bi-bug" aria-hidden="true"></i> Logs
+        </a>
+        {% elif ts == 'success' and estado and estado.dag_run_id %}
+        <a href="/pipeline/logs/{{ estado.dag_run_id }}/{{ task.task_id }}"
+           class="btn-icon view"
+           title="Ver logs de {{ task.task_id }}"
+           aria-label="Ver logs de {{ task.task_id }}">
+          <i class="bi bi-file-text" aria-hidden="true"></i>
+        </a>
+        {% elif ts == 'running' %}
+        <span class="at-badge at-badge-running" style="font-size:11px" aria-live="polite">
+          <span class="badge-dot" aria-hidden="true"></span>
+          Activo
+        </span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
   </div>
 </div>
 {% endif %}
+
+<!-- ══════════════════════════════════
+     RECENT RUNS
+════════════════════════════════════ -->
+{% if historial %}
+<div class="runs-section">
+  <div class="at-table-wrapper">
+    <div class="at-table-header">
+      <span class="at-table-title">
+        <i class="bi bi-clock-history me-2" style="color:var(--at-muted)" aria-hidden="true"></i>
+        Últimas ejecuciones
+      </span>
+      <a href="/pipeline/historial" class="btn-at-ghost" style="font-size:12px">
+        Ver todo <i class="bi bi-chevron-right" aria-hidden="true"></i>
+      </a>
+    </div>
+    <div class="at-table-scroll">
+      <table class="at-table" aria-label="Historial de ejecuciones recientes">
+        <thead>
+          <tr>
+            <th scope="col">Run ID</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Inicio</th>
+            <th scope="col">Fin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in historial %}
+          <tr>
+            <td class="at-code" style="max-width:240px;font-size:11.5px">{{ run.dag_run_id }}</td>
+            <td>
+              <span class="at-badge
+                {% if run.state == 'running' %}at-badge-running
+                {% elif run.state == 'success' %}at-badge-success
+                {% elif run.state == 'failed' %}at-badge-failed
+                {% elif run.state == 'queued' %}at-badge-warning
+                {% else %}at-badge-pending{% endif %}">
+                <span class="badge-dot" aria-hidden="true"></span>
+                {{ run.state }}
+              </span>
+            </td>
+            <td class="at-code" style="font-size:12px;color:var(--at-muted)">
+              {{ (run.start_date or '')[:19].replace('T', ' ') or '—' }}
+            </td>
+            <td class="at-code" style="font-size:12px;color:var(--at-muted)">
+              {{ (run.end_date or '')[:19].replace('T', ' ') or '—' }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- No runs empty state -->
+{% if state == 'no_runs' %}
+<div class="at-card at-empty">
+  <i class="bi bi-hourglass at-empty-icon" aria-hidden="true"></i>
+  <strong>Sin ejecuciones anteriores</strong>
+  <p>Presiona <em>Ejecutar ahora</em> para iniciar el DAG por primera vez.</p>
+</div>
+{% endif %}
+
 {% endblock %}
+
 {% block scripts %}
 <script>
-  // Auto-refresh estado cada 10 segundos
-  const isRunning = {{ 'true' if is_running else 'false' }};
-  if (isRunning) {
-    setTimeout(() => window.location.href = '/pipeline', 10000);
-  } else {
-    setInterval(async () => {
-      const r = await fetch('/pipeline/estado');
-      const data = await r.json();
-      if (data.state && ['running','queued'].includes(data.state)) {
-        window.location.href = '/pipeline';
+(function () {
+  var POLL_INTERVAL  = 10;
+  var countdown      = POLL_INTERVAL;
+  var isRunning      = {{ 'true' if is_running else 'false' }};
+  var countdownEl    = document.getElementById('refresh-countdown');
+  var elapsedEls     = document.querySelectorAll('[data-elapsed="true"]');
+  var elapsedSeconds = 0;
+
+  /* ── Countdown ticker ── */
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  var ticker = setInterval(function () {
+    countdown--;
+    elapsedSeconds++;
+
+    if (countdownEl) countdownEl.textContent = countdown;
+
+    /* Elapsed counters for running tasks */
+    elapsedEls.forEach(function (el) {
+      var m = Math.floor(elapsedSeconds / 60);
+      var s = elapsedSeconds % 60;
+      el.textContent = m + ':' + pad(s);
+    });
+
+    if (countdown <= 0) {
+      clearInterval(ticker);
+      window.location.reload();
+    }
+  }, 1000);
+
+  /* ── Trigger form: show progress immediately ── */
+  var triggerForm = document.getElementById('trigger-form');
+  if (triggerForm) {
+    triggerForm.addEventListener('submit', function () {
+      var btn = document.getElementById('btn-trigger');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Iniciando…';
       }
-    }, 10000);
+    });
   }
+
+  /* ── Sidebar active state ── */
+  if (window.AT) AT.highlightSidebarActive();
+})();
 </script>
 {% endblock %}
