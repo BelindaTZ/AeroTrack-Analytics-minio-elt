@@ -161,6 +161,62 @@
     return false;
   }
 
+  /* ─── Live filter — submit + restore foco via sessionStorage ───────
+     El form se envía normalmente (GET, recarga la página). Antes del
+     submit se guarda el id del input activo en sessionStorage; al
+     volver a cargar se restaura el foco y la posición del cursor
+     automáticamente, sin que el usuario tenga que hacer clic. */
+  var _LF_KEY = 'at_lf';
+
+  function _liveFilterRestore() {
+    var data = sessionStorage.getItem(_LF_KEY);
+    if (!data) return;
+    sessionStorage.removeItem(_LF_KEY);
+    try {
+      var d  = JSON.parse(data);
+      var el = document.getElementById(d.id);
+      if (!el) return;
+      el.focus();
+      if (d.s != null) { try { el.setSelectionRange(d.s, d.e); } catch(e) {} }
+    } catch(e) {}
+  }
+
+  function liveFilter(formId, resultsId, opts) {
+    var form = document.getElementById(formId);
+    if (!form) return;
+
+    opts = opts || {};
+    var textDelay = opts.textDelay !== undefined ? opts.textDelay : 500;
+
+    function submit() {
+      var ae = document.activeElement;
+      if (ae && ae.id) {
+        var d = { id: ae.id, s: null, e: null };
+        try { d.s = ae.selectionStart; d.e = ae.selectionEnd; } catch(e) {}
+        sessionStorage.setItem(_LF_KEY, JSON.stringify(d));
+      }
+      form.submit();
+    }
+
+    var timer;
+    form.querySelectorAll('input[type="text"],input[type="search"],input[type="date"],input[type="number"]')
+      .forEach(function(inp) {
+        inp.addEventListener('input', function() {
+          clearTimeout(timer);
+          timer = setTimeout(submit, textDelay);
+        });
+      });
+    form.querySelectorAll('select').forEach(function(sel) {
+      sel.addEventListener('change', submit);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _liveFilterRestore);
+  } else {
+    _liveFilterRestore();
+  }
+
   /* ─── Auto-refresh with visual countdown ─────────────────────────── */
   function startAutoRefresh(intervalSeconds, countdownSelector) {
     var remaining = intervalSeconds;
@@ -199,6 +255,43 @@
     });
   }
 
+  /* ─── Back button — shown at top of content on sub-pages ─────────── */
+  function initBackButton() {
+    var bc = document.querySelector('.topbar-breadcrumb');
+    if (!bc) return;
+    var allLinks = bc.querySelectorAll('a');
+    if (!allLinks.length) return;
+    var parentLink = allLinks[allLinks.length - 1];
+
+    var label = (parentLink.textContent || '').trim() || 'Volver';
+
+    var btn = document.createElement('button');
+    btn.id = 'at-back-btn';
+    btn.className = 'at-back-btn';
+    btn.setAttribute('type', 'button');
+    btn.setAttribute('aria-label', 'Volver a ' + label);
+    btn.innerHTML =
+      '<i class="bi bi-arrow-left-short" aria-hidden="true"></i>' +
+      _escapeHtml(label);
+
+    btn.addEventListener('click', function () {
+      if (global.history.length > 1) {
+        global.history.back();
+      } else {
+        global.location.href = parentLink.getAttribute('href');
+      }
+    });
+
+    var wrap = document.createElement('div');
+    wrap.className = 'at-back-btn-wrap';
+    wrap.appendChild(btn);
+
+    var content = document.getElementById('content');
+    if (content) {
+      content.insertBefore(wrap, content.firstChild);
+    }
+  }
+
   /* ─── Init ────────────────────────────────────────────────────────── */
   function init() {
     initClock();
@@ -206,6 +299,7 @@
     initConfirmModal();
     initFlashAutoDismiss();
     initDropdownStyling();
+    initBackButton();
   }
 
   if (document.readyState === 'loading') {
@@ -220,6 +314,7 @@
     confirm:              confirm,
     startAutoRefresh:     startAutoRefresh,
     highlightSidebarActive: highlightSidebarActive,
+    liveFilter:           liveFilter,
 
     /* Convenience shorthands */
     success: function (msg, dur) { toast('success', msg, dur); },

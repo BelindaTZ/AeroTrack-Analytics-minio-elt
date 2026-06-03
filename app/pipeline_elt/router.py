@@ -52,6 +52,18 @@ async def estado_json(request: Request):
         return JSONResponse({"state": "error", "error": str(exc)})
 
 
+@router.get("/estado-full")
+async def estado_full(request: Request):
+    """Endpoint AJAX para polling sin recarga de página (estado + historial)."""
+    _perm_ver(request)
+    try:
+        estado = await af.get_dag_status()
+        historial = await af.get_dag_runs(limit=5)
+        return JSONResponse({"estado": estado, "historial": historial})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
 @router.get("/historial", response_class=HTMLResponse)
 async def historial(request: Request):
     _perm_ver(request)

@@ -69,34 +69,30 @@
   <div class="at-table-header">
     <span class="at-table-title">
       Lista de usuarios
-      <span style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">({{ total }})</span>
+      <span id="at-filter-count" style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">({{ total }})</span>
     </span>
     <div class="d-flex gap-2 flex-wrap align-items-center">
-      <form method="get" class="d-flex gap-2 align-items-center flex-wrap" role="search" aria-label="Filtrar usuarios">
+      <form id="usuarios-filter-form" method="get" class="d-flex gap-2 align-items-center flex-wrap" role="search" aria-label="Filtrar usuarios">
         <div class="at-search-wrap">
           <i class="bi bi-search" aria-hidden="true"></i>
-          <input type="text" name="q" class="at-search"
+          <input type="text" name="q" id="filter-q" class="at-search"
                  placeholder="Buscar nombre o email…"
                  value="{{ q }}"
-                 aria-label="Buscar usuarios" />
+                 aria-label="Buscar usuarios" autocomplete="off" />
         </div>
 
-        <select name="rol_id" class="form-control-at" style="width:150px" aria-label="Filtrar por rol">
+        <select name="rol_id" id="filter-rol" class="form-control-at" style="width:150px" aria-label="Filtrar por rol">
           <option value="">Todos los roles</option>
           {% for rol in roles %}
           <option value="{{ rol.id }}" {% if filtro_rol == rol.id %}selected{% endif %}>{{ rol.nombre }}</option>
           {% endfor %}
         </select>
 
-        <select name="activo" class="form-control-at" style="width:120px" aria-label="Filtrar por estado">
+        <select name="activo" id="filter-activo" class="form-control-at" style="width:120px" aria-label="Filtrar por estado">
           <option value="">Todos</option>
           <option value="true"  {% if filtro_activo == 'true'  %}selected{% endif %}>Activos</option>
           <option value="false" {% if filtro_activo == 'false' %}selected{% endif %}>Inactivos</option>
         </select>
-
-        <button type="submit" class="btn-at-primary" style="padding:7px 12px" aria-label="Aplicar filtros">
-          <i class="bi bi-funnel" aria-hidden="true"></i>
-        </button>
       </form>
 
       <button class="btn-at-primary"
@@ -107,6 +103,7 @@
     </div>
   </div>
 
+  <div id="usuarios-results">
   {% if usuarios %}
   <div class="at-table-scroll">
     <table class="at-table" aria-label="Lista de usuarios">
@@ -241,6 +238,7 @@
     <p>Ajusta los filtros o crea un nuevo usuario.</p>
   </div>
   {% endif %}
+  </div><!-- #usuarios-results -->
 </div>
 
 <!-- ── Modal: nuevo usuario ── -->
@@ -295,5 +293,40 @@
     </div>
   </div>
 </div>
+
+{% block scripts %}
+<script>
+(function(){
+  var qEl  = document.getElementById('filter-q');
+  var rEl  = document.getElementById('filter-rol');
+  var aEl  = document.getElementById('filter-activo');
+  var box  = document.getElementById('usuarios-results');
+  if (!qEl || !box) return;
+
+  function apply() {
+    var params = 'q=' + encodeURIComponent(qEl.value)
+               + '&rol_id=' + encodeURIComponent(rEl ? rEl.value : '')
+               + '&activo=' + encodeURIComponent(aEl ? aEl.value : '');
+    fetch('/auth/usuarios?' + params)
+      .then(function(r){ return r.text(); })
+      .then(function(html){
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('usuarios-results');
+        if (!newBox) return;
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('at-filter-count');
+        var oc = document.getElementById('at-filter-count');
+        if (nc && oc) oc.textContent = nc.textContent;
+        history.replaceState(null, '', '/auth/usuarios?' + params);
+      });
+  }
+
+  var timer;
+  qEl.addEventListener('input', function(){ clearTimeout(timer); timer = setTimeout(apply, 500); });
+  if (rEl) rEl.addEventListener('change', apply);
+  if (aEl) aEl.addEventListener('change', apply);
+})();
+</script>
+{% endblock %}
 
 {% endblock %}

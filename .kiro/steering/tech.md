@@ -150,22 +150,93 @@ docker exec airflow-webserver bash -c "echo \$AIRFLOW__API__AUTH_BACKENDS"
 docker exec airflow-webserver airflow config get-value api auth_backends
 ```
 
-## Restricciones del frontend — auto-refresh con query params
+## Restricciones del frontend — auto-refresh
 
-### `location.reload()` conserva `?error=` en la URL
-Cuando un POST redirige a `/pipeline?error=<mensaje>` y la página tiene auto-refresh con `location.reload()`, el error fantasma vuelve a aparecer en cada ciclo porque `location.reload()` recarga la URL completa incluyendo los query params.
+### Evolución del polling en el módulo Pipeline
 
-Patrón correcto para auto-refresh que limpia la URL:
+El módulo Pipeline necesita refrescar datos cada 10 segundos para mostrar el estado del DAG en tiempo real. La solución pasó por tres iteraciones:
+
+#### ❌ Iteración 1 — `location.reload()` (descartada)
+`location.reload()` conserva los query params en la URL. Si un POST redirige a `/pipeline?error=<mensaje>`, el error fantasma reaparece en cada ciclo de refresco.
+
+#### ⚠️ Iteración 2 — `window.location.href = '/pipeline'` (descartada)
+Descarta los query params correctamente, pero hace una navegación completa: el browser trata la página como nueva y el scroll vuelve al top. Tedioso cuando el usuario está revisando la lista de tareas más abajo en el módulo.
 
 ```javascript
-// MAL — conserva ?error= o ?msg= en cada recarga
-setTimeout(() => location.reload(), 10000);
-
-// BIEN — navega a la URL limpia, descarta query params anteriores
-setTimeout(() => window.location.href = '/pipeline', 10000);
+// INCORRECTO para UX — pierde posición de scroll
+window.location.href = '/pipeline';
 ```
 
-Aplicar el mismo patrón en el `setInterval` del polling AJAX cuando se detecta un cambio de estado que requiere recargar la página.
+#### ✅ Iteración 3 — Fetch parcial (implementación actual)
+Endpoint dedicado `GET /pipeline/estado-full` devuelve `{estado, historial}` como JSON. El JS actualiza el DOM en lugar de navegar, preservando el scroll.
+
+```javascript
+// Cada 10 s: fetch → actualizar DOM en lugar de recargar
+fetch('/pipeline/estado-full', { credentials: 'same-origin' })
+  .then(r => r.json())
+  .then(applyData);
+```
+
+**Arquitectura del endpoint:**
+- Ruta: `GET /pipeline/estado-full` en `app/pipeline_elt/router.py`
+- Devuelve: `{"estado": {..., "task_instances": [...]}, "historial": [...]}`
+- Reutiliza `af.get_dag_status()` + `af.get_dag_runs(limit=5)`
+
+**Qué actualiza el JS sin recargar:**
+| Sección | Cómo |
+|---|---|
+| Hero (icono, título, badge, run ID, botón) | Mutación de atributos y `textContent` |
+| Barra de progreso (%, animación) | `style.width` + toggle clase `anim` |
+| Timeline de tareas | `innerHTML` del `#task-timeline` |
+| Tabla "Últimas ejecuciones" | `innerHTML` del `tbody` dentro de `#runs-section` |
+
+**Caso especial — cambio estructural:** si el estado pasa de `no_runs` a cualquier otro (o viceversa), las secciones de progreso y tareas no existen en el DOM porque el template Jinja2 las omite con `{% if state != 'no_runs' %}`. En ese caso el JS cae intencionalmente a `window.location.reload()` para obtener el HTML correcto. Esto solo ocurre cuando el estado cambia de raíz (no durante un pipeline en ejecución).
+
+```javascript
+var hasProgressInDOM = !!document.getElementById('pipeline-progress-section');
+var needsProgress    = st !== 'no_runs';
+if (hasProgressInDOM !== needsProgress) {
+  window.location.reload();   // único caso donde se recarga completo
+  return;
+}
+```
+
+**IDs requeridos en el template** (`panel.html`) para que el JS encuentre los contenedores:
+- `id="pipeline-progress-section"` — en el div `.pipeline-progress-section`
+- `class="task-count-text"` — en el párrafo de conteo de tareas
+- `id="task-timeline"` — ya existía en la lista de tareas
+- `id="runs-section"` — en el div `.runs-section` del historial
+
+## Botón global "Volver" — patrón de implementación
+
+### Objetivo
+Proporcionar un botón de regreso global en todas las páginas secundarias (sub-páginas con breadcrumb padre), sin modificar cada template individualmente.
+
+### Implementación
+El botón se inyecta dinámicamente en `aerotrack-ui.js` mediante `initBackButton()`, llamado desde `init()` al cargar el DOM.
+
+**Lógica de detección automática:**
+- Busca el elemento `.topbar-breadcrumb` en el topbar
+- Si contiene al menos un `<a>`, la página tiene un padre → se muestra el botón
+- Si no hay `<a>` (página raíz: Pipeline, Modelo, Usuarios, etc.) → no aparece nada
+
+**Label dinámico:** usa el texto del último `<a>` del breadcrumb (= padre inmediato). Ejemplo: en "Pipeline ELT › Historial › Logs", el botón muestra "← Historial".
+
+**Fallback de navegación:** `history.back()` si hay historial, `location.href` al enlace del padre si el usuario llegó por URL directa.
+
+**Posición:** arriba a la derecha del área de contenido (`#content`), dentro de un `div.at-back-btn-wrap` con `display:flex; justify-content:flex-end`.
+
+**Estilo:** pill suave — fondo `--at-surface`, borde `--at-border`, texto `--at-muted`, ícono flecha en `--at-blue-500`. Hover: borde azul + glow ring.
+
+### Cache-busting de archivos estáticos
+FastAPI `StaticFiles` sirve los archivos desde disco sin versionar. El navegador los cachea agresivamente. Para forzar recarga al cambiar CSS o JS, se añade un query param de versión en `base.html`:
+
+```html
+<link href="/static/css/aerotrack-theme.css?v=3" rel="stylesheet" />
+<script src="/static/js/aerotrack-ui.js?v=3"></script>
+```
+
+**Regla:** incrementar `v=N` en `base.html` cada vez que se modifique `aerotrack-theme.css` o `aerotrack-ui.js`. Versión actual: `v=3`.
 
 ## Portabilidad
 

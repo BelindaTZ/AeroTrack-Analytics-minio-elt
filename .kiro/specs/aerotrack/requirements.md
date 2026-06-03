@@ -74,7 +74,9 @@ THE SYSTEM SHALL NOT display any option to modify their own role
 #### 1.4 CU-04: Gestionar usuarios
 
 WHEN an Administrator accesses Administración → Usuarios
-THE SYSTEM SHALL display a paginated table of all users with search and filters by role and status
+THE SYSTEM SHALL display a paginated table of all users with live search and filters by role and status;
+filters activate automatically on each keystroke (400 ms debounce for text, immediate for selects)
+without requiring a button click or pressing Enter
 
 WHEN an Administrator submits a new user form with name, email, and role
 THE SYSTEM SHALL auto-generate a temporary password using the following algorithm:
@@ -281,8 +283,8 @@ global OTP, total flights, cancellation rate, and average delay
 WHEN a KPI value exceeds its configured threshold
 THE SYSTEM SHALL highlight that KPI panel in red
 
-WHEN a Data Analyst applies filters (year, month, airline, route)
-THE SYSTEM SHALL update all KPI panels on the page with the filtered data
+WHEN a Data Analyst changes any filter (year, month, airline, route)
+THE SYSTEM SHALL update all KPI panels automatically without requiring a button click
 
 WHEN KPI data is displayed
 THE SYSTEM SHALL correspond to the output of the most recent pipeline execution
@@ -380,8 +382,8 @@ WHEN a Data Analyst accesses the Cancelaciones module
 THE SYSTEM SHALL display a pie chart of total cancellations for the period,
 broken down by FAA code: A (airline), B (weather), C (NAS), D (security)
 
-WHEN a Data Analyst applies airline and period filters
-THE SYSTEM SHALL update the cancellation charts with the filtered data
+WHEN a Data Analyst changes airline or period filters
+THE SYSTEM SHALL update the cancellation charts automatically without requiring a button click
 
 WHEN the cancellation view is displayed
 THE SYSTEM SHALL also show a bar chart of monthly cancellation rate
@@ -526,9 +528,10 @@ THE SYSTEM SHALL display the full `detalle` field as formatted JSON
 
 #### 10.2 CU-40: Filtrar y exportar log de auditoría
 
-WHEN an Administrator applies audit log filters
+WHEN an Administrator changes any audit log filter
 (module, action, specific user, result, date range)
-THE SYSTEM SHALL update the audit table to show only matching events
+THE SYSTEM SHALL update the audit table automatically without requiring a button click;
+text fields apply after 400 ms debounce, selects apply immediately on change
 
 WHEN an Administrator requests audit export
 THE SYSTEM SHALL generate a CSV file of the currently filtered results for external analysis
