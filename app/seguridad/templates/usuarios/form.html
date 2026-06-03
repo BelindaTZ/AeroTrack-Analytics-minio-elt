@@ -8,25 +8,27 @@
 
 {% if error %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div></div>{% endif %}
 
-<div class="at-card" style="max-width:560px">
+<div class="at-card">
   <form action="/auth/usuarios/{{ record.id }}" method="post">
-    <div style="margin-bottom:16px">
-      <label class="form-label-at">Nombre completo</label>
-      <input type="text" name="nombre" class="form-control-at" value="{{ record.nombre }}" required />
+    <div class="row g-3">
+      <div class="col-sm-6">
+        <label class="form-label-at">Nombre completo</label>
+        <input type="text" name="nombre" class="form-control-at" value="{{ record.nombre }}" required />
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label-at">Email</label>
+        <input type="email" name="email" class="form-control-at" value="{{ record.email }}" required />
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-at">Rol</label>
+        <select name="rol_id" class="form-control-at" required>
+          {% for rol in roles %}
+          <option value="{{ rol.id }}" {% if rol.id == record.rol_id %}selected{% endif %}>{{ rol.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
-    <div style="margin-bottom:16px">
-      <label class="form-label-at">Email</label>
-      <input type="email" name="email" class="form-control-at" value="{{ record.email }}" required />
-    </div>
-    <div style="margin-bottom:24px">
-      <label class="form-label-at">Rol</label>
-      <select name="rol_id" class="form-control-at" required>
-        {% for rol in roles %}
-        <option value="{{ rol.id }}" {% if rol.id == record.rol_id %}selected{% endif %}>{{ rol.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 mt-4">
       <button type="submit" class="btn-at-primary"><i class="bi bi-floppy-fill"></i> Guardar cambios</button>
       <a href="/auth/usuarios" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Cancelar</a>
     </div>

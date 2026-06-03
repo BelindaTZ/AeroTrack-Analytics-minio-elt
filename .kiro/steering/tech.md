@@ -238,6 +238,26 @@ FastAPI `StaticFiles` sirve los archivos desde disco sin versionar. El navegador
 
 **Regla:** incrementar `v=N` en `base.html` cada vez que se modifique `aerotrack-theme.css` o `aerotrack-ui.js`. Versión actual: `v=3`.
 
+## Convención de layout para formularios de página completa
+
+Los formularios que se renderizan como **página completa** (no modales) deben ocupar el ancho total del área de contenido `#content`. **Nunca** se les aplica `max-width` inline al elemento `.at-card` contenedor.
+
+### Regla
+- **Formulario de página completa** → `.at-card` sin `max-width`, campos distribuidos en `row g-3` con `col-sm-6` (o columnas apropiadas según la cantidad de campos).
+- **Formulario modal / ventana emergente** → sin restricción de ancho en el card interno; el `modal-dialog` ya gestiona el ancho.
+
+### Motivo
+Un `max-width` fijo en un card de página completa deja un espacio vacío visible a la derecha del card, lo que se ve desequilibrado en pantallas medianas y grandes (el sidebar ocupa ~240 px y el resto es espacio aprovechable).
+
+### Archivos de referencia (implementación actual)
+| Template | Campos en grid |
+|---|---|
+| `app/seguridad/templates/roles/form.html` | `col-sm-6` × 2 (Nombre, Descripción) |
+| `app/seguridad/templates/usuarios/form.html` | `col-sm-6` × 2 + `col-sm-4` (Nombre, Email, Rol) |
+| `app/modelo_dimensional/templates/modelo_dimensional/form_registro.html` | `col-sm-6` dinámico por columnas de tabla |
+
+Los modales (`usuarios/lista.html` → crear usuario, confirm modal en `base.html`) no se ven afectados por esta convención.
+
 ## Portabilidad
 
 - **Docker-first:** funciona en Windows, macOS y Linux sin cambios de código
