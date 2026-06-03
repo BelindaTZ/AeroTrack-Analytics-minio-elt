@@ -256,6 +256,119 @@ Los nombres de template en el código (`render(request, "roles/lista.html", ...)
 
 ---
 
+## UI Conventions
+
+### Live Filter Pattern
+
+All filter controls across every module — administrator and analyst alike — **must not require a button click or Enter key to apply**. Filters activate automatically via `fetch` + `innerHTML` swap: the page never fully reloads, the input keeps focus, and the URL stays in sync via `history.replaceState`.
+
+#### Timing
+
+| Control | Trigger | Debounce |
+|---|---|---|
+| `<input type="text">` | `input` event | 500 ms (text inputs in usuarios); 400 ms (short codes in modelo_dimensional) |
+| `<input type="date">` / `type="number">` | `input` event | 400 ms |
+| `<select>` | `change` event | none — fires immediately |
+
+A debounce of 400–500 ms is sufficient: one request fires only when the user pauses. Each request reads a Parquet from MinIO and filters with pandas — a lightweight operation that does not overload the system.
+
+#### HTML structure (required)
+
+The filter form and the results container **must be siblings** (or otherwise unrelated in the DOM). The results `<div id="...">` must **never contain** the filter inputs — otherwise swapping `innerHTML` would destroy the inputs and lose focus.
+
+```html
+<div class="at-table-wrapper">
+
+  <div class="at-table-header">
+    <!-- optional count badge — updated automatically by the script -->
+    <span id="at-filter-count">({{ total }})</span>
+
+    <!-- filter form: NO submit button -->
+    <form id="my-filter-form" method="get" role="search">
+      <input type="text"  name="q"      id="q-input"      value="{{ q }}" autocomplete="off" />
+      <select             name="estado" id="estado-select">...</select>
+    </form>
+  </div>
+
+  <!-- ONLY this div gets replaced on each filter -->
+  <div id="my-results">
+    {% if items %}
+      <div class="at-table-scroll">...</div>
+      <nav class="at-pagination">...</nav>
+    {% else %}
+      <div class="at-empty">...</div>
+    {% endif %}
+  </div>
+
+</div>
+```
+
+#### JavaScript — canonical inline pattern ({% block scripts %})
+
+Each module writes its own self-contained script. **Do not use `FormData` to build params** — serialize each field manually with `encodeURIComponent`. **Use the absolute path** (`/auth/usuarios`, `/modelo/{{ tabla }}`, etc.) — do not rely on `window.location.pathname` which may carry stale query params.
+
+```javascript
+{% block scripts %}
+<script>
+(function(){
+  var qEl  = document.getElementById('q-input');
+  var selEl = document.getElementById('estado-select');
+  var box  = document.getElementById('my-results');
+  if (!qEl || !box) return;
+
+  function apply() {
+    var params = 'q=' + encodeURIComponent(qEl.value)
+               + '&estado=' + encodeURIComponent(selEl ? selEl.value : '');
+    fetch('/my-module?' + params)
+      .then(function(r){ return r.text(); })
+      .then(function(html){
+        var doc    = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('my-results');
+        if (!newBox) return;                              // server error — do nothing
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('at-filter-count');
+        var oc = document.getElementById('at-filter-count');
+        if (nc && oc) oc.textContent = nc.textContent;
+        history.replaceState(null, '', '/my-module?' + params);
+      });
+  }
+
+  var timer;
+  qEl.addEventListener('input', function(){ clearTimeout(timer); timer = setTimeout(apply, 500); });
+  if (selEl) selEl.addEventListener('change', apply);
+})();
+</script>
+{% endblock %}
+```
+
+#### Critical rules — learned from implementation
+
+1. **Never use `new FormData(form)` to build the query string.** It causes silent failures in some browsers/environments. Always serialize each named input individually with `encodeURIComponent`.
+2. **Never call `AT.liveFilter(...)` from the template** to attach filter listeners. The function exists in `aerotrack-ui.js` but template-level element timing makes it unreliable. Write the inline IIFE directly in `{% block scripts %}`.
+3. **Never put the filter form inside the results `<div>`.** If you swap `box.innerHTML`, the form and its inputs are destroyed and focus is lost permanently.
+4. **No submit button in filter forms.** The JS listener is the sole trigger. A submit button would let users accidentally bypass the live-filter flow.
+5. **If `newBox` is `null`** after `DOMParser`, do nothing — the server likely returned an error page. Do not fall back to `form.submit()` as this causes a full reload and loses focus.
+
+#### Implemented modules (Entrega 1)
+
+| Module | Endpoint | Results ID | Controls | Debounce |
+|---|---|---|---|---|
+| `seguridad` — Usuarios | `/auth/usuarios` | `usuarios-results` | `#filter-q` (text) · `#filter-rol` (select) · `#filter-activo` (select) | 500 ms |
+| `modelo_dimensional` — lista_registros | `/modelo/{{ tabla }}` | `modelo-results` | `#search-input` (text) | 400 ms |
+
+#### Pending modules (Entregas 2–3) — follow the same pattern
+
+| Module | Endpoint | Results ID | Controls |
+|---|---|---|---|
+| `dashboard` | `/dashboard` | `dashboard-results` | select: año · mes · aerolínea · ruta |
+| `puntualidad` | `/puntualidad/otp` | `puntualidad-results` | select: aerolínea · período |
+| `rutas` | `/rutas/ranking` | `rutas-results` | select: aerolínea |
+| `cancelaciones` | `/cancelaciones/causas` | `cancelaciones-results` | select: aerolínea · período |
+| `auditoria` | `/auditoria` | `auditoria-results` | text: usuario · select: módulo · acción · resultado · date range |
+| `predictivo` | `/predictivo/estacionalidad` | `predictivo-results` | select: aerolínea |
+
+---
+
 ## Components and Interfaces
 
 ### API Endpoints

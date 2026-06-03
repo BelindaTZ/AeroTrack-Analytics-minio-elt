@@ -1,8 +1,9 @@
 """
 AeroTrack Analytics — DAG de Airflow: Pipeline ELT
 ====================================================
-Qué hace: Orquesta el pipeline ELT diario con exactamente 2 tareas:
-    [extract] → PocketBase → Parquet → MinIO (aerotrack-raw)
+Qué hace: Orquesta el pipeline ELT con 3 tareas explícitas:
+    [extract]   → PocketBase → Parquet local
+    [load]      → Parquet local → MinIO (aerotrack-raw)
     [transform] → aerotrack-raw → modelo estrella → aerotrack-dims
 
 Las funciones importadas usan config.py (también en dags/) que
@@ -19,7 +20,7 @@ from airflow.decorators import dag, task
 from airflow.utils.dates import days_ago
 
 # Importar las funciones del pipeline (config.py las hace Docker-aware)
-from aerotrack_tasks import extract_pipeline, transform_pipeline
+from aerotrack_tasks import extract_pipeline, load_pipeline, transform_pipeline
 
 
 def _on_failure(context: dict) -> None:
@@ -51,7 +52,7 @@ def aerotrack_elt():
     """
     Pipeline ELT de AeroTrack Analytics.
 
-    extract → transform
+    extract → load → transform
 
     Imports resueltos en /opt/airflow/dags/ (en sys.path de Airflow):
       - aerotrack_tasks  → dags/aerotrack_tasks.py
@@ -60,16 +61,22 @@ def aerotrack_elt():
 
     # execution_timeout por tarea sobrescribe default_args
     @task(task_id="extract", execution_timeout=timedelta(hours=2))
-    def extract() -> None:
-        """Extrae de PocketBase (10 workers), convierte a Parquet y sube a aerotrack-raw."""
-        extract_pipeline()
+    def extract() -> str:
+        """Extrae de PocketBase, convierte a Parquet incremental y devuelve la ruta local."""
+        return extract_pipeline()
+
+    @task(task_id="load", execution_timeout=timedelta(minutes=30))
+    def load(parquet_path: str) -> None:
+        """Sube el Parquet local a MinIO (aerotrack-raw) y elimina el archivo temporal."""
+        load_pipeline(parquet_path)
 
     @task(task_id="transform", execution_timeout=timedelta(hours=1))
     def transform() -> None:
         """Descarga el Parquet crudo y genera el modelo estrella en aerotrack-dims."""
         transform_pipeline()
 
-    extract() >> transform()
+    parquet_path = extract()
+    load(parquet_path) >> transform()
 
 
 dag_instance = aerotrack_elt()

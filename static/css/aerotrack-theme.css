@@ -379,6 +379,44 @@ td.at-code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-featu
 
 .page-heading p { font-size: 13.5px; color: var(--at-muted); margin: 5px 0 0; }
 
+/* ─── Back button (content area, sub-pages) ─────────────────────────── */
+.at-back-btn-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+#at-back-btn.at-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px 6px 10px;
+  border: 1px solid var(--at-border);
+  border-radius: 999px;
+  background: var(--at-surface);
+  color: var(--at-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--at-dur-fast) var(--at-ease),
+              color       var(--at-dur-fast) var(--at-ease),
+              background  var(--at-dur-fast) var(--at-ease),
+              box-shadow  var(--at-dur-fast) var(--at-ease);
+  line-height: 1;
+  letter-spacing: .1px;
+  white-space: nowrap;
+}
+#at-back-btn.at-back-btn i {
+  color: var(--at-blue-500);
+  font-size: 17px;
+  transition: color var(--at-dur-fast) var(--at-ease);
+}
+#at-back-btn.at-back-btn:hover {
+  border-color: var(--at-blue-500);
+  color: var(--at-text);
+  background: var(--at-bg);
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, .1);
+}
+
 /* ─── Flash messages ─────────────────────────────────────────────────── */
 .flash-bar { margin-bottom: 20px; }
 .flash-success, .flash-error, .flash-warn {

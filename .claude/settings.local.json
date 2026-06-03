@@ -27,7 +27,10 @@
       "Bash(Get-ChildItem -Recurse \"c:\\\\proyectos\\\\minio-elt\\\\.claude\\\\skills\\\\ui-ux-pro-max\")",
       "Bash(Select-Object FullName, Length)",
       "PowerShell(Get-ChildItem -Recurse \"c:\\\\proyectos\\\\minio-elt\\\\static\" | Select-Object FullName, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}})",
-      "Bash(mkdir -p c:/proyectos/minio-elt/app/utils 2>/dev/null; echo done)"
+      "Bash(mkdir -p c:/proyectos/minio-elt/app/utils 2>/dev/null; echo done)",
+      "Bash(docker stats *)",
+      "Bash(node --check \"c:/proyectos/minio-elt/static/js/aerotrack-ui.js\")",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "C:\\proyectos\\minio-elt\\.kiro",

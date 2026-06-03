@@ -247,7 +247,7 @@
      PROGRESS TRACK
 ════════════════════════════════════ -->
 {% if state != 'no_runs' %}
-<div class="pipeline-progress-section">
+<div class="pipeline-progress-section" id="pipeline-progress-section">
   <div class="progress-header">
     <span class="progress-label">
       <i class="bi bi-activity me-2" style="color:var(--at-blue-500)" aria-hidden="true"></i>
@@ -259,7 +259,7 @@
     <div class="at-progress-bar {% if is_running %}anim{% endif %}" style="width:{{ pct }}%"></div>
   </div>
   {% if total_tasks > 0 %}
-  <div style="margin-top:8px;font-size:12px;color:var(--at-muted)">
+  <div class="task-count-text" style="margin-top:8px;font-size:12px;color:var(--at-muted)">
     {{ done_tasks }} de {{ total_tasks }} tareas completadas
   </div>
   {% endif %}
@@ -306,7 +306,7 @@
         </div>
         {% if ts == 'running' %}
         <span class="task-elapsed" aria-live="polite">
-          Tiempo: <span class="at-elapsed-counter" data-elapsed="true">0:00</span>
+          Tiempo: <span class="at-elapsed-counter" data-start="{{ task.start_date or '' }}">…</span>
         </span>
         {% endif %}
       </div>
@@ -343,7 +343,7 @@
      RECENT RUNS
 ════════════════════════════════════ -->
 {% if historial %}
-<div class="runs-section">
+<div class="runs-section" id="runs-section">
   <div class="at-table-wrapper">
     <div class="at-table-header">
       <span class="at-table-title">
@@ -408,36 +408,205 @@
 {% block scripts %}
 <script>
 (function () {
-  var POLL_INTERVAL  = 10;
-  var countdown      = POLL_INTERVAL;
-  var isRunning      = {{ 'true' if is_running else 'false' }};
-  var countdownEl    = document.getElementById('refresh-countdown');
-  var elapsedEls     = document.querySelectorAll('[data-elapsed="true"]');
-  var elapsedSeconds = 0;
+  var POLL_INTERVAL = 10;
+  var countdown = POLL_INTERVAL;
+  var countdownEl = document.getElementById('refresh-countdown');
+  var elapsedEls = [];
 
-  /* ── Countdown ticker ── */
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
-  var ticker = setInterval(function () {
-    countdown--;
-    elapsedSeconds++;
+  function scanElapsedEls() {
+    elapsedEls = Array.from(document.querySelectorAll('[data-start]'));
+  }
 
-    if (countdownEl) countdownEl.textContent = countdown;
-
-    /* Elapsed counters for running tasks */
+  function updateElapsed() {
     elapsedEls.forEach(function (el) {
-      var m = Math.floor(elapsedSeconds / 60);
-      var s = elapsedSeconds % 60;
-      el.textContent = m + ':' + pad(s);
+      var s = el.getAttribute('data-start');
+      if (!s) return;
+      var sec = Math.max(0, Math.floor((Date.now() - new Date(s).getTime()) / 1000));
+      el.textContent = Math.floor(sec / 60) + ':' + pad(sec % 60);
     });
+  }
 
-    if (countdown <= 0) {
-      clearInterval(ticker);
+  scanElapsedEls();
+  updateElapsed();
+
+  // ── Helpers de estado ──
+  function isActive(st) { return st === 'running' || st === 'queued'; }
+
+  function heroTitle(st) {
+    if (isActive(st))      return 'Ejecutando pipeline…';
+    if (st === 'success')  return 'Ejecución completada';
+    if (st === 'failed')   return 'Ejecución fallida';
+    if (st === 'no_runs')  return 'Listo para ejecutar';
+    return st.charAt(0).toUpperCase() + st.slice(1);
+  }
+
+  function badgeLabel(st) {
+    if (isActive(st))     return 'En ejecución';
+    if (st === 'success') return 'Completado';
+    if (st === 'failed')  return 'Error';
+    return 'Sin ejecución';
+  }
+
+  function badgeCls(st) {
+    if (isActive(st))     return 'at-badge at-badge-running';
+    if (st === 'success') return 'at-badge at-badge-success';
+    if (st === 'failed')  return 'at-badge at-badge-failed';
+    return 'at-badge at-badge-pending';
+  }
+
+  function heroIconCls(st) {
+    if (isActive(st))     return 'bi bi-arrow-repeat';
+    if (st === 'success') return 'bi bi-check-circle';
+    if (st === 'failed')  return 'bi bi-exclamation-circle';
+    return 'bi bi-gear';
+  }
+
+  var TASK_ICONS  = { running: 'arrow-repeat', success: 'check-lg', failed: 'x-lg', queued: 'clock', skipped: 'skip-forward' };
+  var TASK_LABELS = { running: 'En ejecución', success: 'Completado exitosamente', failed: 'Falló — ver logs', queued: 'En cola de espera', skipped: 'Omitido' };
+
+  // ── Actualizadores de DOM ──
+  function updateHero(estado) {
+    var st = estado.state || 'no_runs';
+    var active = isActive(st);
+
+    var ring = document.querySelector('.hero-icon-ring');
+    if (ring) {
+      ring.classList.toggle('active', active);
+      var icon = ring.querySelector('i');
+      if (icon) icon.className = heroIconCls(st);
+    }
+
+    var titleEl = document.querySelector('.hero-title');
+    if (titleEl) titleEl.textContent = heroTitle(st);
+
+    var badge = document.querySelector('.hero-meta .at-badge');
+    if (badge) {
+      badge.className = badgeCls(st);
+      badge.innerHTML = '<span class="badge-dot" aria-hidden="true"></span>' + badgeLabel(st);
+    }
+
+    var runIdSpan = document.querySelector('.hero-meta .at-mono');
+    if (runIdSpan && estado.dag_run_id) {
+      runIdSpan.textContent = estado.dag_run_id.slice(0, 36);
+    }
+
+    var btn = document.getElementById('btn-trigger');
+    if (btn) {
+      btn.disabled = active;
+      btn.innerHTML = '<i class="bi bi-' + (active ? 'hourglass-split' : 'play-fill') + '" aria-hidden="true"></i> '
+                    + (active ? 'En ejecución…' : 'Ejecutar ahora');
+    }
+  }
+
+  function updateProgress(estado) {
+    var section = document.getElementById('pipeline-progress-section');
+    if (!section) return;
+    var st = estado.state || 'no_runs';
+    var tasks = estado.task_instances || [];
+    var total = tasks.length;
+    var done  = tasks.filter(function (t) { return ['success','failed','skipped'].indexOf(t.state || '') >= 0; }).length;
+    var pct   = total > 0 ? Math.floor(done / total * 100) : (st === 'success' ? 100 : 0);
+
+    var pctEl = section.querySelector('.progress-pct');
+    if (pctEl) { pctEl.textContent = pct + '%'; pctEl.setAttribute('aria-label', pct + '% completado'); }
+
+    var wrap = section.querySelector('.at-progress-wrap');
+    if (wrap) wrap.setAttribute('aria-valuenow', pct);
+
+    var bar = section.querySelector('.at-progress-bar');
+    if (bar) { bar.style.width = pct + '%'; bar.classList.toggle('anim', isActive(st)); }
+
+    var countEl = section.querySelector('.task-count-text');
+    if (countEl && total > 0) countEl.textContent = done + ' de ' + total + ' tareas completadas';
+  }
+
+  function buildTaskItem(task, dagRunId) {
+    var ts = task.state || 'none';
+    var actionsHtml = '';
+    if (ts === 'failed' && dagRunId) {
+      actionsHtml = '<a href="/pipeline/logs/' + dagRunId + '/' + task.task_id + '" class="btn-at-ghost" style="font-size:12px"><i class="bi bi-bug" aria-hidden="true"></i> Logs</a>';
+    } else if (ts === 'success' && dagRunId) {
+      actionsHtml = '<a href="/pipeline/logs/' + dagRunId + '/' + task.task_id + '" class="btn-icon view" title="Ver logs"><i class="bi bi-file-text" aria-hidden="true"></i></a>';
+    } else if (ts === 'running') {
+      actionsHtml = '<span class="at-badge at-badge-running" style="font-size:11px"><span class="badge-dot" aria-hidden="true"></span> Activo</span>';
+    }
+    return '<div class="task-timeline-item step-' + ts + '" role="listitem" aria-label="' + task.task_id + ': ' + ts + '">'
+      + '<div class="task-node ' + ts + '" aria-hidden="true"><i class="' + ('bi bi-' + (TASK_ICONS[ts] || 'dash')) + '"></i></div>'
+      + '<div class="task-info">'
+      +   '<div class="task-id">' + task.task_id + '</div>'
+      +   '<div class="task-state-label">' + (TASK_LABELS[ts] || 'Pendiente') + '</div>'
+      + (ts === 'running' ? '<span class="task-elapsed" aria-live="polite">Tiempo: <span class="at-elapsed-counter" data-start="' + (task.start_date || '') + '">…</span></span>' : '')
+      + '</div>'
+      + '<div class="task-actions">' + actionsHtml + '</div>'
+      + '</div>';
+  }
+
+  function updateTasks(estado) {
+    var timeline = document.getElementById('task-timeline');
+    if (!timeline) return;
+    var tasks = estado.task_instances || [];
+    var dagRunId = estado.dag_run_id || '';
+    timeline.innerHTML = tasks.map(function (t) { return buildTaskItem(t, dagRunId); }).join('');
+    scanElapsedEls();
+    updateElapsed();
+  }
+
+  function updateHistorial(historial) {
+    var tbody = document.querySelector('#runs-section tbody');
+    if (!tbody || !historial) return;
+    var CLS = { running: 'at-badge-running', success: 'at-badge-success', failed: 'at-badge-failed', queued: 'at-badge-warning' };
+    tbody.innerHTML = historial.map(function (run) {
+      var cls   = CLS[run.state] || 'at-badge-pending';
+      var start = (run.start_date || '').slice(0, 19).replace('T', ' ') || '—';
+      var end   = (run.end_date   || '').slice(0, 19).replace('T', ' ') || '—';
+      return '<tr>'
+        + '<td class="at-code" style="max-width:240px;font-size:11.5px">' + run.dag_run_id + '</td>'
+        + '<td><span class="at-badge ' + cls + '"><span class="badge-dot" aria-hidden="true"></span>' + run.state + '</span></td>'
+        + '<td class="at-code" style="font-size:12px;color:var(--at-muted)">' + start + '</td>'
+        + '<td class="at-code" style="font-size:12px;color:var(--at-muted)">' + end + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function applyData(data) {
+    var estado   = data.estado   || {};
+    var historial = data.historial || [];
+    var st = estado.state || 'no_runs';
+
+    // Si la estructura de la página cambió (ej. no_runs ↔ con datos), recarga completa
+    var hasProgressInDOM = !!document.getElementById('pipeline-progress-section');
+    var needsProgress    = st !== 'no_runs';
+    if (hasProgressInDOM !== needsProgress) {
       window.location.reload();
+      return;
+    }
+
+    updateHero(estado);
+    updateProgress(estado);
+    updateTasks(estado);
+    updateHistorial(historial);
+  }
+
+  function doFetch() {
+    fetch('/pipeline/estado-full', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(applyData)
+      .catch(function (e) { console.warn('[pipeline] fetch error:', e); });
+  }
+
+  setInterval(function () {
+    countdown--;
+    if (countdownEl) countdownEl.textContent = countdown;
+    updateElapsed();
+    if (countdown <= 0) {
+      countdown = POLL_INTERVAL;
+      doFetch();
     }
   }, 1000);
 
-  /* ── Trigger form: show progress immediately ── */
+  /* ── Trigger form ── */
   var triggerForm = document.getElementById('trigger-form');
   if (triggerForm) {
     triggerForm.addEventListener('submit', function () {
@@ -449,7 +618,6 @@
     });
   }
 
-  /* ── Sidebar active state ── */
   if (window.AT) AT.highlightSidebarActive();
 })();
 </script>
