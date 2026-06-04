@@ -64,6 +64,3 @@ El sistema transforma datos crudos en información accionable organizada en tres
 - Datos en tiempo real (el pipeline procesa snapshots estáticos)
 - Despliegue en producción cloud (migratable vía variables .env)
 
-## Nota sobre el estado actual
-
-La implementación en `webapp/` es un CRUD genérico de las tablas Parquet en MinIO (prototipo de presentación inicial). El alcance real del producto está definido por los 42 casos de uso de este documento. La arquitectura de la webapp debe evolucionar para cubrir todos los módulos descritos.

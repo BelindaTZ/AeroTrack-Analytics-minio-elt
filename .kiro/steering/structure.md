@@ -38,20 +38,6 @@ minio-elt/                          ← Raíz del proyecto
 │   ├── asistente_ia/               ← Chatbot RAG sobre modelo estrella — E3 [CU-41..42]
 │   └── auxiliar/                   ← Paquete «extensible» — sin CUs previstos
 │
-├── webapp/                         ← CRUD prototipo inicial (presentación)
-│   ├── main.py                     ← Prototipo: CRUD genérico de Parquet
-│   ├── config.py
-│   ├── minio_client.py
-│   ├── router_tablas.py
-│   ├── requirements_web.txt
-│   └── templates/
-│       ├── base.html
-│       ├── dashboard.html
-│       ├── tabla_lista.html
-│       ├── tabla_detalle.html
-│       ├── tabla_form.html
-│       └── error.html
-│
 ├── dags/
 │   ├── aerotrack_elt_dag.py        ← DAG principal: extract >> transform
 │   ├── aerotrack_tasks.py          ← extract_pipeline(), transform_pipeline()
@@ -82,10 +68,9 @@ minio-elt/                          ← Raíz del proyecto
 
 | Módulo | Directorio | Entrega | Estado |
 |---|---|---|---|
-| CRUD Parquet (prototipo) | `webapp/` | — | Implementado (presentación inicial) |
-| Autenticación + RBAC | `app/seguridad/` | E1 | Por implementar |
-| Pipeline ELT UI | `app/pipeline_elt/` | E1 | Por implementar |
-| Modelo Dimensional UI | `app/modelo_dimensional/` | E1 | Por implementar |
+| Autenticación + RBAC | `app/seguridad/` | E1 | Implementado |
+| Pipeline ELT UI | `app/pipeline_elt/` | E1 | Implementado |
+| Modelo Dimensional UI | `app/modelo_dimensional/` | E1 | Implementado |
 | Dashboard KPIs | `app/dashboard/` | E2 | Por implementar |
 | Análisis Puntualidad | `app/puntualidad/` | E2 | Por implementar |
 | Análisis Rutas | `app/rutas/` | E2 | Por implementar |

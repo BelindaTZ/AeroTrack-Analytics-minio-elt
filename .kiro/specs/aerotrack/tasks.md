@@ -120,28 +120,39 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   - [x] 7.2 Endpoint GET /pipeline/logs/{run_id}/{task_id} — traceback completo del error
   - [x] 7.3 Botón de reintento que dispara el pipeline completo desde historial
 
-#### Wave 3 — Modelo dimensional (migrar desde webapp/, depende de auth)
+#### Wave 3 — Modelo dimensional (depende de auth)
 
-- [x] 8. Migrar CRUD del modelo dimensional desde webapp/ a app/modelo_dimensional/
-  **Description:** La carpeta webapp/ contiene una implementación funcional del
-  CRUD de las 12 tablas dimensionales. MIGRAR (no reescribir desde cero) esa
-  lógica a app/modelo_dimensional/ siguiendo la estructura de módulos del proyecto.
-  Refactorizar para: usar config.py centralizado, agregar verificación de permisos
-  RBAC (modelo_dimensional.ver / .crear / .editar / .eliminar), integrar registro
-  en pb_auditoria después de cada operación de escritura.
-  NO eliminar webapp/ durante esta tarea — se mantiene hasta visto bueno en Entrega 1.
-  **Files:** app/modelo_dimensional/router.py, app/modelo_dimensional/service.py,
-  app/templates/modelo_dimensional/
+- [x] 8. Implementar CRUD del modelo dimensional en app/modelo_dimensional/
+  **Description:** Módulo FastAPI con CRUD completo de las 12 tablas del modelo
+  estrella (fact_vuelo + 11 dims) almacenadas como Parquet en MinIO bucket
+  `aerotrack-dims`. Estructura del módulo:
+  - `router.py`: endpoints bajo prefijo `/modelo`; rutas estáticas (`/validar`,
+    `/{tabla}/nuevo`) definidas ANTES que las dinámicas (`/{tabla}/{pk}/...`)
+    para evitar conflictos de resolución de rutas en FastAPI
+  - `data/service.py`: lógica de negocio — read/write Parquet vía
+    `shared/clients/minio_client.py`; paginación 50/página; búsqueda
+    multi-columna con `df.apply(str.contains)`; auto-incremento de PK;
+    `_cast()` para conversión de tipos str→int/float; `_desnormalizar()`
+    obligatoria antes de cada escritura (pandas puede retornar columnas
+    categóricas al leer Parquet, lo que falla en `concat`)
+  - `templates/modelo_dimensional/`: lista_tablas.html (cards con métricas),
+    lista_registros.html (live filter 400 ms + paginación),
+    form_registro.html (formulario dinámico create/edit por schema Parquet),
+    detalle_registro.html (vista solo lectura), validacion.html (reporte
+    con exportación CSV)
+  **Files:** app/modelo_dimensional/router.py,
+  app/modelo_dimensional/data/service.py,
+  app/modelo_dimensional/templates/modelo_dimensional/
   **Dependencies:** 1, 2
   **Requirements:** CU-14, CU-15, CU-16
 
-  - [x] 8.1 Migrar lógica de listado de tablas con métricas desde webapp/ (nombre, count, tamaño Parquet, última actualización)
-  - [x] 8.2 Migrar lógica de exploración paginada (50/página) con búsqueda por columna
-  - [x] 8.3 Migrar formularios dinámicos de crear/editar registro basados en schema Parquet
-  - [x] 8.4 Migrar lógica de eliminación con modal de confirmación (bloquear pk=0)
-  - [x] 8.5 Agregar verificación de permisos RBAC en cada endpoint
-  - [x] 8.6 Agregar registro en pb_auditoria en cada operación de escritura (INSERT-only)
-  - [x] 8.7 Implementar CU-16: validación de integridad FK + NULLs con exportación CSV del reporte
+  - [x] 8.1 listar_tablas_con_metricas(): itera TABLAS, llama stat_parquet() en MinIO y carga count; retorna nombre, label, icon, pk, count, size_mb, modified, disponible
+  - [x] 8.2 paginar(df, page, q): filtrado multi-columna (q busca en todas las columnas como str, case-insensitive); paginación 50/página con PAGE_SIZE desde shared/templates.py; live filter en lista_registros con fetch+innerHTML (debounce 400 ms, patrón canónico sin FormData)
+  - [x] 8.3 crear_registro() y editar_registro(): formulario dinámico generado desde df.columns + dtypes; PK auto-incremental (max+1) en crear; PK read-only en editar; _desnormalizar() antes de concat/write para evitar error con columnas categóricas de Parquet
+  - [x] 8.4 eliminar_registro(): bloquea pk_val en ("0", "0.0") en service y en router (HTTP 403 sin mostrar modal); modal de confirmación en template para los demás casos
+  - [x] 8.5 RBAC: `_perm_ver = require_permission("modelo_dimensional", "ver")` cacheado a nivel módulo; acciones individuales (crear/editar/eliminar/ejecutar/exportar) verificadas con require_permission() inline en cada endpoint
+  - [x] 8.6 Auditoría: audit.registrar(user_id, email, accion, "modelo_dimensional", recurso_tipo=tabla, recurso_id=pk) INSERT en pb_auditoria tras cada operación de escritura (crear, editar, eliminar, validar)
+  - [x] 8.7 validar_integridad() (CU-16): verifica 12 FKs de fact_vuelo contra sus dims (FACT_FKS dict), detecta NULLs en FKs obligatorias, verifica fila pk=0 en dims opcionales (dim_cancelacion, dim_retraso_causa, dim_desvio); exportación CSV del reporte en GET /modelo/validar/export
 
 #### Wave 4 — Navegación y layout (depende de auth + módulos)
 
@@ -348,14 +359,13 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
 - [ ] 22. Verificar y limpiar docker-compose.yml para entrega
   **Description:** Confirmar que docker compose up -d levanta todo en orden
   correcto con healthchecks. Verificar que minio-init crea los 3 buckets.
-  Actualizar volume del servicio fastapi de ./webapp a ./app.
   **Files:** docker-compose.yml
   **Dependencies:** None
   **Requirements:** Portabilidad — Instalabilidad (ISO 25010)
 
   - [ ] 22.1 Confirmar healthchecks y orden de depends_on para todos los servicios
   - [ ] 22.2 Verificar creación automática de buckets aerotrack-raw, aerotrack-dims, aerotrack-exports
-  - [ ] 22.3 Actualizar volume fastapi de ./webapp:/app a ./app:/app
+  - [ ] 22.3 Verificar que el servicio fastapi monta ./app:/code/app y todos los servicios Airflow solo montan dags, logs, plugins, scripts, data
 
 - [ ] 23. Generar diagramas finales y actualizar docs/
   **Description:** Actualizar diagrama de componentes y despliegue con el
@@ -367,20 +377,6 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   - [ ] 23.1 Actualizar diagrama de componentes con todos los módulos de E1-E3
   - [ ] 23.2 Actualizar diagrama de despliegue con servicios Docker definitivos
 
-#### Wave 2 — Limpieza final (depende de aprobación Entrega 1)
-
-- [ ] 24. [BLOQUEADO — espera visto bueno del usuario en Entrega 1] Eliminar webapp/ y todas sus referencias
-  **Description:** EJECUTAR SOLO cuando el usuario haya dado visto bueno
-  explícito de que Entrega 1 funciona correctamente. Eliminar carpeta webapp/
-  completa, eliminar referencias en docker-compose.yml (volumes de airflow-*)
-  y limpiar la nota de advertencia de la tarea 8 en este archivo.
-  **Files:** webapp/ (eliminar), docker-compose.yml, tasks.md
-  **Dependencies:** 8, 9
-  **Requirements:** Mantenibilidad — Modificabilidad (ISO 25010)
-
-  - [ ] 24.1 Eliminar carpeta webapp/ completa una vez confirmado el visto bueno
-  - [ ] 24.2 Eliminar referencias a webapp/ en docker-compose.yml (volumes de airflow-*)
-  - [ ] 24.3 Limpiar nota de advertencia y referencias a webapp/ en tarea 8 de este archivo
 
 ## Task Dependency Graph
 
@@ -440,12 +436,6 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
       "label": "Entrega 4 — Wave 1 — Documentación final (paralelo)",
       "tasks": [21, 22, 23],
       "dependencies": []
-    },
-    {
-      "wave": "E4-W2",
-      "label": "Entrega 4 — Wave 2 — Limpieza final (bloqueada hasta visto bueno E1)",
-      "tasks": [24],
-      "dependencies": ["E4-W1"]
     }
   ]
 }
@@ -453,9 +443,6 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
 
 ## Notes
 
-- **webapp/** contiene implementación preliminar del CRUD dimensional (solo para demostración visual). NO eliminar hasta visto bueno explícito del usuario en Entrega 1. La tarea 8 migra esa lógica hacia app/modelo_dimensional/.
-- **Tarea 24** está bloqueada: solo ejecutar cuando el usuario confirme explícitamente que Entrega 1 funciona.
 - Las tareas de cada Entrega son independientes entre entregas. Al indicar "implementa Entrega N", Kiro no debe tocar tareas de otras entregas.
-- **docker-compose.yml** monta ./webapp como volumen del servicio fastapi durante E1. Al completar E4 (tarea 22) se cambia a ./app.
 - Todas las operaciones de escritura deben registrar en pb_auditoria (INSERT-only, sin UPDATE ni DELETE sobre esa colección).
 - Los valores sensibles en configuracion_sistema (flag sensible=true) siempre se enmascaran con •••• en la UI.

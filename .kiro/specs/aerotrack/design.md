@@ -88,7 +88,7 @@ graph TD
 
 **MinIO — Analytical Layer (Parquet)**
 
-MinIO expone la API S3 estándar. El pipeline ELT escribe los Parquet; la webapp los lee para análisis. No existen FKs entre capas — la integridad se verifica por proceso (CU-16).
+MinIO expone la API S3 estándar. El pipeline ELT escribe los Parquet; la app FastAPI los lee para análisis. No existen FKs entre capas — la integridad se verifica por proceso (CU-16).
 
 | Bucket | Variable | Escrito por | Leído por | Contenido |
 |---|---|---|---|---|
@@ -112,7 +112,7 @@ PocketBase v0.22.4 gestiona todos los datos operativos vía REST API en `:8090`.
 
 **PostgreSQL — Airflow Metadata Only**
 
-Almacena exclusivamente los metadatos internos de Airflow (DAG runs, task instances, XComs). No es accesible por la webapp FastAPI.
+Almacena exclusivamente los metadatos internos de Airflow (DAG runs, task instances, XComs). No es accesible por la app FastAPI.
 
 ### Environment Detection Pattern
 
@@ -240,9 +240,9 @@ Los nombres de template en el código (`render(request, "roles/lista.html", ...)
 
 | Package | Entrega | Status | Dependencies |
 |---------|---------|--------|--------------|
-| `seguridad` | E1 | IN PROGRESS | PocketBase: app_users, roles, roles_permisos, modulos |
-| `pipeline_elt` | E1 | IN PROGRESS | Airflow DAG `aerotrack_elt_pipeline`, MinIO, PocketBase |
-| `modelo_dimensional` | E1 | IN PROGRESS | MinIO aerotrack-dims |
+| `seguridad` | E1 | DONE | PocketBase: app_users, roles, roles_permisos, modulos |
+| `pipeline_elt` | E1 | DONE | Airflow DAG `aerotrack_elt_pipeline`, MinIO, PocketBase |
+| `modelo_dimensional` | E1 | DONE | MinIO aerotrack-dims |
 | `dashboard` | E2 | TODO | modelo_dimensional completo |
 | `puntualidad` | E2 | TODO | modelo_dimensional completo |
 | `rutas` | E2 | TODO | modelo_dimensional completo |

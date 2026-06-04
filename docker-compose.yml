@@ -152,7 +152,6 @@ services:
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./data:/opt/airflow/data
-      - ./webapp:/opt/airflow/app
     networks:
       - elt-network
     restart: "no"
@@ -186,7 +185,6 @@ services:
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./data:/opt/airflow/data
-      - ./webapp:/opt/airflow/app
     networks:
       - elt-network
     restart: unless-stopped
@@ -217,7 +215,6 @@ services:
       - ./plugins:/opt/airflow/plugins
       - ./scripts:/opt/airflow/scripts
       - ./data:/opt/airflow/data
-      - ./webapp:/opt/airflow/app
     networks:
       - elt-network
     restart: unless-stopped
