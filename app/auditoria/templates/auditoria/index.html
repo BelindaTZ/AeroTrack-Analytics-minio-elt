@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Auditoría — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-item">Administración</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Auditoría</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .filter-field { display:flex; flex-direction:column; gap:4px; }
+  .filter-field label { font-size:11px; font-weight:600; color:var(--at-muted); text-transform:uppercase; letter-spacing:.5px; }
+  .detalle-modal-body { font-family:'JetBrains Mono',monospace; font-size:12px; white-space:pre-wrap; word-break:break-all; background:rgba(0,0,0,.2); padding:14px; border-radius:8px; max-height:340px; overflow-y:auto; color:var(--at-text); }
+  .badge-resultado-exitoso { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;background:rgba(16,185,129,.12);color:#10b981; }
+  .badge-resultado-fallido  { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;background:rgba(239,68,68,.12);color:#ef4444; }
+  .badge-resultado-otros    { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;background:rgba(148,163,184,.1);color:var(--at-muted); }
+  tr.clickable { cursor:pointer; }
+  tr.clickable:hover td { background:rgba(255,255,255,.025); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-journal-text"></i></span>
+    Auditoría
+  </h1>
+  <p>Registro inmutable de acciones realizadas en el sistema (INSERT-only).</p>
+</div>
+
+<div class="at-table-wrapper">
+  <div class="at-table-header" style="flex-wrap:wrap;gap:14px;align-items:flex-end;padding:16px 20px">
+    <span class="at-table-title">
+      Registro de auditoría del sistema
+      <span id="auditoria-count" style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">
+        {% if total is not none %}({{ "{:,}".format(total) }}){% endif %}
+      </span>
+    </span>
+    <form id="auditoria-filter-form" method="get" action="/auditoria"
+          class="d-flex gap-2 flex-wrap align-items-end" role="search">
+      <div class="filter-field">
+        <label for="f-modulo">Módulo</label>
+        <select id="f-modulo" name="modulo" class="form-control-at" style="width:150px">
+          <option value="">Todos los módulos</option>
+          {% for m in modulos_disponibles %}
+          <option value="{{ m }}" {% if filtros.modulo == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="f-accion">Acción</label>
+        <select id="f-accion" name="accion" class="form-control-at" style="width:150px">
+          <option value="">Todas las acciones</option>
+          {% for a in acciones_disponibles %}
+          <option value="{{ a }}" {% if filtros.accion == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="f-resultado">Resultado</label>
+        <select id="f-resultado" name="resultado" class="form-control-at" style="width:150px">
+          <option value="">Todos los resultados</option>
+          <option value="exitoso" {% if filtros.resultado == 'exitoso' %}selected{% endif %}>Exitoso</option>
+          <option value="fallido" {% if filtros.resultado == 'fallido' %}selected{% endif %}>Fallido</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="f-usuario">Usuario / email</label>
+        <input id="f-usuario" type="text" name="usuario" value="{{ filtros.usuario }}"
+               class="form-control-at" style="width:180px" placeholder="Buscar usuario…" autocomplete="off">
+      </div>
+      <div class="filter-field">
+        <label for="f-desde">Desde</label>
+        <input id="f-desde" type="date" name="desde" value="{{ filtros.desde }}" class="form-control-at" style="width:150px">
+      </div>
+      <div class="filter-field">
+        <label for="f-hasta">Hasta</label>
+        <input id="f-hasta" type="date" name="hasta" value="{{ filtros.hasta }}" class="form-control-at" style="width:150px">
+      </div>
+    </form>
+    <a href="/auditoria/export?{{ request.url.query }}" class="btn-at-ghost" style="align-self:flex-end">
+      <i class="bi bi-download" aria-hidden="true"></i> Exportar CSV
+    </a>
+  </div>
+
+  <div id="auditoria-results">
+    <div class="at-table-scroll">
+      <table class="at-table" aria-label="Log de auditoría">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Módulo</th>
+            <th>Acción</th>
+            <th>Recurso</th>
+            <th>Resultado</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in registros %}
+          <tr class="clickable" onclick="showDetalle({{ r | tojson }})">
+            <td class="at-mono" style="font-size:11.5px;color:var(--at-muted)">
+              {{ r.get('created', '')[:19].replace('T', ' ') or '—' }}
+            </td>
+            <td style="font-size:12.5px">
+              <div style="font-weight:600">{{ r.get('usuario_email','—') }}</div>
+              <div style="font-size:11px;color:var(--at-muted)">{{ r.get('usuario_id','')[:12] }}…</div>
+            </td>
+            <td><span class="at-badge at-badge-pending" style="font-size:11.5px">{{ r.get('modulo','—') }}</span></td>
+            <td style="font-weight:600;font-size:13px">{{ r.get('accion','—') }}</td>
+            <td style="font-size:12px">
+              {% if r.get('recurso_tipo') %}
+              <span style="color:var(--at-muted)">{{ r.recurso_tipo }}</span>
+              {% if r.get('recurso_id') %}/<span class="at-mono">{{ r.recurso_id[:20] }}</span>{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              {% if r.get('resultado') == 'exitoso' %}
+              <span class="badge-resultado-exitoso"><i class="bi bi-check2" aria-hidden="true"></i> exitoso</span>
+              {% elif r.get('resultado') == 'fallido' %}
+              <span class="badge-resultado-fallido"><i class="bi bi-x" aria-hidden="true"></i> fallido</span>
+              {% else %}
+              <span class="badge-resultado-otros">{{ r.get('resultado','—') }}</span>
+              {% endif %}
+            </td>
+            <td class="at-mono" style="font-size:11.5px;color:var(--at-sub)">{{ r.get('ip_address','—') or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" style="text-align:center;padding:32px;color:var(--at-muted)">
+              <i class="bi bi-journal-x" style="font-size:24px;display:block;margin-bottom:8px" aria-hidden="true"></i>
+              No hay registros con los filtros actuales.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if has_prev or has_next %}
+    <nav class="at-pagination" aria-label="Paginación del log">
+      <span>Página {{ page }}</span>
+      <div class="pag-btns">
+        {% if has_prev %}
+        <a href="?{{ request.url.query | replace('page=' ~ page, 'page=' ~ (page - 1)) if 'page=' in request.url.query else (request.url.query + '&page=' ~ (page-1)) }}"
+           class="pag-btn" aria-label="Página anterior">
+          <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </a>
+        {% endif %}
+        <span class="pag-btn active" aria-current="page">{{ page }}</span>
+        {% if has_next %}
+        <a href="?{{ (request.url.query + '&page=' ~ (page+1)) if 'page=' not in request.url.query else request.url.query | replace('page=' ~ page, 'page=' ~ (page+1)) }}"
+           class="pag-btn" aria-label="Página siguiente">
+          <i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </a>
+        {% endif %}
+      </div>
+    </nav>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal fade" id="detalle-modal" tabindex="-1" aria-labelledby="detalle-modal-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="detalle-modal-title" style="font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px">
+          <i class="bi bi-journal-text" style="color:var(--at-blue-500)" aria-hidden="true"></i>
+          Detalle del registro
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" style="padding:20px 24px">
+        <div id="detalle-info" style="margin-bottom:14px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+        <div class="detalle-modal-body" id="detalle-json">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var fModulo    = document.getElementById('f-modulo');
+  var fAccion    = document.getElementById('f-accion');
+  var fResultado = document.getElementById('f-resultado');
+  var fUsuario   = document.getElementById('f-usuario');
+  var fDesde     = document.getElementById('f-desde');
+  var fHasta     = document.getElementById('f-hasta');
+  var box        = document.getElementById('auditoria-results');
+  var countEl    = document.getElementById('auditoria-count');
+  if (!box) return;
+
+  function apply() {
+    var params = 'modulo='    + encodeURIComponent(fModulo    ? fModulo.value    : '')
+               + '&accion='   + encodeURIComponent(fAccion    ? fAccion.value    : '')
+               + '&resultado='+ encodeURIComponent(fResultado ? fResultado.value : '')
+               + '&usuario='  + encodeURIComponent(fUsuario   ? fUsuario.value   : '')
+               + '&desde='    + encodeURIComponent(fDesde     ? fDesde.value     : '')
+               + '&hasta='    + encodeURIComponent(fHasta     ? fHasta.value     : '');
+    fetch('/auditoria?' + params, { credentials: 'same-origin' })
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('auditoria-results');
+        if (!newBox) return;
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('auditoria-count');
+        if (nc && countEl) countEl.textContent = nc.textContent;
+        history.replaceState(null, '', '/auditoria?' + params);
+      })
+      .catch(function(){});
+  }
+
+  var timer;
+  function debounced() { clearTimeout(timer); timer = setTimeout(apply, 400); }
+
+  if (fModulo)    fModulo.addEventListener('change', apply);
+  if (fAccion)    fAccion.addEventListener('change', apply);
+  if (fResultado) fResultado.addEventListener('change', apply);
+  if (fUsuario)   fUsuario.addEventListener('input', debounced);
+  if (fDesde)     fDesde.addEventListener('input', debounced);
+  if (fHasta)     fHasta.addEventListener('input', debounced);
+})();
+
+function showDetalle(r) {
+  var info = document.getElementById('detalle-info');
+  var json = document.getElementById('detalle-json');
+  info.innerHTML = [
+    ['Fecha',     (r.created || '').slice(0,19).replace('T',' ')],
+    ['Usuario',   r.usuario_email || '—'],
+    ['Módulo',    r.modulo || '—'],
+    ['Acción',    r.accion || '—'],
+    ['Resultado', r.resultado || '—'],
+    ['IP',        r.ip_address || '—'],
+  ].map(function(p) {
+    return '<div><span style="font-size:11px;font-weight:700;color:var(--at-muted);text-transform:uppercase;letter-spacing:.5px">' + p[0] + '</span><br><span style="font-size:13px;font-weight:600">' + p[1] + '</span></div>';
+  }).join('');
+  var detalle = r.detalle || '';
+  try { json.textContent = JSON.stringify(JSON.parse(detalle), null, 2); }
+  catch(e) { json.textContent = detalle || '(sin detalle)'; }
+  new bootstrap.Modal(document.getElementById('detalle-modal')).show();
+}
+</script>
+{% endblock %}

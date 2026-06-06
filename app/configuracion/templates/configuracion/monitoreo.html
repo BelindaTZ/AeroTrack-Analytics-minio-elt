@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Estado de Servicios — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<a href="/configuracion" style="color:var(--at-muted);text-decoration:none">Configuración</a>
+<span class="bc-sep">›</span>
+<span class="bc-current">Estado de Servicios</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .services-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:20px; margin-bottom:24px; }
+  .service-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:22px 24px; box-shadow:var(--at-shadow-sm); position:relative; overflow:hidden; }
+  .service-card.online::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--at-green-500); border-radius:3px 3px 0 0; }
+  .service-card.offline::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--at-red-500); border-radius:3px 3px 0 0; }
+  .service-card.degradado::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:#f59e0b; border-radius:3px 3px 0 0; }
+
+  .service-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .service-name { font-size:15px; font-weight:700; color:var(--at-text); display:flex; align-items:center; gap:8px; }
+  .service-name i { font-size:18px; }
+  .service-status-badge { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:3px 10px; border-radius:20px; }
+  .service-status-badge.online  { background:rgba(16,185,129,.12); color:#10b981; }
+  .service-status-badge.offline { background:rgba(239,68,68,.12); color:#ef4444; }
+  .service-status-badge.degradado { background:rgba(245,158,11,.12); color:#f59e0b; }
+
+  .service-latency { font-family:'JetBrains Mono',monospace; font-size:24px; font-weight:700; color:var(--at-text); margin:10px 0 6px; }
+  .service-latency span { font-size:13px; font-weight:400; color:var(--at-muted); margin-left:2px; }
+
+  .service-meta { font-size:12px; color:var(--at-sub); margin-bottom:4px; }
+  .service-link { font-size:12px; color:var(--at-blue-500); text-decoration:none; }
+  .service-link:hover { text-decoration:underline; }
+  .service-error { font-size:12px; color:#ef4444; background:rgba(239,68,68,.08); border-radius:6px; padding:8px 10px; margin-top:10px; font-family:'JetBrains Mono',monospace; }
+
+  .bucket-table { width:100%; border-collapse:collapse; margin-top:12px; }
+  .bucket-table th { font-size:10.5px; font-weight:700; color:var(--at-muted); text-transform:uppercase; letter-spacing:.5px; padding:5px 8px; border-bottom:1px solid var(--at-border); }
+  .bucket-table td { font-size:12px; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.03); }
+  .bucket-table tr:last-child td { border:none; }
+
+  .refresh-bar { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:12px 18px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--at-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-activity"></i></span>
+    Estado de Servicios
+  </h1>
+  <p>Health check de MinIO, PocketBase y Airflow con latencia en tiempo real.</p>
+</div>
+
+<div class="refresh-bar">
+  <span>
+    <i class="bi bi-activity me-2" style="color:var(--at-blue-500)"></i>
+    Estado en tiempo real — refresco automático cada <strong style="color:var(--at-text)">30s</strong>
+  </span>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:12px">Próximo refresco en <span id="countdown" style="font-family:'JetBrains Mono',monospace;color:var(--at-blue-500)">30</span>s</span>
+    <button class="btn-at-ghost" style="font-size:12px" onclick="doRefresh()">
+      <i class="bi bi-arrow-clockwise"></i> Ahora
+    </button>
+  </div>
+</div>
+
+<div class="services-grid" id="services-grid">
+  {% for svc in status.servicios %}
+  <div class="service-card {{ svc.estado }}" id="svc-{{ svc.nombre | lower }}">
+    <div class="service-header">
+      <div class="service-name">
+        <i class="bi {{ svc.icono }}" aria-hidden="true"></i>
+        {{ svc.nombre }}
+      </div>
+      <span class="service-status-badge {{ svc.estado }}">
+        <span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block"></span>
+        {{ svc.estado | capitalize }}
+      </span>
+    </div>
+
+    {% if svc.latencia_ms >= 0 %}
+    <div class="service-latency">
+      {{ svc.latencia_ms }}<span>ms</span>
+    </div>
+    {% else %}
+    <div class="service-latency" style="color:var(--at-muted)">—<span>ms</span></div>
+    {% endif %}
+
+    <div class="service-meta">
+      <a href="{{ svc.url }}" target="_blank" rel="noopener" class="service-link">
+        <i class="bi bi-box-arrow-up-right" style="font-size:10px"></i> {{ svc.url }}
+      </a>
+    </div>
+
+    {% if svc.nombre == 'Airflow' and svc.ok %}
+    <div class="service-meta">
+      Scheduler: <strong>{{ svc.scheduler }}</strong>
+    </div>
+    {% endif %}
+
+    {% if svc.nombre == 'MinIO' and svc.ok and svc.metricas %}
+    <table class="bucket-table">
+      <thead><tr><th>Bucket</th><th>Objetos</th><th>Tamaño</th></tr></thead>
+      <tbody>
+        {% for m in svc.metricas %}
+        <tr>
+          <td style="font-family:'JetBrains Mono',monospace">{{ m.bucket }}</td>
+          <td>{{ m.objetos }}</td>
+          <td>{{ m.size_mb }} MB</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if svc.error %}
+    <div class="service-error">
+      <i class="bi bi-exclamation-triangle"></i> {{ svc.error }}
+    </div>
+    {% if not svc.ok %}
+    <div style="margin-top:10px;font-size:12px;color:var(--at-muted)">
+      {% if svc.nombre == 'PocketBase' %}
+      <strong>Diagnóstico:</strong> Verificar que el servicio PocketBase esté levantado: <code>docker logs pocketbase</code>
+      {% elif svc.nombre == 'MinIO' %}
+      <strong>Diagnóstico:</strong> Verificar que MinIO esté levantado: <code>docker logs minio</code>
+      {% elif svc.nombre == 'Airflow' %}
+      <strong>Diagnóstico:</strong> Verificar Airflow: <code>docker logs airflow-webserver</code>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var INTERVAL = 30;
+  var countdown = INTERVAL;
+  var cdEl = document.getElementById('countdown');
+
+  function doRefresh() {
+    fetch('/configuracion/estado/json', { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { applyStatus(data); countdown = INTERVAL; })
+      .catch(function(e) { console.warn('monitor refresh error', e); });
+  }
+  window.doRefresh = doRefresh;
+
+  function applyStatus(data) {
+    (data.servicios || []).forEach(function(svc) {
+      var card = document.getElementById('svc-' + svc.nombre.toLowerCase());
+      if (!card) return;
+      card.className = 'service-card ' + svc.estado;
+      var badge = card.querySelector('.service-status-badge');
+      if (badge) {
+        badge.className = 'service-status-badge ' + svc.estado;
+        badge.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block"></span> ' + svc.estado.charAt(0).toUpperCase() + svc.estado.slice(1);
+      }
+      var lat = card.querySelector('.service-latency');
+      if (lat) {
+        lat.innerHTML = (svc.latencia_ms >= 0 ? svc.latencia_ms : '—') + '<span>ms</span>';
+      }
+    });
+  }
+
+  setInterval(function() {
+    countdown--;
+    if (cdEl) cdEl.textContent = countdown;
+    if (countdown <= 0) {
+      countdown = INTERVAL;
+      doRefresh();
+    }
+  }, 1000);
+})();
+</script>
+{% endblock %}

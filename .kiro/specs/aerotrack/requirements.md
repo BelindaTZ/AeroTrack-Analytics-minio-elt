@@ -629,6 +629,37 @@ THE SYSTEM SHALL mask it in the UI with •••• characters
 
 ---
 
+## Entrega 2 — Capa Analítica
+
+Los siguientes requisitos complementan los CUs 17–34 y 39–40 con el comportamiento esperado del sistema analítico. Se derivan de las decisiones técnicas de la Entrega 2.
+
+WHEN el Analista accede al dashboard
+THE SYSTEM SHALL calcular OTP global, retraso promedio, top-3 aerolíneas
+y cancelaciones del período usando pandas sobre fact_vuelo.parquet en MinIO.
+
+WHEN un KPI supera el umbral configurado en configuracion_sistema (PocketBase)
+THE SYSTEM SHALL mostrar una alerta visual con severidad (warning/critical)
+y el valor actual vs umbral.
+
+WHEN el Analista solicita análisis de puntualidad
+THE SYSTEM SHALL generar una narrativa ejecutiva en español llamando a
+Grok 3 mini con fallback automático a Gemini 2.0 Flash si el primero
+retorna HTTP 429, 402, 503 o timeout.
+
+WHEN la narrativa para un conjunto de KPIs ya fue generada en los últimos 300s
+THE SYSTEM SHALL retornar la narrativa desde caché sin llamar a ninguna API externa.
+
+WHEN el Analista exporta un análisis
+THE SYSTEM SHALL generar el archivo (PDF vía WeasyPrint, Excel vía openpyxl)
+y almacenarlo en el bucket aerotrack-exports de MinIO, retornando
+un enlace de descarga firmado con expiración de 1 hora.
+
+WHEN el Admin guarda configuración de SMTP en CU-30
+THE SYSTEM SHALL enviar un email de prueba inmediatamente y mostrar
+el resultado en la misma pantalla sin recargar la página.
+
+---
+
 ## Non-Functional Requirements (ISO 25010)
 
 ### 13. Eficiencia de Desempeño
@@ -782,5 +813,6 @@ Organized by layer. All version constraints are minimums (`>=`).
 |---|---|---|
 | `duckdb` | ≥ 0.10.0 | In-process SQL engine for columnar Parquet queries without loading full file into RAM |
 | `reportlab` | ≥ 4.0.0 | PDF generation for CU-27 (analysis exports) and CU-38 (executive report) |
+| `weasyprint` | ≥ 62.0 | PDF rendering for CU-27 (Entrega 2) — renders HTML/CSS templates respecting `--at-*` design tokens to PDF; used instead of ReportLab for analytical exports |
 | `openpyxl` | ≥ 3.1.0 | Excel `.xlsx` generation with multiple sheets for CU-28 |
 | `statsmodels` | ≥ 0.14.0 | Time-series forecasting for OTP projections in the predictive module (CU-35) |

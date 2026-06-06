@@ -46,14 +46,22 @@
       {% endif %}
     {% endfor %}
 
-    <!-- ── Entrega 2 — coming soon ── -->
+    <!-- ── Entrega 2 — activa ── -->
     <div class="nav-label" style="margin-top:6px">Entrega 2</div>
     {% for mod in modulos_sidebar if mod.entrega == 2 %}
-    <span class="nav-item-link disabled-soon" title="Disponible en Entrega 2" aria-disabled="true">
-      <i class="bi {{ mod.icon }}" aria-hidden="true"></i>
-      {{ mod.label }}
-      <span class="badge-soon">Próximamente</span>
-    </span>
+      {% if mod.clave in user_permissions %}
+      <a href="{{ mod.url }}"
+         class="nav-item-link {% if request.url.path.startswith(mod.url) %}active{% endif %}"
+         aria-current="{% if request.url.path.startswith(mod.url) %}page{% endif %}">
+        <i class="bi {{ mod.icon }}" aria-hidden="true"></i>
+        {{ mod.label }}
+      </a>
+      {% else %}
+      <span class="nav-item-link disabled-soon" title="Sin permiso" aria-disabled="true">
+        <i class="bi {{ mod.icon }}" aria-hidden="true"></i>
+        {{ mod.label }}
+      </span>
+      {% endif %}
     {% endfor %}
 
     <!-- ── Entrega 3 — coming soon ── -->
@@ -236,7 +244,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/aerotrack-ui.js?v=3"></script>
+<script src="/static/js/aerotrack-ui.js?v=4"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

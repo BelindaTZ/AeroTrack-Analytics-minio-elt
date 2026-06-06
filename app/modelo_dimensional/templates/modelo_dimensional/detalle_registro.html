@@ -7,11 +7,13 @@
 {% endblock %}
 {% block content %}
 <div class="page-heading">
-  <h1><i class="bi {{ tabla_info.icon }}" style="color:var(--at-coral);margin-right:8px"></i>{{ tabla_info.label }} — <span class="badge-pk">{{ pk_val }}</span></h1>
-</div>
-<div class="d-flex gap-2 mb-4">
-  <a href="/modelo/{{ tabla }}/{{ pk_val }}/editar" class="btn-at-primary"><i class="bi bi-pencil"></i> Editar</a>
-  <a href="/modelo/{{ tabla }}" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Volver</a>
+  <div class="page-heading-meta">
+    <h1><i class="bi {{ tabla_info.icon }}" style="color:var(--at-coral);margin-right:8px"></i>{{ tabla_info.label }} — <span class="badge-pk">{{ pk_val }}</span></h1>
+    <div class="d-flex gap-2">
+      <a href="/modelo/{{ tabla }}/{{ pk_val }}/editar" class="btn-at-primary"><i class="bi bi-pencil"></i> Editar</a>
+      <a href="/modelo/{{ tabla }}" class="btn-at-ghost"><i class="bi bi-arrow-left"></i> Volver</a>
+    </div>
+  </div>
 </div>
 <div class="at-card">
   <div class="detail-grid">

@@ -7,6 +7,7 @@ IN_DOCKER = os.path.exists("/.dockerenv")
 
 # ── MinIO ─────────────────────────────────────────────────────────────────────
 MINIO_ENDPOINT = os.getenv("MINIO_URL_DOCKER") if IN_DOCKER else os.getenv("MINIO_URL", "localhost:9000")
+MINIO_PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_URL", "localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS", "admin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET", "admin1234")
 MINIO_BUCKET_RAW = os.getenv("MINIO_BUCKET_RAW", "aerotrack-raw")

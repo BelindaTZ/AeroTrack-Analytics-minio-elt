@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Configuración — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-item">Administración</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Configuración</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .config-layout { display:grid; grid-template-columns:220px 1fr; gap:20px; }
+  @media(max-width:800px){ .config-layout { grid-template-columns:1fr; } }
+
+  .config-nav { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:10px; height:fit-content; position:sticky; top:16px; }
+  .config-nav-item { display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:var(--at-r-md); font-size:13px; font-weight:500; color:var(--at-sub); cursor:pointer; border:none; background:none; width:100%; text-align:left; transition:background var(--at-dur-base); }
+  .config-nav-item:hover { background:rgba(255,255,255,.05); color:var(--at-text); }
+  .config-nav-item.active { background:var(--at-running-bg); color:var(--at-blue-500); }
+  .config-nav-item i { width:16px; text-align:center; }
+
+  .config-panel { display:none; }
+  .config-panel.active { display:block; }
+
+  .config-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:24px 28px; margin-bottom:20px; }
+  .config-card-title { font-size:14px; font-weight:700; color:var(--at-text); margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+  .config-card-title i { width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; font-size:14px; }
+
+  .config-row { display:grid; grid-template-columns:1fr 1.6fr; gap:12px; align-items:start; padding:12px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+  .config-row:last-child { border:none; padding-bottom:0; }
+  .config-label { font-size:13px; font-weight:600; color:var(--at-text); }
+  .config-desc { font-size:11.5px; color:var(--at-muted); margin-top:2px; }
+  .config-input-wrap { display:flex; gap:8px; align-items:center; }
+
+  .sensible-badge { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:20px; background:rgba(239,68,68,.1); color:#ef4444; margin-top:4px; }
+
+  .smtp-test-result { margin-top:10px; padding:10px 14px; border-radius:var(--at-r-md); font-size:13px; display:none; }
+  .smtp-test-result.ok { background:rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.2); }
+  .smtp-test-result.error { background:rgba(239,68,68,.12); color:#ef4444; border:1px solid rgba(239,68,68,.2); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{% set _msg = request.query_params.get('msg', '') %}
+{% set _err = request.query_params.get('error', '') %}
+{% set _active = request.query_params.get('active', 'email') %}
+{% set _test_smtp = request.query_params.get('test_smtp', '') %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-sliders"></i></span>
+    Configuración
+  </h1>
+  <p>Parámetros del sistema por módulo. Los cambios aplican sin reiniciar servicios.</p>
+</div>
+
+<div class="config-layout">
+
+  <!-- Nav -->
+  <nav class="config-nav" aria-label="Grupos de configuración">
+    {% for grupo in grupos_orden %}
+    {% set meta = grupo_meta[grupo] %}
+    <button class="config-nav-item {% if _active == grupo %}active{% endif %}"
+            onclick="showPanel('{{ grupo }}')"
+            id="nav-{{ grupo }}"
+            type="button">
+      <i class="bi {{ meta.icon }}" style="color:{{ meta.color }}"></i>
+      {{ meta.label }}
+    </button>
+    {% endfor %}
+    <hr style="border-color:var(--at-border);margin:8px 0">
+    <a href="/configuracion/estado" class="config-nav-item">
+      <i class="bi bi-activity" style="color:#10b981"></i>
+      Estado servicios
+    </a>
+  </nav>
+
+  <!-- Panels -->
+  <div>
+    {% for grupo in grupos_orden %}
+    {% set meta = grupo_meta[grupo] %}
+    <div id="panel-{{ grupo }}" class="config-panel {% if _active == grupo %}active{% endif %}">
+
+      <div class="config-card">
+        <div class="config-card-title">
+          <i class="bi {{ meta.icon }}" style="background:rgba({{ '59,130,246' if grupo=='email' else '245,158,11' if grupo=='alertas' else '99,102,241' if grupo=='pipeline' else '16,185,129' if grupo=='ia' else '148,163,184' }}, .12);color:{{ meta.color }}"></i>
+          {{ meta.label }}
+        </div>
+
+        <form method="post" action="/configuracion/{{ grupo }}" id="form-{{ grupo }}">
+
+          {% for item in grupos.get(grupo, []) %}
+          <div class="config-row">
+            <div>
+              <div class="config-label">{{ item.descripcion or item.clave }}</div>
+              <div class="config-desc">{{ item.clave }}</div>
+              {% if item.sensible %}
+              <span class="sensible-badge"><i class="bi bi-lock-fill"></i> Sensible</span>
+              {% endif %}
+            </div>
+            <div class="config-input-wrap">
+              {% if item.tipo == 'bool' %}
+              <select name="{{ item.clave }}" class="form-control-at" {% if not item.editable %}disabled{% endif %}>
+                <option value="true" {% if item.valor_real == 'true' %}selected{% endif %}>Sí (activado)</option>
+                <option value="false" {% if item.valor_real != 'true' %}selected{% endif %}>No (desactivado)</option>
+              </select>
+              {% elif item.tipo == 'password' %}
+              <input type="password" name="{{ item.clave }}"
+                     value="{{ item.valor }}"
+                     class="form-control-at" autocomplete="new-password"
+                     {% if not item.editable %}disabled{% endif %}
+                     placeholder="••••••••">
+              {% elif item.tipo in ('int', 'float') %}
+              <input type="number" name="{{ item.clave }}"
+                     value="{{ item.valor_real }}"
+                     class="form-control-at"
+                     step="{{ '0.01' if item.tipo == 'float' else '1' }}"
+                     {% if not item.editable %}disabled{% endif %}>
+              {% elif item.tipo == 'email' %}
+              <input type="email" name="{{ item.clave }}"
+                     value="{{ item.valor_real }}"
+                     class="form-control-at"
+                     {% if not item.editable %}disabled{% endif %}>
+              {% else %}
+              <input type="text" name="{{ item.clave }}"
+                     value="{{ item.valor_real }}"
+                     class="form-control-at"
+                     {% if not item.editable %}disabled{% endif %}>
+              {% endif %}
+            </div>
+          </div>
+          {% else %}
+          <p style="color:var(--at-muted);font-size:13px">No hay configuraciones en este grupo.</p>
+          {% endfor %}
+
+          <div style="display:flex;gap:10px;margin-top:20px;align-items:center;flex-wrap:wrap">
+            <button type="submit" class="btn-at-primary">
+              <i class="bi bi-floppy-fill" aria-hidden="true"></i>
+              Guardar {{ meta.label }}
+            </button>
+            {% if grupo == 'email' %}
+            <button type="button" class="btn-at-ghost" id="btn-test-smtp">
+              <i class="bi bi-send" aria-hidden="true"></i>
+              Probar SMTP
+            </button>
+            {% endif %}
+          </div>
+
+        </form>
+
+        {% if grupo == 'email' %}
+        <div id="smtp-test-result" class="smtp-test-result" role="alert"></div>
+        {% if _test_smtp %}
+        <script>
+        document.addEventListener('DOMContentLoaded', function () {
+          testSmtp();
+        });
+        </script>
+        {% endif %}
+        {% endif %}
+
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showPanel(grupo) {
+  document.querySelectorAll('.config-panel').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.config-nav-item').forEach(function(el) { el.classList.remove('active'); });
+  var panel = document.getElementById('panel-' + grupo);
+  var nav = document.getElementById('nav-' + grupo);
+  if (panel) panel.classList.add('active');
+  if (nav) nav.classList.add('active');
+  // Update URL
+  var url = new URL(window.location.href);
+  url.searchParams.set('active', grupo);
+  url.searchParams.delete('test_smtp');
+  history.replaceState(null, '', url.toString());
+}
+
+function testSmtp() {
+  var result = document.getElementById('smtp-test-result');
+  if (!result) return;
+  result.style.display = 'block';
+  result.className = 'smtp-test-result';
+  result.textContent = 'Probando conexión SMTP…';
+  fetch('/configuracion/email/test', { method: 'POST', credentials: 'same-origin' })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      result.className = 'smtp-test-result ' + (data.ok ? 'ok' : 'error');
+      result.innerHTML = '<i class="bi bi-' + (data.ok ? 'check-circle' : 'exclamation-triangle') + '" style="margin-right:6px"></i>' + data.mensaje;
+    })
+    .catch(function(e) {
+      result.className = 'smtp-test-result error';
+      result.textContent = 'Error de red: ' + e;
+    });
+}
+
+var btnTest = document.getElementById('btn-test-smtp');
+if (btnTest) {
+  btnTest.addEventListener('click', testSmtp);
+}
+</script>
+{% endblock %}

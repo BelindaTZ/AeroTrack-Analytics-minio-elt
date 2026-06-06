@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Rutas — Eficiencia{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-item">Análisis</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Rutas</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); margin-bottom:24px; }
+  .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .chart-title i { width:28px; height:28px; background:var(--at-running-bg); border-radius:7px; display:inline-flex; align-items:center; justify-content:center; color:var(--at-blue-500); font-size:13px; }
+  .badge-ineficiente { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:rgba(239,68,68,.12); color:#ef4444; }
+  .narrativa-card  { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; margin-bottom:24px; }
+  .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
+  .narrativa-body  { font-size:13.5px; line-height:1.7; color:var(--at-text); white-space:pre-wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-map-fill"></i></span>
+    Rutas
+  </h1>
+  <p>Ranking de eficiencia por ruta (tiempo real / tiempo programado).</p>
+</div>
+
+<div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">
+      Ranking de eficiencia
+      <span id="rutas-count" style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">
+        {% if not error %}({{ rows|length }} rutas · umbral {{ "%.0f"|format(umbral*100) }}%){% endif %}
+      </span>
+    </span>
+    <form id="rutas-filter-form" method="get" action="/rutas" class="d-flex gap-2 flex-wrap align-items-center" role="search">
+      <select id="sel-year" name="year" class="form-control-at" style="width:150px" aria-label="Filtrar por año">
+        <option value="">Todos los años</option>
+        {% for y in years %}
+        <option value="{{ y }}" {% if filtros.year == y|string %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+      <select id="sel-airline" name="airline" class="form-control-at" style="width:190px" aria-label="Filtrar por aerolínea">
+        <option value="">Todas las aerolíneas</option>
+        {% for al in aerolinas %}
+        <option value="{{ al }}" {% if filtros.airline == al %}selected{% endif %}>{{ al }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div id="rutas-results" style="padding:20px 20px 4px">
+    {% if error %}
+    <div class="at-empty" role="status" style="padding:24px 0">
+      <i class="bi bi-exclamation-circle at-empty-icon" aria-hidden="true"></i>
+      <strong>Datos no disponibles</strong>
+      <p>{{ error }}</p>
+    </div>
+    {% else %}
+
+    <div class="chart-card">
+      <div class="chart-title"><i class="bi bi-graph-up"></i> Tiempo real vs. programado (muestra 3 000 vuelos)</div>
+      <div id="chart-scatter" style="height:300px"></div>
+    </div>
+
+    <!-- Narrativa IA (carga asíncrona) -->
+    <div id="narrativa-async" class="narrativa-card" data-narrativa-url="/rutas/narrativa" style="display:none"></div>
+
+    {% endif %}
+
+    <!-- Datos scatter para re-render -->
+    <script id="rutas-chart-data" type="application/json">{{ grafico_scatter | safe }}</script>
+  </div>
+
+  <!-- Tabla (fuera del results para no perder el scroll) -->
+  {% if not error %}
+  {% if rows %}
+  <div class="at-table-scroll">
+    <table class="at-table" aria-label="Ranking de eficiencia de rutas">
+      <thead>
+        <tr>
+          <th>#</th><th>Ruta</th><th>Origen</th><th>Destino</th>
+          <th>Vuelos</th><th>Índice eficiencia</th><th>Retraso prom.</th><th>Estado</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="font-weight:700;color:var(--at-muted)">{{ loop.index }}</td>
+          <td style="font-weight:700;font-family:'JetBrains Mono',monospace">{{ r.ruta }}</td>
+          <td style="font-size:12px;color:var(--at-sub)">{{ r.origen_ciudad }}</td>
+          <td style="font-size:12px;color:var(--at-sub)">{{ r.dest_ciudad }}</td>
+          <td class="at-mono">{{ "{:,}".format(r.total) }}</td>
+          <td style="font-weight:600;color:{{ '#ef4444' if r.ineficiente else '#10b981' }}">{{ "%.3f"|format(r.eficiencia_media) }}</td>
+          <td class="at-mono">{{ "%.1f"|format(r.retraso_prom) }} min</td>
+          <td>
+            {% if r.ineficiente %}
+            <span class="badge-ineficiente"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Ineficiente</span>
+            {% else %}
+            <span class="at-badge at-badge-success"><span class="badge-dot"></span> OK</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="/rutas/{{ r.ruta }}/detalle" class="btn-icon view" title="Ver detalle" aria-label="Ver detalle de {{ r.ruta }}">
+              <i class="bi bi-eye" aria-hidden="true"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="at-empty" style="padding:32px">
+    <i class="bi bi-info-circle at-empty-icon" aria-hidden="true"></i>
+    <strong>Sin datos</strong>
+    <p>No hay rutas con suficientes vuelos para este período.</p>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+(function () {
+  var layoutBase = {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 12 },
+    margin: { l: 55, r: 20, t: 20, b: 50 },
+    xaxis: { gridcolor: 'rgba(255,255,255,0.06)' },
+    yaxis: { gridcolor: 'rgba(255,255,255,0.06)' },
+  };
+
+  function renderCharts() {
+    var dataEl = document.getElementById('rutas-chart-data');
+    if (!dataEl) return;
+    try {
+      var sc = JSON.parse(dataEl.textContent);
+      if (sc && sc.data) {
+        Object.assign(sc.layout, layoutBase);
+        Plotly.newPlot('chart-scatter', sc.data, sc.layout, { responsive: true, displayModeBar: false });
+      }
+    } catch(e) {}
+  }
+
+  renderCharts();
+
+  var selYear    = document.getElementById('sel-year');
+  var selAirline = document.getElementById('sel-airline');
+  var box        = document.getElementById('rutas-results');
+  var countEl    = document.getElementById('rutas-count');
+  if (!box) return;
+
+  function apply() {
+    var params = 'year='    + encodeURIComponent(selYear    ? selYear.value    : '')
+               + '&airline='+ encodeURIComponent(selAirline ? selAirline.value : '');
+    fetch('/rutas?' + params, { credentials: 'same-origin' })
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('rutas-results');
+        if (!newBox) return;
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('rutas-count');
+        if (nc && countEl) countEl.textContent = nc.textContent;
+        history.replaceState(null, '', '/rutas?' + params);
+        renderCharts();
+      })
+      .catch(function(){});
+  }
+
+  if (selYear)    selYear.addEventListener('change', apply);
+  if (selAirline) selAirline.addEventListener('change', apply);
+})();
+</script>
+{% endblock %}

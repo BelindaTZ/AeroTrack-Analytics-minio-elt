@@ -328,6 +328,9 @@ CONFIG = [
     {"clave":"ia_temperatura",         "valor":"0.3",           "tipo":"float",   "modulo":"ia",      "descripcion":"Temperatura 0.0-1.0",                      "editable":True, "sensible":False},
     {"clave":"ia_activa",              "valor":"false",         "tipo":"bool",    "modulo":"ia",      "descripcion":"Habilita el módulo de IA",                 "editable":True, "sensible":False},
     {"clave":"ia_timeout_segundos",    "valor":"30",            "tipo":"int",     "modulo":"ia",      "descripcion":"Timeout por respuesta en segundos",        "editable":True, "sensible":False},
+    # ── IA narrativa (Grok primario → Gemini fallback) ──
+    {"clave":"ia_api_key_grok",        "valor":"",              "tipo":"password","modulo":"ia",      "descripcion":"API Key xAI (Grok 3 mini) para narrativa",  "editable":True, "sensible":True},
+    {"clave":"ia_api_key_gemini",      "valor":"",              "tipo":"password","modulo":"ia",      "descripcion":"API Key Google (Gemini 2.0 Flash) fallback","editable":True, "sensible":True},
 ]
 
 # ── Main ──────────────────────────────────────────────────────────────────────

@@ -6,11 +6,19 @@ from jinja2 import FileSystemLoader
 
 _BASE = Path(__file__).parent.parent
 templates = Jinja2Templates(directory=str(_BASE / "shared" / "templates"))
+templates.env.auto_reload = True  # recarga templates sin reiniciar el servidor
 templates.env.loader = FileSystemLoader([
     str(_BASE / "shared" / "templates"),
     str(_BASE / "seguridad" / "templates"),
     str(_BASE / "pipeline_elt" / "templates"),
     str(_BASE / "modelo_dimensional" / "templates"),
+    str(_BASE / "dashboard" / "templates"),
+    str(_BASE / "puntualidad" / "templates"),
+    str(_BASE / "rutas" / "templates"),
+    str(_BASE / "cancelaciones" / "templates"),
+    str(_BASE / "configuracion" / "templates"),
+    str(_BASE / "auditoria" / "templates"),
+    str(_BASE / "reportes" / "templates"),
 ])
 
 # Tablas del modelo dimensional con sus PKs e iconos

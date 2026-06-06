@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Comparativa por Ruta — Puntualidad OTP{% endblock %}
+
+{% block breadcrumb %}
+<a href="/puntualidad" style="color:var(--at-muted);text-decoration:none">Puntualidad OTP</a>
+<span class="bc-sep">›</span>
+<span class="bc-current">Comparar por ruta</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); margin-bottom:24px; }
+  .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .chart-title i { width:28px; height:28px; background:var(--at-running-bg); border-radius:7px; display:inline-flex; align-items:center; justify-content:center; color:var(--at-blue-500); font-size:13px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-arrow-left-right"></i></span>
+    Comparar aerolíneas por ruta
+  </h1>
+  <p>Contrasta OTP y retraso promedio de todas las aerolíneas que operan en una misma ruta.</p>
+</div>
+
+<div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">
+      Comparativa de aerolíneas
+      <span id="comparar-count" style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">
+        {% if datos %}({{ datos | length }} aerolíneas en {{ ruta }}){% endif %}
+      </span>
+    </span>
+    <form id="comparar-filter-form" method="get" action="/puntualidad/comparar"
+          class="d-flex gap-2 flex-wrap align-items-center" role="search">
+      <select id="sel-ruta" name="ruta" class="form-control-at" style="width:200px" aria-label="Seleccionar ruta">
+        <option value="">Seleccionar ruta…</option>
+        {% for r in rutas_disponibles %}
+        <option value="{{ r }}" {% if ruta == r %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+      <select id="sel-year" name="year" class="form-control-at" style="width:150px" aria-label="Filtrar por año">
+        <option value="">Todos los años</option>
+        {% for y in years %}
+        <option value="{{ y }}" {% if year == y|string %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div id="comparar-results" style="padding:4px 0">
+    {% if error %}
+    <div class="at-empty" style="padding:32px">
+      <i class="bi bi-exclamation-circle at-empty-icon" aria-hidden="true"></i>
+      <strong>Error</strong>
+      <p>{{ error }}</p>
+    </div>
+    {% elif ruta and not datos %}
+    <div class="at-empty" style="padding:32px">
+      <i class="bi bi-info-circle at-empty-icon" aria-hidden="true"></i>
+      <strong>Sin datos</strong>
+      <p>No hay suficientes vuelos para la ruta {{ ruta }}.</p>
+    </div>
+    {% elif datos %}
+    <div style="padding:20px 20px 4px">
+      <div class="chart-card">
+        <div class="chart-title"><i class="bi bi-bar-chart-fill"></i> OTP y retraso promedio — Ruta {{ ruta }}</div>
+        <canvas id="chart-comparar" style="max-height:320px"></canvas>
+      </div>
+
+      <div class="at-table-scroll">
+        <table class="at-table" aria-label="Comparativa de aerolíneas en ruta {{ ruta }}">
+          <thead>
+            <tr><th>Aerolínea</th><th>Vuelos</th><th>OTP %</th><th>Retraso prom. (min)</th></tr>
+          </thead>
+          <tbody>
+            {% for d in datos %}
+            <tr>
+              <td style="font-weight:600">{{ d.aerolinea }}</td>
+              <td class="at-mono">{{ "{:,}".format(d.total) }}</td>
+              <td style="color:{{ '#10b981' if d.otp >= 80 else '#f59e0b' }};font-weight:600">{{ "%.1f"|format(d.otp) }}%</td>
+              <td class="at-mono">{{ "%.1f"|format(d.retraso) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Datos Chart.js -->
+    <script id="comparar-chart-data" type="application/json">
+    {
+      "labels":   {{ datos | map(attribute='aerolinea') | list | tojson }},
+      "otp":      {{ datos | map(attribute='otp') | list | tojson }},
+      "retraso":  {{ datos | map(attribute='retraso') | list | tojson }}
+    }
+    </script>
+    {% else %}
+    <div class="at-empty" style="padding:32px">
+      <i class="bi bi-arrow-left-right at-empty-icon" aria-hidden="true"></i>
+      <strong>Selecciona una ruta</strong>
+      <p>Elige una ruta en el selector para comparar el OTP entre aerolíneas.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var labelColor = '#94a3b8';
+  var fontCfg = { family: 'Inter, sans-serif', size: 12 };
+  var darkGrid = { color: 'rgba(255,255,255,0.06)' };
+  var _chart = null;
+
+  function renderChart() {
+    var dataEl = document.getElementById('comparar-chart-data');
+    if (!dataEl) return;
+    var d;
+    try { d = JSON.parse(dataEl.textContent); } catch(e) { return; }
+    var ctx = document.getElementById('chart-comparar');
+    if (!ctx) return;
+    if (_chart) { _chart.destroy(); _chart = null; }
+    var c = Chart.getChart('chart-comparar');
+    if (c) c.destroy();
+    _chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: d.labels,
+        datasets: [
+          { label: 'OTP %', data: d.otp, backgroundColor: '#3b82f6', yAxisID: 'y' },
+          { label: 'Retraso prom. (min)', data: d.retraso, backgroundColor: '#f59e0b', yAxisID: 'y2' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: labelColor, font: fontCfg } } },
+        scales: {
+          x:  { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid },
+          y:  { position:'left',  ticks: { color:'#3b82f6', font: fontCfg, callback: function(v){ return v+'%'; } }, grid: darkGrid },
+          y2: { position:'right', ticks: { color:'#f59e0b', font: fontCfg }, grid: { display: false } },
+        }
+      }
+    });
+  }
+
+  renderChart();
+
+  var selRuta = document.getElementById('sel-ruta');
+  var selYear = document.getElementById('sel-year');
+  var box     = document.getElementById('comparar-results');
+  var countEl = document.getElementById('comparar-count');
+  if (!box) return;
+
+  function apply() {
+    var params = 'ruta=' + encodeURIComponent(selRuta ? selRuta.value : '')
+               + '&year=' + encodeURIComponent(selYear ? selYear.value : '');
+    fetch('/puntualidad/comparar?' + params, { credentials: 'same-origin' })
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('comparar-results');
+        if (!newBox) return;
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('comparar-count');
+        if (nc && countEl) countEl.textContent = nc.textContent;
+        history.replaceState(null, '', '/puntualidad/comparar?' + params);
+        renderChart();
+      })
+      .catch(function(){});
+  }
+
+  if (selRuta) selRuta.addEventListener('change', apply);
+  if (selYear) selYear.addEventListener('change', apply);
+})();
+</script>
+{% endblock %}

@@ -366,6 +366,13 @@ td.at-code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-featu
   display: flex; align-items: center; gap: 10px;
   color: var(--at-text);
 }
+.page-heading-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .heading-icon {
   width: 34px; height: 34px;
   border-radius: var(--at-r-md);

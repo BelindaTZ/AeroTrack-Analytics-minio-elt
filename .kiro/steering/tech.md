@@ -228,6 +228,23 @@ El botón se inyecta dinámicamente en `aerotrack-ui.js` mediante `initBackButto
 
 **Estilo:** pill suave — fondo `--at-surface`, borde `--at-border`, texto `--at-muted`, ícono flecha en `--at-blue-500`. Hover: borde azul + glow ring.
 
+### Preservación del scroll del sidebar entre navegaciones
+
+El `#sidebar` tiene `overflow-y: auto` y es desplazable cuando hay muchos módulos. Una recarga de página completa resetea `scrollTop = 0`, obligando al usuario a volver a bajar cada vez que navega.
+
+**Solución:** `initSidebarScrollRestore()` en `aerotrack-ui.js`, llamado desde `init()`.
+
+- **Al hacer clic** en cualquier `.nav-item-link[href]` del sidebar, guarda `sidebar.scrollTop` en `sessionStorage` con clave `at_sidebar_scroll`.
+- **Al cargar la nueva página**, lee ese valor, lo aplica a `sidebar.scrollTop` y borra la entrada.
+
+No requiere cambios en templates. Funciona automáticamente para todos los módulos presentes y futuros. `sessionStorage` se limpia solo al cerrar el tab.
+
+```javascript
+// Patrón — no duplicar, ya está en initSidebarScrollRestore()
+sessionStorage.setItem('at_sidebar_scroll', sidebar.scrollTop);  // antes de navegar
+sidebar.scrollTop = parseInt(sessionStorage.getItem('at_sidebar_scroll'), 10) || 0;  // al cargar
+```
+
 ### Cache-busting de archivos estáticos
 FastAPI `StaticFiles` sirve los archivos desde disco sin versionar. El navegador los cachea agresivamente. Para forzar recarga al cambiar CSS o JS, se añade un query param de versión en `base.html`:
 
@@ -236,7 +253,7 @@ FastAPI `StaticFiles` sirve los archivos desde disco sin versionar. El navegador
 <script src="/static/js/aerotrack-ui.js?v=3"></script>
 ```
 
-**Regla:** incrementar `v=N` en `base.html` cada vez que se modifique `aerotrack-theme.css` o `aerotrack-ui.js`. Versión actual: `v=3`.
+**Regla:** incrementar `v=N` en `base.html` cada vez que se modifique `aerotrack-theme.css` o `aerotrack-ui.js`. Versión actual: `v=4`.
 
 ## Convención de layout para formularios de página completa
 
@@ -265,3 +282,356 @@ Los modales (`usuarios/lista.html` → crear usuario, confirm modal en `base.htm
 - **PocketBase reemplazable:** cualquier backend con REST API
 - **FastAPI desplegable:** Railway, Render, AWS ECS o cualquier runtime de contenedores
 - **Múltiples proveedores LLM:** OpenAI, Anthropic, Gemini o endpoint custom (configurado desde UI en CU-42)
+
+---
+
+## Patrones de performance — Entrega 2
+
+Problemas detectados y resueltos durante la Entrega 2 por carga lenta al navegar entre módulos analíticos. Documentados como patrones obligatorios para Entrega 3 y siguientes.
+
+---
+
+### P-01 · Estrategia de caché en 3 capas
+
+Toda página analítica que lea datos de MinIO o PocketBase debe implementar los tres niveles de caché siguientes. El acceso frío a MinIO (2M filas) puede tardar 10+ segundos; con los tres niveles activos, las visitas posteriores son < 200 ms.
+
+#### Capa 1 — Fact table completo (`app/shared/analytics.py`)
+
+`_load_base_fact()` cachea `fact_vuelo` + 8 joins con dimensiones en `_fact_cache` (TTL 10 min). Es el paso más caro (lectura MinIO + merges pandas). El módulo lo llama mediante `load_enriched_fact(filtros)`.
+
+```python
+# _fact_cache global en analytics.py
+_fact_cache: dict = {"df": None, "expires": 0.0, "bucket": ""}
+_FACT_TTL = 600  # 10 min
+```
+
+#### Capa 2 — Listas de dimensiones (`app/shared/analytics.py`)
+
+`get_aerolinas()` y `get_years()` se llaman en **cada** módulo para poblar los dropdowns de filtro. Sin caché hacen 2 lecturas MinIO extra por página. Se cachean en `_dim_cache` (TTL 5 min).
+
+```python
+_dim_cache: dict = {}
+_DIM_TTL = 300  # 5 min, clave = f"aerolinas:{bucket}" | f"years:{bucket}"
+```
+
+**Regla:** cualquier función que lea una tabla de dimensión entera para obtener una lista de valores únicos (aerolíneas, años, aeropuertos, etc.) debe seguir este patrón.
+
+#### Capa 3 — Resultados computados por módulo
+
+Aunque el fact esté cacheado, los groupbys + Plotly sobre 2M filas tardan 2–4 s por página. Cada módulo analítico debe cachear sus propios resultados computados en un `_page_cache` local, con clave `str(sorted(filtros.items()))` y TTL 5 min.
+
+```python
+# En cada router analítico (dashboard, puntualidad, rutas, cancelaciones, etc.)
+_page_cache: dict = {}
+_PAGE_TTL = 300
+
+def _compute_page(filtros: dict, ...) -> dict:
+    key = str(sorted(filtros.items()))
+    entry = _page_cache.get(key)
+    if entry and time.time() < entry["expires"]:
+        return entry["data"]
+    df = load_enriched_fact(filtros or None)
+    data = {
+        "kpis":   _calcular_kpis(df),
+        "charts": _generar_graficos(df),
+        # ... resto de computaciones pesadas
+    }
+    _page_cache[key] = {"data": data, "expires": time.time() + _PAGE_TTL}
+    return data
+
+@router.get("", response_class=HTMLResponse)
+def mi_modulo(request: Request, year: str = "", ...):
+    filtros = {k: v for k, v in {"year": year, ...}.items() if v}
+    data = _compute_page(filtros)
+    return render(request, "template.html", {**data, ...})
+```
+
+**Regla:** el endpoint `/narrativa` del mismo módulo también debe llamar `_compute_page(filtros)` — así reutiliza el resultado cacheado sin recalcular.
+
+#### TTL de configuración (PocketBase)
+
+Las funciones que leen `configuracion_sistema` (umbrales de alertas, umbral de rutas ineficientes, etc.) también deben cachearse. TTL recomendado 60 s — lo suficiente para amortiguar navegación entre módulos sin ocultar cambios de configuración.
+
+```python
+_umbrales_cache: dict = {"data": None, "expires": 0.0}
+_UMBRALES_TTL = 60
+
+def _get_umbrales() -> dict:
+    global _umbrales_cache
+    if _umbrales_cache["data"] is not None and time.time() < _umbrales_cache["expires"]:
+        return _umbrales_cache["data"]
+    # ... leer PocketBase ...
+    _umbrales_cache = {"data": result, "expires": time.time() + _UMBRALES_TTL}
+    return result
+```
+
+---
+
+### P-02 · Narrativa IA asíncrona
+
+**Problema:** `generar_narrativa()` llama a Grok 3 mini / Gemini 2.0 Flash con timeout 12 s. Al llamarse dentro del route principal bloqueaba **toda** la respuesta HTTP hasta que el LLM contestara.
+
+**Solución:** separar la narrativa en un endpoint JSON propio y cargarlo desde el cliente con `fetch` tras renderizar la página.
+
+#### Backend — endpoint `/narrativa`
+
+Cada módulo analítico que use narrativa IA debe exponer:
+
+```python
+@router.get("/narrativa")
+def narrativa_json(request: Request, year: str = "", month: str = "", airline: str = ""):
+    _perm_ver(request)
+    try:
+        filtros = {k: v for k, v in {"year": year, ...}.items() if v}
+        data = _compute_page(filtros)          # reutiliza caché de Capa 3
+        ctx = {"KPI 1": data["kpis"]["..."], ...}
+        return JSONResponse(generar_narrativa(ctx, "Nombre del módulo"))
+    except Exception:
+        return JSONResponse({"texto": "", "proveedor": "", "desde_cache": False})
+```
+
+El endpoint siempre retorna el mismo shape `{texto, proveedor, desde_cache}`. En caso de error devuelve campos vacíos — el JS simplemente oculta la tarjeta.
+
+`generar_narrativa()` tiene su propio caché TTL 5 min (clave MD5 del prompt), por lo que navegaciones repetidas dentro de la misma sesión devuelven respuesta instantánea.
+
+#### Frontend — div con `data-narrativa-url`
+
+En el template, reemplazar el bloque `{% if narrativa.texto %}` con:
+
+```html
+<!-- La URL base; el JS adjunta los query params actuales automáticamente -->
+<div id="narrativa-async"
+     class="narrativa-card"
+     data-narrativa-url="/MI_MODULO/narrativa"
+     style="display:none">
+</div>
+```
+
+`initNarrativaAsync()` en `aerotrack-ui.js` detecta el `id="narrativa-async"`, muestra un skeleton de carga, llama al endpoint pasando los query params actuales de `window.location.search`, y pinta el resultado. Se expone como `AT.initNarrativaAsync()` para que los módulos con live filter puedan rellamarla tras un swap de DOM.
+
+```javascript
+// En el callback del live filter, tras el innerHTML swap:
+if (window.AT) AT.initNarrativaAsync();
+```
+
+**Regla:** nunca llamar `generar_narrativa()` dentro de un route `HTMLResponse`. Siempre en un endpoint separado `GET /modulo/narrativa`.
+
+---
+
+### P-03 · No releer dimensiones que ya están en el fact enriquecido
+
+`load_enriched_fact()` ya hace join con todas las dimensiones. Releer una dimensión directamente desde MinIO en una función analítica duplica la I/O de red sin beneficio.
+
+**Ejemplo real (bug corregido):** `_calcular_ranking()` en `rutas/ranking_eficiencia.py` releía `dim_ruta` para obtener `OriginCityName`/`DestCityName`, cuando esas columnas ya estaban disponibles en el DataFrame enriquecido recibido como argumento.
+
+```python
+# ❌ Antes — lectura innecesaria de MinIO
+dim_r = read_parquet(MINIO_BUCKET_DIMS, "dim_ruta")
+lookup_o = dict(zip(dim_r["OriginCode"], dim_r["OriginCityName"]))
+
+# ✅ Ahora — usa lo que ya trajo load_enriched_fact()
+if "OriginCityName" in df.columns:
+    city_o = df.drop_duplicates("OriginCode").set_index("OriginCode")["OriginCityName"].to_dict()
+```
+
+**Regla:** antes de importar `read_parquet` o `MINIO_BUCKET_DIMS` en un módulo analítico, verificar si las columnas necesarias ya vienen en el `df` recibido de `load_enriched_fact()`.
+
+---
+
+### P-04 · Caché de `_get_ia_config()` en `ia_narrativa.py`
+
+`generar_narrativa()` consulta PocketBase en cada invocación para obtener las claves API de Grok y Gemini. Sin caché esto es un round-trip PocketBase bloqueante antes de cada llamada al LLM.
+
+Caché TTL 2 min en `_cfg_cache`. Los cambios de clave API en la UI de configuración tardan máximo 2 min en reflejarse — comportamiento aceptable.
+
+```python
+_cfg_cache: dict = {"data": None, "expires": 0.0}
+_CFG_TTL = 120
+```
+
+---
+
+### P-05 · Indicador visual de carga en navegación lateral
+
+**Problema:** al hacer clic en un ítem del sidebar el navegador congelaba la UI mientras el servidor procesaba la primera visita (caché frío). Sin feedback visual, parecía que el clic no había funcionado.
+
+**Solución:** `initNavLoadingBar()` en `aerotrack-ui.js` adjunta un listener `click` a todos los `.nav-item-link[href]` del sidebar. Al activarse, inserta un `<div id="at-nav-bar">` fijo en el top de la pantalla con animación CSS `at-page-load` (barra azul que progresa del 0% al 94% en 10 s). La barra desaparece automáticamente cuando el navegador carga la nueva página.
+
+No requiere cambios en los templates. Se inicializa automáticamente desde `init()`.
+
+---
+
+## Bugs conocidos y soluciones — Entrega 2
+
+Errores reales encontrados durante la implementación de la Entrega 2. Documentados para evitar reincidencia.
+
+---
+
+### B-01 · Merge type mismatch int32 vs str en pandas
+
+**Síntoma:** `You are trying to merge on int32 and str columns for key 'fk_aerolinea'`
+
+**Causa:** Parquet con PyArrow puede leer columnas integer como `int32` o incluso como `object`/`str` dependiendo de cómo fueron escritas. Los FKs de `fact_vuelo` y los PKs de las dimensiones no siempre coinciden en dtype tras el ciclo write→read.
+
+**Solución aplicada:** En `app/shared/analytics.py`, antes de cualquier merge:
+1. Todas las columnas `fk_*` de `fact_vuelo` se castean a `int64` con `pd.to_numeric(...).fillna(0).astype("int64")`.
+2. Cada PK de dimensión se normaliza a `int64` mediante la función helper `_norm_pk()` aplicada sobre cada `_safe_read()`.
+
+**Regla:** Siempre castear FK y PK a `int64` antes de hacer merge; nunca asumir que Parquet preserva el dtype exacto.
+
+---
+
+### B-02 · `dict.values` en Jinja2 resuelve el método Python, no la clave
+
+**Síntoma:** `TypeError: Object of type builtin_function_or_method is not JSON serializable`
+
+**Causa:** En Jinja2, el operador `.` intenta primero `getattr(obj, attr)`. Para un `dict` Python, `causas_data.values` retorna el método `dict.values()` en lugar de la clave `"values"`, porque `getattr(dict, "values")` existe.
+
+**Solución aplicada:** Renombrar la clave conflictiva `"values"` → `"counts"` en:
+- `app/puntualidad/analizar_otp.py` → `_causas_retraso()`: `result["counts"]`
+- `app/cancelaciones/clasificar_faa.py` → `_causas_faa()`: `"counts": values`
+- Templates: `causas.counts`, `causas_data.counts`, `d.causas_counts`, `d.faa_counts`
+
+**Regla:** Nunca usar como clave de dict ninguno de los métodos de Python dict (`keys`, `values`, `items`, `get`, `update`, `pop`, etc.) si ese dict se va a pasar como contexto a Jinja2.
+
+---
+
+### B-03 · Columnas Categorical de Parquet rompen concatenaciones de strings
+
+**Síntoma:** `unsupported operand type(s) for +: 'Categorical' and 'str'`
+
+**Causa:** PyArrow puede leer columnas string de Parquet (con dictionary encoding) como `pd.CategoricalDtype`. Las operaciones de concatenación string (`col + "-" + col2`) fallan sobre Categorical. Afecta a `OriginCode`, `DestCode` y otras columnas de strings leídas desde dimensiones.
+
+**Solución aplicada:**
+1. `app/shared/analytics.py`: función `_desnormalizar(df)` que convierte todas las columnas Categorical a su dtype base (`cat.categories.dtype`). Se aplica en `_safe_read()` (todas las dims) y sobre `fact_vuelo` al cargarlo.
+2. `app/rutas/ranking_eficiencia.py`: `.astype(str)` explícito sobre `OriginCode` y `DestCode` antes de cualquier concatenación o lookup.
+3. `app/puntualidad/analizar_otp.py`: `.astype(str)` al construir la lista de rutas disponibles.
+
+**Regla:** Siempre llamar `_desnormalizar(df)` (o `.astype(str)` puntual) antes de usar columnas string de Parquet en operaciones de concatenación o búsqueda.
+
+---
+
+### B-04 · WeasyPrint requiere librerías de sistema no incluidas en `python:3.13-slim`
+
+**Síntoma:** `OSError: cannot load library 'libgobject-2.0-0'`
+
+**Causa:** WeasyPrint delega el renderizado de texto en Pango/Cairo (librerías nativas de sistema). La imagen `python:3.13-slim` no incluye estas librerías. El `pip install weasyprint` instala solo el código Python pero no las dependencias nativas.
+
+**Solución aplicada:**
+1. Agregar al `Dockerfile` antes de pip install:
+   ```dockerfile
+   RUN apt-get update && apt-get install -y --no-install-recommends \
+       libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+       libgobject-2.0-0 libglib2.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+       && rm -rf /var/lib/apt/lists/*
+   ```
+2. `app/reportes/generar_pdf.py`: import lazy de WeasyPrint dentro de `generar_pdf()` (no a nivel de módulo) para evitar que un fallo de import al arrancar deje `_WEASYPRINT_OK = False` permanentemente aunque se instale después.
+3. `app/reportes/router.py`: usa `_weasyprint_available()` (función) en vez de `_WEASYPRINT_OK` (constante) para que cada request consulte en tiempo de ejecución.
+
+**Regla:** Las librerías con dependencias de sistema nativas deben importarse de forma lazy (dentro de la función) para permitir degradación graceful y recarga en caliente.
+
+---
+
+### B-05 · Clase CSS `at-input` no existe — usar `form-control-at`
+
+**Síntoma:** Los selects e inputs de los módulos E2 no reciben ningún estilo (aparecen como controles nativos del navegador sin el diseño del sistema).
+
+**Causa:** En los templates de E2 se usó `class="at-input"` pero en `aerotrack-theme.css` la clase correcta es `form-control-at`.
+
+**Solución:** Reemplazar globalmente `class="at-input"` → `class="form-control-at"` en todos los templates de E2.
+
+---
+
+### B-06 · Filtros con botón submit violan el Live Filter Pattern del design.md
+
+**Síntoma:** Los filtros recargan la página completa al hacer clic, en vez de actualizar solo el bloque de resultados.
+
+**Causa:** Se implementaron los filtros con `<button type="submit">` en vez del patrón canónico definido en `.kiro/specs/aerotrack/design.md` (§ "Live Filter Pattern").
+
+**Solución:**
+- Eliminar el botón submit de todos los filter forms de módulos analíticos.
+- Envolver el contenido dinámico en `<div id="X-results">` hermano del form.
+- Adjuntar listener `change` (selects) / `input` + debounce 400ms (texto/fecha) que llama a `fetch` + `box.innerHTML = newBox.innerHTML`.
+- Los datos de gráficos Plotly/Chart.js se embedden en `<script id="X-chart-data" type="application/json">` dentro del results div y se re-renderizan tras cada swap.
+
+---
+
+### B-07 · URL firmada de MinIO usa hostname interno de Docker — enlace PDF no abre en el navegador
+
+**Síntoma:** Al generar un PDF desde el módulo Reportes, el enlace "Descargar PDF" aparece pero al hacer clic devuelve error de conexión (ERR_NAME_NOT_RESOLVED o similar).
+
+**Causa:** `presigned_get_object()` genera la URL firmada usando el mismo `MINIO_ENDPOINT` con el que se construyó el cliente Minio. Dentro de Docker, ese endpoint es `minio:9000` (hostname interno de la red Docker `elt-network`). El navegador no puede resolver `minio:9000` porque ese hostname solo existe dentro de la red de contenedores.
+
+```
+URL generada (incorrecta para el browser):
+http://minio:9000/aerotrack-exports/reportes/aerotrack_reporte_20260604.pdf?X-Amz-Signature=...
+
+URL necesaria (accesible desde el browser):
+http://localhost:9000/aerotrack-exports/reportes/aerotrack_reporte_20260604.pdf?X-Amz-Signature=...
+```
+
+**Solución aplicada:**
+1. `app/config.py`: agregar `MINIO_PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_URL", "localhost:9000")` — endpoint accesible desde el browser (por defecto `localhost:9000`, el puerto API expuesto en docker-compose).
+2. `app/reportes/generar_pdf.py` → `subir_pdf_minio()`: usar **dos clientes Minio separados** — uno interno para I/O y otro público solo para presigning:
+
+```python
+# Cliente interno → upload y bucket check (resuelve minio:9000 dentro de Docker)
+client = Minio(MINIO_ENDPOINT, ...)
+client.put_object(...)
+
+# Cliente público → presigning (calcula firma con localhost:9000)
+# presigned_get_object() es puramente local: no hace red, solo computa HMAC.
+# La firma queda atada al hostname del cliente, así el browser recibe
+# una URL con Host=localhost:9000 cuya firma coincide exactamente.
+sign_client = Minio(MINIO_PUBLIC_ENDPOINT, ...)
+url = sign_client.presigned_get_object(...)
+```
+
+**Por qué no funciona reemplazar el string después de firmar:** MinIO incluye el `Host` dentro del canonical request que firma con HMAC-SHA256. Si se firma con `minio:9000` y luego se reemplaza por `localhost:9000`, el browser envía `Host: localhost:9000` al verificar la URL → `SignatureDoesNotMatch`. La firma debe calcularse con el mismo host que recibirá la petición.
+
+**Regla:** Siempre separar el endpoint interno (para I/O server-side: `minio:9000`) del endpoint público (para URLs entregadas al browser: `localhost:9000`). Usar dos clientes Minio distintos: uno para operar, otro para firmar. En producción, `MINIO_PUBLIC_URL` apuntará al dominio/CDN público.
+
+---
+
+### B-08 · Gráficos vacíos por `defer` en librerías de charts (Plotly / Chart.js)
+
+**Síntoma:** Los gráficos de los módulos analíticos (Dashboard, Puntualidad, Rutas, Cancelaciones) aparecen como contenedores vacíos al cargar la página por primera vez. No hay error visible en consola porque el `catch(e){}` silencia la excepción.
+
+**Causa:** Las librerías de charts (Plotly y Chart.js) se cargaban con el atributo `defer` en el bloque `{% block head_extra %}` (dentro del `<head>`). Los scripts `defer` ejecutan **después** de que el parser termina de procesar todo el HTML. Sin embargo, el IIFE en `{% block scripts %}` (al final del `<body>`) es un inline script que ejecuta **durante** el parsing, antes que cualquier script `defer`. Al llamar `Plotly.newPlot()` o `new Chart()`, la librería todavía no existe en `window`, lo que lanza un `ReferenceError` silenciado por el catch.
+
+```
+Orden real de ejecución (incorrecto):
+1. Parser encuentra <script src="plotly" defer> → descarga en background, no ejecuta
+2. Parser llega al IIFE en {% block scripts %} → ejecuta inmediatamente
+3. Plotly.newPlot() → ReferenceError (silenciado) → gráfico vacío
+4. Parser termina → scripts defer finalmente ejecutan (demasiado tarde)
+```
+
+**Solución aplicada:** Mover el tag `<script>` de la librería desde `{% block head_extra %}` al inicio de `{% block scripts %}`, sin `defer`. Al estar en el mismo bloque y antes del IIFE, la librería carga sincrónicamente en orden correcto al final del body.
+
+```html
+{# ❌ Antes — defer en head_extra, librería disponible después del IIFE #}
+{% block head_extra %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
+...
+{% endblock %}
+
+{# ✅ Ahora — sincrónico en scripts, disponible antes del IIFE #}
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+(function () {
+  function renderCharts() { ... Plotly.newPlot(...) ... }
+  renderCharts();
+})();
+</script>
+{% endblock %}
+```
+
+**Archivos corregidos:** `dashboard/index.html`, `rutas/ranking.html`, `puntualidad/index.html`, `puntualidad/comparar.html`, `cancelaciones/causas.html`.
+
+**Excepción — `rutas/detalle.html`:** Este template usa `DOMContentLoaded` para envolver el código de charts. Según la spec del W3C, el evento `DOMContentLoaded` no se dispara hasta que todos los scripts `defer` hayan terminado de ejecutar, por lo que `defer` + `DOMContentLoaded` es una combinación válida. No requirió cambio.
+
+**Regla:** Nunca cargar una librería de charts con `defer` en `<head>` si el código que la usa vive en un inline script en `{% block scripts %}`. Elegir una de dos alternativas:
+- Mover la librería (sin `defer`) al inicio de `{% block scripts %}`.
+- Envolver todo el código de uso en `document.addEventListener('DOMContentLoaded', ...)` (válido porque DOMContentLoaded espera a defer).

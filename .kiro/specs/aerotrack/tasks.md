@@ -170,65 +170,80 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
 
 ---
 
-### ⬜ ENTREGA 2 — Nivel Táctico (50%)
+### ✅ ENTREGA 2 — Nivel Táctico (50%) — COMPLETADA
 > Implementar solo cuando se indique "implementa Entrega 2"
 > Prerequisito: Entrega 1 completada y aprobada
 
 #### Wave 1 — Análisis base (sin dependencias entre sí, paralelo)
 
-- [ ] 10. Implementar dashboard de KPIs
+- [x] 10. Implementar dashboard de KPIs
   **Description:** Dashboard principal con métricas clave consultando los
   Parquet de MinIO (aerotrack-dims): OTP global, total vuelos, tasa cancelación,
   retraso promedio. Alertas visuales cuando KPIs superan umbrales de
   configuracion_sistema. Filtros por aerolínea, ruta y período.
+  Los KPIs se calculan con **pandas** sobre `fact_vuelo.parquet` en MinIO — sin base de datos intermedia.
+  Los gráficos interactivos usan **Plotly** (dispersión, barras apiladas); se serializan a JSON en el router
+  y se pasan al template Jinja2. Cada módulo incluye una **narrativa ejecutiva en español** renderizada
+  en un card debajo del gráfico principal, generada vía `app/utils/ia_narrativa.py`
+  (Grok 3 mini → Gemini 2.0 Flash fallback); el card indica qué proveedor respondió y si viene del caché.
   **Files:** app/dashboard/kpis.py, app/dashboard/alertas.py,
-  app/templates/dashboard/index.html
+  app/templates/dashboard/index.html, app/utils/ia_narrativa.py
   **Dependencies:** None
   **Requirements:** CU-17, CU-18
 
-  - [ ] 10.1 Endpoint GET /dashboard/kpis con filtros por año, mes, aerolínea, ruta
-  - [ ] 10.2 Calcular OTP global, total vuelos, tasa cancelación y retraso promedio desde fact_vuelo
-  - [ ] 10.3 Evaluar KPIs contra umbrales de configuracion_sistema y resaltar en rojo si superan
-  - [ ] 10.4 Template con paneles KPI y Chart.js; filtros que actualizan todos los paneles
+  - [x] 10.1 Endpoint GET /dashboard/kpis con filtros por año, mes, aerolínea, ruta
+  - [x] 10.2 Calcular OTP global, total vuelos, tasa cancelación, retraso promedio y top-3 aerolíneas con pandas sobre fact_vuelo.parquet en MinIO
+  - [x] 10.3 Evaluar KPIs contra umbrales de configuracion_sistema; mostrar alerta con severidad (warning/critical) y valor actual vs umbral
+  - [x] 10.4 Template con paneles KPI y Plotly; filtros que actualizan todos los paneles automáticamente
+  - [x] 10.5 Implementar `app/utils/ia_narrativa.py`: patrón Grok 3 mini (primario) → Gemini 2.0 Flash (fallback en HTTP 429/402/503 o timeout >12s); temperatura 0.4 en ambos; caché en memoria con TTL 300s, clave=MD5(prompt); contexto = solo KPIs agregados (~10-20 métricas), nunca el DataFrame completo ni filas raw
 
-- [ ] 11. Implementar módulo de puntualidad OTP
+- [x] 11. Implementar módulo de puntualidad OTP
   **Description:** Análisis de puntualidad por aerolínea con Chart.js.
   Desglose de causas de retraso (carrier/weather/NAS/security/late aircraft).
   Comparativa entre aerolíneas en rutas compartidas. Tendencias mes a mes.
+  Los datos se agregan con **pandas** sobre Parquet de MinIO. **Chart.js** para series de tiempo
+  (OTP mensual, barras de causas de retraso). Incluye card de narrativa ejecutiva vía `ia_narrativa.py`
+  con badge de proveedor/caché debajo del gráfico principal.
   **Files:** app/puntualidad/analizar_otp.py, app/templates/puntualidad/
   **Dependencies:** None
   **Requirements:** CU-19, CU-20, CU-21
 
-  - [ ] 11.1 Endpoint GET /puntualidad/otp — OTP por aerolínea como barra Chart.js
-  - [ ] 11.2 Vista de desglose de causas de retraso por aerolínea seleccionada (torta)
-  - [ ] 11.3 Endpoint comparativa de aerolíneas en ruta compartida (GET /puntualidad/comparar)
-  - [ ] 11.4 Endpoint GET /puntualidad/tendencias — línea OTP mes a mes y por día de semana
+  - [x] 11.1 Endpoint GET /puntualidad/otp — OTP por aerolínea como barra Chart.js
+  - [x] 11.2 Vista de desglose de causas de retraso por aerolínea seleccionada (torta)
+  - [x] 11.3 Endpoint comparativa de aerolíneas en ruta compartida (GET /puntualidad/comparar)
+  - [x] 11.4 Endpoint GET /puntualidad/tendencias — línea OTP mes a mes y por día de semana
 
-- [ ] 12. Implementar módulo de rutas
+- [x] 12. Implementar módulo de rutas
   **Description:** Ranking de rutas por índice de eficiencia (tiempo real /
   programado). Detalle de ruta con distribución de retrasos y estacionalidad.
   Rutas ineficientes marcadas si superan umbral configurado.
+  Los datos de eficiencia se calculan con **pandas** sobre Parquet de MinIO. Los gráficos usan
+  **Plotly** (scatter plot tiempo real vs programado, heatmap de rutas). Incluye card de narrativa
+  ejecutiva vía `ia_narrativa.py` con badge de proveedor/caché.
   **Files:** app/rutas/ranking_eficiencia.py, app/templates/rutas/
   **Dependencies:** None
   **Requirements:** CU-22, CU-23
 
-  - [ ] 12.1 Endpoint GET /rutas/ranking — lista ordenada por índice de eficiencia
-  - [ ] 12.2 Marcar rutas ineficientes si desviación supera umbral de configuracion_sistema
-  - [ ] 12.3 Vista de detalle de ruta: box plot tiempo real vs programado, distribución retrasos
-  - [ ] 12.4 Endpoint GET /rutas/{ruta}/comparar — scatter plot diferencia tiempo real vs programado
+  - [x] 12.1 Endpoint GET /rutas/ranking — lista ordenada por índice de eficiencia
+  - [x] 12.2 Marcar rutas ineficientes si desviación supera umbral de configuracion_sistema
+  - [x] 12.3 Vista de detalle de ruta: box plot tiempo real vs programado, distribución retrasos
+  - [x] 12.4 Endpoint GET /rutas/{ruta}/detalle — scatter plot eficiencia, distribución retrasos, OTP mensual
 
-- [ ] 13. Implementar módulo de cancelaciones
+- [x] 13. Implementar módulo de cancelaciones
   **Description:** Clasificación por código FAA (A/B/C/D) con gráfica de torta.
   Impacto de desvíos con DivArrDelay y DivDistance. Tendencia mensual filtrable.
+  Los datos se agregan con **pandas** sobre Parquet de MinIO. **Chart.js** para la tendencia
+  mensual de cancelaciones (barras con curva de causas superpuesta). Incluye card de narrativa
+  ejecutiva vía `ia_narrativa.py` con badge de proveedor/caché.
   **Files:** app/cancelaciones/clasificar_faa.py, app/templates/cancelaciones/
   **Dependencies:** None
   **Requirements:** CU-24, CU-25, CU-26
 
-  - [ ] 13.1 Endpoint GET /cancelaciones/causas — torta por código FAA con filtros
-  - [ ] 13.2 Vista de desvíos: aeropuerto alternativo, DivArrDelay, DivDistance
-  - [ ] 13.3 Endpoint GET /cancelaciones/tendencias — barra mensual con curva de causas superpuesta
+  - [x] 13.1 Endpoint GET /cancelaciones/causas — torta por código FAA con filtros
+  - [x] 13.2 Vista de desvíos: aeropuerto alternativo, DivArrDelay, DivDistance
+  - [x] 13.3 Endpoint GET /cancelaciones/tendencias — barra mensual con curva de causas superpuesta
 
-- [ ] 14. Implementar configuración dinámica del sistema
+- [x] 14. Implementar configuración dinámica del sistema
   **Description:** Panel de configuración agrupado por módulo (email, alertas,
   pipeline, ia, sistema). Valores sensibles enmascarados con ••••. Endpoint para
   probar conexión SMTP. Los cambios aplican sin reiniciar servicios.
@@ -237,38 +252,44 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   **Dependencies:** None
   **Requirements:** CU-29, CU-30, CU-31, CU-32
 
-  - [ ] 14.1 Endpoint GET /configuracion — todos los grupos con valores (sensibles enmascarados)
-  - [ ] 14.2 Endpoint PUT /configuracion/{grupo} — guardar grupo de configuración
-  - [ ] 14.3 Endpoint POST /configuracion/email/test — enviar email de prueba via SMTP
-  - [ ] 14.4 Aplicar umbrales inmediatamente al dashboard al guardar grupo alertas (sin restart)
+  - [x] 14.1 Endpoint GET /configuracion — todos los grupos con valores (sensibles enmascarados)
+  - [x] 14.2 Endpoint POST /configuracion/{grupo} — guardar grupo de configuración
+  - [x] 14.3 Endpoint POST /configuracion/email/test — enviar email de prueba via SMTP (CU-30); inline AJAX
+  - [x] 14.4 Al guardar alertas, persistir umbrales; dashboard los lee en cada carga (CU-31)
 
-- [ ] 15. Implementar módulo de auditoría
+- [x] 15. Implementar módulo de auditoría
   **Description:** Vista paginada del log pb_auditoria con filtros por módulo,
   acción, usuario y rango de fechas. Exportar resultado filtrado como CSV.
   **Files:** app/auditoria/log.py, app/templates/auditoria/
   **Dependencies:** None
   **Requirements:** CU-39, CU-40
 
-  - [ ] 15.1 Endpoint GET /auditoria — tabla paginada ordenada por más reciente
-  - [ ] 15.2 Filtros por módulo, acción, usuario, resultado y rango de fechas
-  - [ ] 15.3 Click en fila muestra detalle JSON del campo detalle
-  - [ ] 15.4 Endpoint GET /auditoria/export — CSV del resultado filtrado actual
+  - [x] 15.1 Endpoint GET /auditoria — tabla paginada ordenada por más reciente
+  - [x] 15.2 Filtros por módulo, acción, usuario, resultado y rango de fechas
+  - [x] 15.3 Click en fila muestra detalle JSON del campo detalle
+  - [x] 15.4 Endpoint GET /auditoria/export — CSV del resultado filtrado actual
 
 #### Wave 2 — Exportación y monitoreo (dependen de módulos anteriores)
 
-- [ ] 16. Implementar exportación PDF y Excel
+- [x] 16. Implementar exportación PDF y Excel
   **Description:** Generar reportes descargables desde cualquier módulo
   analítico. PDF con ReportLab incluyendo gráficas, subido a MinIO aerotrack-exports/.
   Excel con openpyxl con hojas por módulo, descarga directa sin subir a MinIO.
+  El PDF se genera con **WeasyPrint** (renderiza el HTML/CSS del sistema respetando los tokens `--at-*`);
+  se sube al bucket `aerotrack-exports` en MinIO y se retorna un **enlace firmado con expiración de 1 hora**.
+  El bucket `aerotrack-exports` debe estar creado antes de la primera exportación — se crea desde el
+  DAG de inicialización de Airflow con **lifecycle policy de 7 días**.
+  El Excel se genera con **openpyxl** con hojas separadas por módulo analítico (puntualidad, rutas, cancelaciones).
   **Files:** app/reportes/generar_pdf.py, app/reportes/generar_excel.py
   **Dependencies:** 11, 12, 13
   **Requirements:** CU-27, CU-28
 
-  - [ ] 16.1 Endpoint POST /reportes/pdf — generar PDF con ReportLab, subir a MinIO exports, retornar link
-  - [ ] 16.2 Endpoint POST /reportes/excel — generar .xlsx con hojas puntualidad/rutas/cancelaciones
-  - [ ] 16.3 Formulario de selección de secciones y período antes de exportar PDF
+  - [x] 16.1 Endpoint POST /reportes/pdf — generar PDF con WeasyPrint, subir a MinIO aerotrack-exports, retornar enlace firmado 1h
+  - [x] 16.2 Endpoint POST /reportes/excel — generar .xlsx con openpyxl: puntualidad, rutas, cancelaciones, resumen
+  - [x] 16.3 Formulario de selección de secciones y período antes de exportar PDF
+  - [x] 16.4 Verificar/crear bucket aerotrack-exports con lifecycle 7 días al arrancar
 
-- [ ] 17. Implementar monitoreo de servicios y MinIO
+- [x] 17. Implementar monitoreo de servicios y MinIO
   **Description:** Panel de estado de servicios (MinIO, PocketBase, Airflow)
   con latencia en ms. Métricas de MinIO: espacio usado, objetos por bucket.
   Refresco automático cada 30 segundos.
@@ -276,10 +297,10 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   **Dependencies:** 14
   **Requirements:** CU-33, CU-34
 
-  - [ ] 17.1 Endpoint GET /configuracion/estado — health check de MinIO, PocketBase, Airflow con latencia
-  - [ ] 17.2 Métricas MinIO: espacio total/usado, objetos por bucket, fechas de última modificación
-  - [ ] 17.3 Template con estado visual verde/rojo por servicio y refresco automático cada 30s
-  - [ ] 17.4 Mostrar instrucciones de diagnóstico si un servicio no responde
+  - [x] 17.1 Endpoint GET /configuracion/estado — health check de MinIO, PocketBase, Airflow con latencia
+  - [x] 17.2 Métricas MinIO: espacio total/usado, objetos por bucket, fechas de última modificación
+  - [x] 17.3 Template con estado visual verde/rojo por servicio y refresco automático cada 30s
+  - [x] 17.4 Mostrar instrucciones de diagnóstico si un servicio no responde
 
 ---
 

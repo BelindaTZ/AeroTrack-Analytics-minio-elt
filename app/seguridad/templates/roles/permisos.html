@@ -16,8 +16,12 @@
     background: var(--at-surface);
     border: 1px solid var(--at-border);
     border-radius: var(--at-r-lg);
-    overflow: hidden;
     box-shadow: var(--at-shadow-sm);
+    overflow-x: auto;
+  }
+  .perm-matrix-wrap .at-table-scroll {
+    overflow: visible;
+    min-width: max-content;
   }
 
   .perm-matrix-header {
@@ -28,7 +32,7 @@
   }
 
   .perm-table {
-    width: 100%; border-collapse: collapse;
+    width: 100%; min-width: 830px; border-collapse: collapse;
     font-size: 13px;
   }
   .perm-table thead th {
@@ -122,10 +126,15 @@
 
 {% block content %}
 <div class="page-heading">
-  <h1>
-    <span class="heading-icon indigo" aria-hidden="true"><i class="bi bi-key-fill"></i></span>
-    Permisos — {{ rol.nombre }}
-  </h1>
+  <div class="page-heading-meta">
+    <h1>
+      <span class="heading-icon indigo" aria-hidden="true"><i class="bi bi-key-fill"></i></span>
+      Permisos — {{ rol.nombre }}
+    </h1>
+    <a href="/auth/roles" class="btn-at-ghost">
+      <i class="bi bi-arrow-left" aria-hidden="true"></i> Volver a roles
+    </a>
+  </div>
   <p>Selecciona los permisos activos para este rol. Los cambios son inmediatos al guardar.</p>
 </div>
 
@@ -147,15 +156,6 @@
 </div>
 
 <form action="/auth/roles/{{ rol.id }}/permisos" method="post" id="perms-form">
-  <!-- Save buttons (top) -->
-  <div style="display:flex;gap:8px;margin-bottom:16px">
-    <button type="submit" class="btn-at-primary">
-      <i class="bi bi-floppy-fill" aria-hidden="true"></i> Guardar permisos
-    </button>
-    <a href="/auth/roles" class="btn-at-ghost">
-      <i class="bi bi-arrow-left" aria-hidden="true"></i> Volver
-    </a>
-  </div>
 
   <!-- Permission matrix -->
   <div class="perm-matrix-wrap">

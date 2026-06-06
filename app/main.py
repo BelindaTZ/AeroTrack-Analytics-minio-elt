@@ -10,6 +10,17 @@ from app.seguridad.rbac.roles_admin import router as roles_router
 from app.seguridad.rbac.permisos import router as permisos_router
 from app.pipeline_elt.router import router as pipeline_router
 from app.modelo_dimensional.router import router as modelo_router
+
+# Entrega 2
+from app.dashboard.kpis import router as dashboard_router
+from app.puntualidad.analizar_otp import router as puntualidad_router
+from app.rutas.ranking_eficiencia import router as rutas_router
+from app.cancelaciones.clasificar_faa import router as cancelaciones_router
+from app.configuracion.panel import router as configuracion_router
+from app.configuracion.monitoreo import router as monitoreo_router
+from app.auditoria.log import router as auditoria_router
+from app.reportes.router import router as reportes_router
+
 from app.shared.deps import _redirect_to_login, get_current_user, render
 
 app = FastAPI(title="AeroTrack Analytics", version="1.0.0")
@@ -19,19 +30,29 @@ _STATIC.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(auth_router,     prefix="/auth",          tags=["auth"])
-app.include_router(usuarios_router, prefix="/auth/usuarios", tags=["usuarios"])
-app.include_router(permisos_router, prefix="/auth/roles",    tags=["permisos"])
-app.include_router(roles_router,    prefix="/auth/roles",    tags=["roles"])
-app.include_router(pipeline_router, prefix="/pipeline",      tags=["pipeline"])
-app.include_router(modelo_router,   prefix="/modelo",        tags=["modelo"])
+app.include_router(auth_router,         prefix="/auth",                     tags=["auth"])
+app.include_router(usuarios_router,     prefix="/auth/usuarios",             tags=["usuarios"])
+app.include_router(permisos_router,     prefix="/auth/roles",                tags=["permisos"])
+app.include_router(roles_router,        prefix="/auth/roles",                tags=["roles"])
+app.include_router(pipeline_router,     prefix="/pipeline",                  tags=["pipeline"])
+app.include_router(modelo_router,       prefix="/modelo",                    tags=["modelo"])
+
+# Entrega 2
+app.include_router(dashboard_router,    prefix="/dashboard",                 tags=["dashboard"])
+app.include_router(puntualidad_router,  prefix="/puntualidad",               tags=["puntualidad"])
+app.include_router(rutas_router,        prefix="/rutas",                     tags=["rutas"])
+app.include_router(cancelaciones_router,prefix="/cancelaciones",             tags=["cancelaciones"])
+app.include_router(configuracion_router,prefix="/configuracion",             tags=["configuracion"])
+app.include_router(monitoreo_router,    prefix="/configuracion/estado",      tags=["monitoreo"])
+app.include_router(auditoria_router,    prefix="/auditoria",                 tags=["auditoria"])
+app.include_router(reportes_router,     prefix="/reportes",                  tags=["reportes"])
 
 
 # ── Root redirect ─────────────────────────────────────────────────────────────
 @app.get("/", response_class=RedirectResponse)
 async def root(request: Request):
     user = get_current_user(request)
-    return RedirectResponse("/pipeline" if user else "/auth/login", status_code=302)
+    return RedirectResponse("/dashboard" if user else "/auth/login", status_code=302)
 
 
 # ── Exception handlers ────────────────────────────────────────────────────────

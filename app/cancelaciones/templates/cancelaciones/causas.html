@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Cancelaciones — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-item">Análisis</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Cancelaciones</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); margin-bottom:24px; }
+  .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .chart-title i { width:28px; height:28px; background:var(--at-running-bg); border-radius:7px; display:inline-flex; align-items:center; justify-content:center; color:var(--at-blue-500); font-size:13px; }
+  .charts-2col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media(max-width:900px){ .charts-2col { grid-template-columns:1fr; } }
+  .kpi-mini-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:24px; }
+  .kpi-mini { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:14px 18px; }
+  .kpi-mini-label { font-size:11px; font-weight:600; color:var(--at-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+  .kpi-mini-val { font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; color:var(--at-text); }
+  .narrativa-card  { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; margin-bottom:24px; }
+  .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
+  .narrativa-body  { font-size:13.5px; line-height:1.7; color:var(--at-text); white-space:pre-wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-x-circle-fill"></i></span>
+    Cancelaciones
+  </h1>
+  <p>Clasificación por código FAA (A/B/C/D), tendencia mensual e impacto de desvíos.</p>
+</div>
+
+<div class="at-table-wrapper" style="margin-bottom:24px">
+  <div class="at-table-header">
+    <span class="at-table-title">
+      Cancelaciones FAA
+      <span id="cancelaciones-count" style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">
+        {% if not error %}({{ "{:,}".format(causas_data.total_cancelados) }} cancelados · {{ "%.1f"|format(causas_data.tasa * 100) }}%){% endif %}
+      </span>
+    </span>
+    <form id="cancelaciones-filter-form" method="get" action="/cancelaciones" class="d-flex gap-2 flex-wrap align-items-center" role="search">
+      <select id="sel-year" name="year" class="form-control-at" style="width:150px" aria-label="Filtrar por año">
+        <option value="">Todos los años</option>
+        {% for y in years %}
+        <option value="{{ y }}" {% if filtros.year == y|string %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+      <select id="sel-month" name="month" class="form-control-at" style="width:160px" aria-label="Filtrar por mes">
+        <option value="">Todos los meses</option>
+        {% for m,l in [("1","Ene"),("2","Feb"),("3","Mar"),("4","Abr"),("5","May"),("6","Jun"),("7","Jul"),("8","Ago"),("9","Sep"),("10","Oct"),("11","Nov"),("12","Dic")] %}
+        <option value="{{ m }}" {% if filtros.month == m %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select>
+      <select id="sel-airline" name="airline" class="form-control-at" style="width:190px" aria-label="Filtrar por aerolínea">
+        <option value="">Todas las aerolíneas</option>
+        {% for al in aerolinas %}
+        <option value="{{ al }}" {% if filtros.airline == al %}selected{% endif %}>{{ al }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div id="cancelaciones-results" style="padding:20px 20px 4px">
+    {% if error %}
+    <div class="at-empty" role="status" style="padding:24px 0">
+      <i class="bi bi-exclamation-circle at-empty-icon" aria-hidden="true"></i>
+      <strong>Datos no disponibles</strong>
+      <p>{{ error }}</p>
+    </div>
+    {% else %}
+
+    <div class="kpi-mini-row">
+      <div class="kpi-mini">
+        <div class="kpi-mini-label">Total cancelados</div>
+        <div class="kpi-mini-val">{{ "{:,}".format(causas_data.total_cancelados) }}</div>
+      </div>
+      <div class="kpi-mini">
+        <div class="kpi-mini-label">Tasa cancelación</div>
+        <div class="kpi-mini-val" style="color:{{ '#ef4444' if causas_data.tasa > 0.05 else '#10b981' }}">{{ "%.1f"|format(causas_data.tasa * 100) }}%</div>
+      </div>
+      <div class="kpi-mini">
+        <div class="kpi-mini-label">Total vuelos</div>
+        <div class="kpi-mini-val">{{ "{:,}".format(causas_data.total_vuelos) }}</div>
+      </div>
+      <div class="kpi-mini">
+        <div class="kpi-mini-label">Causas FAA distintas</div>
+        <div class="kpi-mini-val">{{ causas_data.labels | length }}</div>
+      </div>
+    </div>
+
+    <div class="charts-2col">
+      <div class="chart-card">
+        <div class="chart-title"><i class="bi bi-pie-chart-fill"></i> Causas por código FAA</div>
+        {% if causas_data.labels %}
+        <canvas id="chart-faa" style="max-height:260px"></canvas>
+        {% else %}
+        <div class="at-empty" style="padding:20px"><p style="margin:0;font-size:13px">Sin datos de cancelaciones en este período.</p></div>
+        {% endif %}
+      </div>
+      <div class="chart-card">
+        <div class="chart-title"><i class="bi bi-bar-chart-fill"></i> Tendencia mensual de cancelaciones</div>
+        {% if tendencias.meses %}
+        <canvas id="chart-tend" style="max-height:260px"></canvas>
+        {% else %}
+        <div class="at-empty" style="padding:20px"><p style="margin:0;font-size:13px">Sin datos mensuales disponibles.</p></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Narrativa IA (carga asíncrona) -->
+    <div id="narrativa-async" class="narrativa-card" data-narrativa-url="/cancelaciones/narrativa" style="display:none"></div>
+
+    {% if desvios %}
+    <div class="at-table-wrapper" style="margin-bottom:0">
+      <div class="at-table-header">
+        <span class="at-table-title"><i class="bi bi-signpost-split me-2" aria-hidden="true"></i>Desvíos — Impacto por ruta</span>
+        <span style="font-size:12px;color:var(--at-muted)">{{ desvios|length }} rutas</span>
+      </div>
+      <div class="at-table-scroll">
+        <table class="at-table">
+          <thead>
+            <tr><th>Ruta</th><th>Aeropuerto alternativo</th><th>Desvíos</th><th>DivArrDelay prom.</th><th>DivDistance prom.</th></tr>
+          </thead>
+          <tbody>
+            {% for d in desvios %}
+            <tr>
+              <td style="font-family:'JetBrains Mono',monospace;font-weight:600">{{ d.ruta }}</td>
+              <td>{{ d.alt_airport }}</td>
+              <td class="at-mono">{{ "{:,}".format(d.count) }}</td>
+              <td class="at-mono">{{ d.div_arr_delay }} min</td>
+              <td class="at-mono">{{ d.div_distance }} mi</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+    <!-- Datos Chart.js embebidos -->
+    <script id="canc-chart-data" type="application/json">
+    {
+      "faa_descs":  {{ causas_data.descriptions | tojson }},
+      "faa_counts": {{ causas_data.counts | tojson }},
+      "tend_meses": {{ tendencias.meses | tojson }},
+      "tend_canc":  {{ tendencias.cancelaciones | tojson }},
+      "tend_causas": {{ tendencias.causas | tojson }}
+    }
+    </script>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var darkGrid = { color: 'rgba(255,255,255,0.06)' };
+  var labelColor = '#94a3b8';
+  var fontCfg = { family: 'Inter, sans-serif', size: 12 };
+  var _charts = {};
+
+  function destroyChart(id) {
+    if (_charts[id]) { try { _charts[id].destroy(); } catch(e){} delete _charts[id]; }
+    var c = Chart.getChart(id);
+    if (c) c.destroy();
+  }
+
+  function renderCharts() {
+    var dataEl = document.getElementById('canc-chart-data');
+    if (!dataEl) return;
+    var d;
+    try { d = JSON.parse(dataEl.textContent); } catch(e) { return; }
+
+    var ctxFaa = document.getElementById('chart-faa');
+    if (ctxFaa && d.faa_counts && d.faa_counts.length) {
+      destroyChart('chart-faa');
+      _charts['chart-faa'] = new Chart(ctxFaa, {
+        type: 'doughnut',
+        data: { labels: d.faa_descs, datasets: [{ data: d.faa_counts, backgroundColor: ['#3b82f6','#f59e0b','#10b981','#ef4444'], hoverOffset: 6 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: labelColor, font: fontCfg, padding: 12 } } } }
+      });
+    }
+
+    var ctxTend = document.getElementById('chart-tend');
+    if (ctxTend && d.tend_meses && d.tend_meses.length) {
+      destroyChart('chart-tend');
+      var colors = { A:'#3b82f6', B:'#f59e0b', C:'#10b981', D:'#ef4444' };
+      var datasets = [{ label:'Total cancelados', data: d.tend_canc, backgroundColor:'rgba(239,68,68,.4)', borderColor:'#ef4444', type:'bar' }];
+      Object.keys(d.tend_causas || {}).forEach(function(code) {
+        datasets.push({ label:'Código ' + code, data: d.tend_causas[code], borderColor: colors[code] || '#94a3b8', backgroundColor:'transparent', type:'line', tension:0.3, pointRadius:3 });
+      });
+      _charts['chart-tend'] = new Chart(ctxTend, {
+        type: 'bar',
+        data: { labels: d.tend_meses, datasets: datasets },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: labelColor, font: fontCfg } } }, scales: { x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid }, y: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid } } }
+      });
+    }
+  }
+
+  renderCharts();
+
+  var selYear    = document.getElementById('sel-year');
+  var selMonth   = document.getElementById('sel-month');
+  var selAirline = document.getElementById('sel-airline');
+  var box        = document.getElementById('cancelaciones-results');
+  var countEl    = document.getElementById('cancelaciones-count');
+  if (!box) return;
+
+  function apply() {
+    var params = 'year='    + encodeURIComponent(selYear    ? selYear.value    : '')
+               + '&month='  + encodeURIComponent(selMonth   ? selMonth.value   : '')
+               + '&airline='+ encodeURIComponent(selAirline ? selAirline.value : '');
+    fetch('/cancelaciones?' + params, { credentials: 'same-origin' })
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('cancelaciones-results');
+        if (!newBox) return;
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('cancelaciones-count');
+        if (nc && countEl) countEl.textContent = nc.textContent;
+        history.replaceState(null, '', '/cancelaciones?' + params);
+        renderCharts();
+      })
+      .catch(function(){});
+  }
+
+  if (selYear)    selYear.addEventListener('change', apply);
+  if (selMonth)   selMonth.addEventListener('change', apply);
+  if (selAirline) selAirline.addEventListener('change', apply);
+})();
+</script>
+{% endblock %}

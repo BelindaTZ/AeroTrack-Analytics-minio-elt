@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}Puntualidad OTP — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-item">Análisis</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Puntualidad OTP</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); margin-bottom:24px; }
+  .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .chart-title i { width:28px; height:28px; background:var(--at-running-bg); border-radius:7px; display:inline-flex; align-items:center; justify-content:center; color:var(--at-blue-500); font-size:13px; }
+  .charts-2col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media(max-width:900px){ .charts-2col { grid-template-columns:1fr; } }
+  .narrativa-card  { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; margin-bottom:24px; }
+  .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
+  .narrativa-body  { font-size:13.5px; line-height:1.7; color:var(--at-text); white-space:pre-wrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-clock-history"></i></span>
+    Puntualidad OTP
+  </h1>
+  <p>On-Time Performance por aerolínea, causas de retraso y tendencias mensuales.</p>
+</div>
+
+<div class="at-table-wrapper" style="margin-bottom:24px">
+  <div class="at-table-header">
+    <span class="at-table-title">
+      OTP por aerolínea
+      <span id="puntualidad-count" style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">
+        {% if not error %}({{ datos_otp | length }} aerolíneas){% endif %}
+      </span>
+    </span>
+    <div class="d-flex gap-2 flex-wrap align-items-center">
+      <form id="puntualidad-filter-form" method="get" action="/puntualidad" class="d-flex gap-2 flex-wrap align-items-center" role="search">
+        <select id="sel-year" name="year" class="form-control-at" style="width:150px" aria-label="Filtrar por año">
+          <option value="">Todos los años</option>
+          {% for y in years %}
+          <option value="{{ y }}" {% if filtros.year == y|string %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+        <select id="sel-month" name="month" class="form-control-at" style="width:160px" aria-label="Filtrar por mes">
+          <option value="">Todos los meses</option>
+          {% for m,l in [("1","Ene"),("2","Feb"),("3","Mar"),("4","Abr"),("5","May"),("6","Jun"),("7","Jul"),("8","Ago"),("9","Sep"),("10","Oct"),("11","Nov"),("12","Dic")] %}
+          <option value="{{ m }}" {% if filtros.month == m %}selected{% endif %}>{{ l }}</option>
+          {% endfor %}
+        </select>
+        <select id="sel-airline" name="airline" class="form-control-at" style="width:190px" aria-label="Filtrar por aerolínea">
+          <option value="">Todas las aerolíneas</option>
+          {% for al in aerolinas %}
+          <option value="{{ al }}" {% if filtros.airline == al %}selected{% endif %}>{{ al }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <a href="/puntualidad/comparar" class="btn-at-ghost">
+        <i class="bi bi-arrow-left-right" aria-hidden="true"></i> Comparar por ruta
+      </a>
+    </div>
+  </div>
+
+  <div id="puntualidad-results" style="padding:20px 20px 4px">
+    {% if error %}
+    <div class="at-empty" role="status" style="padding:24px 0">
+      <i class="bi bi-exclamation-circle at-empty-icon" aria-hidden="true"></i>
+      <strong>Datos no disponibles</strong>
+      <p>{{ error }}</p>
+    </div>
+    {% else %}
+
+    <div class="chart-card">
+      <div class="chart-title"><i class="bi bi-bar-chart-fill"></i> OTP por aerolínea (top 25 por volumen)</div>
+      <canvas id="chart-otp-al" style="max-height:300px"></canvas>
+    </div>
+
+    <div class="charts-2col">
+      <div class="chart-card">
+        <div class="chart-title"><i class="bi bi-pie-chart-fill"></i> Causas de retraso{% if filtros.airline %} — {{ filtros.airline }}{% endif %}</div>
+        {% if causas.labels %}
+        <canvas id="chart-causas" style="max-height:240px"></canvas>
+        {% else %}
+        <div class="at-empty" style="padding:20px"><p style="margin:0;font-size:13px">Sin datos de causas disponibles.</p></div>
+        {% endif %}
+      </div>
+      <div class="chart-card">
+        <div class="chart-title"><i class="bi bi-graph-up"></i> OTP mensual{% if filtros.airline %} — {{ filtros.airline }}{% endif %}</div>
+        {% if tendencias.meses %}
+        <canvas id="chart-tendencias" style="max-height:240px"></canvas>
+        {% else %}
+        <div class="at-empty" style="padding:20px"><p style="margin:0;font-size:13px">Sin datos mensuales disponibles.</p></div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if tendencias_dia.dias %}
+    <div class="chart-card">
+      <div class="chart-title"><i class="bi bi-calendar-week"></i> OTP por día de semana</div>
+      <canvas id="chart-dia-semana" style="max-height:200px"></canvas>
+    </div>
+    {% endif %}
+
+    <!-- Narrativa IA (carga asíncrona) -->
+    <div id="narrativa-async" class="narrativa-card" data-narrativa-url="/puntualidad/narrativa" style="display:none"></div>
+
+    {% endif %}
+
+    <!-- Datos Chart.js embebidos para re-render tras swap -->
+    <script id="punt-chart-data" type="application/json">
+    {
+      "otp_labels": {{ datos_otp | map(attribute='aerolinea') | list | tojson }},
+      "otp_values": {{ datos_otp | map(attribute='otp') | list | tojson }},
+      "causas_labels": {{ causas.labels | tojson }},
+      "causas_counts": {{ causas.counts | tojson }},
+      "tend_meses": {{ tendencias.meses | tojson }},
+      "tend_otp":   {{ tendencias.otp | tojson }},
+      "dia_dias": {{ tendencias_dia.dias | tojson }},
+      "dia_otp":  {{ tendencias_dia.otp | tojson }}
+    }
+    </script>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var darkGrid = { color: 'rgba(255,255,255,0.06)' };
+  var labelColor = '#94a3b8';
+  var fontCfg = { family: 'Inter, sans-serif', size: 12 };
+  var _charts = {};
+
+  function destroyChart(id) {
+    if (_charts[id]) { try { _charts[id].destroy(); } catch(e){} delete _charts[id]; }
+    var c = Chart.getChart(id);
+    if (c) c.destroy();
+  }
+
+  function renderCharts() {
+    var dataEl = document.getElementById('punt-chart-data');
+    if (!dataEl) return;
+    var d;
+    try { d = JSON.parse(dataEl.textContent); } catch(e) { return; }
+
+    // OTP por aerolínea (barras)
+    var ctxAl = document.getElementById('chart-otp-al');
+    if (ctxAl && d.otp_labels && d.otp_labels.length) {
+      destroyChart('chart-otp-al');
+      var colors = d.otp_values.map(function(v){ return v >= 80 ? '#3b82f6' : (v >= 70 ? '#f59e0b' : '#ef4444'); });
+      _charts['chart-otp-al'] = new Chart(ctxAl, {
+        type: 'bar',
+        data: { labels: d.otp_labels, datasets: [{ label: 'OTP %', data: d.otp_values, backgroundColor: colors }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: labelColor, font: fontCfg, maxRotation: 45 }, grid: darkGrid },
+            y: { ticks: { color: labelColor, font: fontCfg, callback: function(v){ return v + '%'; } }, grid: darkGrid, min: 0, max: 105 }
+          }
+        }
+      });
+    }
+
+    // Causas (doughnut)
+    var ctxCausas = document.getElementById('chart-causas');
+    if (ctxCausas && d.causas_counts && d.causas_counts.length) {
+      destroyChart('chart-causas');
+      _charts['chart-causas'] = new Chart(ctxCausas, {
+        type: 'doughnut',
+        data: { labels: d.causas_labels, datasets: [{ data: d.causas_counts, backgroundColor: ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: labelColor, font: fontCfg, padding: 12 } } } }
+      });
+    }
+
+    // Tendencia mensual (line)
+    var ctxTend = document.getElementById('chart-tendencias');
+    if (ctxTend && d.tend_meses && d.tend_meses.length) {
+      destroyChart('chart-tendencias');
+      _charts['chart-tendencias'] = new Chart(ctxTend, {
+        type: 'line',
+        data: { labels: d.tend_meses, datasets: [{ label: 'OTP %', data: d.tend_otp, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.12)', fill: true, tension: 0.3, pointRadius: 4 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid }, y: { ticks: { color: labelColor, font: fontCfg, callback: function(v){ return v + '%'; } }, grid: darkGrid, min: 0, max: 105 } } }
+      });
+    }
+
+    // Día de semana (bar)
+    var ctxDia = document.getElementById('chart-dia-semana');
+    if (ctxDia && d.dia_dias && d.dia_dias.length) {
+      destroyChart('chart-dia-semana');
+      _charts['chart-dia-semana'] = new Chart(ctxDia, {
+        type: 'bar',
+        data: { labels: d.dia_dias, datasets: [{ label: 'OTP %', data: d.dia_otp, backgroundColor: '#6366f1' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid }, y: { ticks: { color: labelColor, font: fontCfg, callback: function(v){ return v + '%'; } }, grid: darkGrid, min: 0, max: 105 } } }
+      });
+    }
+  }
+
+  renderCharts();
+
+  var selYear    = document.getElementById('sel-year');
+  var selMonth   = document.getElementById('sel-month');
+  var selAirline = document.getElementById('sel-airline');
+  var box        = document.getElementById('puntualidad-results');
+  var countEl    = document.getElementById('puntualidad-count');
+  if (!box) return;
+
+  function apply() {
+    var params = 'year='    + encodeURIComponent(selYear    ? selYear.value    : '')
+               + '&month='  + encodeURIComponent(selMonth   ? selMonth.value   : '')
+               + '&airline='+ encodeURIComponent(selAirline ? selAirline.value : '');
+    fetch('/puntualidad?' + params, { credentials: 'same-origin' })
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newBox = doc.getElementById('puntualidad-results');
+        if (!newBox) return;
+        box.innerHTML = newBox.innerHTML;
+        var nc = doc.getElementById('puntualidad-count');
+        if (nc && countEl) countEl.textContent = nc.textContent;
+        history.replaceState(null, '', '/puntualidad?' + params);
+        renderCharts();
+      })
+      .catch(function(){});
+  }
+
+  if (selYear)    selYear.addEventListener('change', apply);
+  if (selMonth)   selMonth.addEventListener('change', apply);
+  if (selAirline) selAirline.addEventListener('change', apply);
+})();
+</script>
+{% endblock %}

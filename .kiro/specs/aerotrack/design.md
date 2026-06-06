@@ -96,6 +96,8 @@ MinIO expone la API S3 estándar. El pipeline ELT escribe los Parquet; la app Fa
 | `aerotrack-dims` | `MINIO_BUCKET_DIMS` | DAG transform task | FastAPI (análisis, CRUD) | `fact_vuelo.parquet` + 11 `dim_*.parquet` |
 | `aerotrack-exports` | `MINIO_BUCKET_EXPORTS` | FastAPI (reportes, predictivo) | Usuarios (descarga) | PDFs y `.xlsx` generados bajo demanda |
 
+> **Lifecycle policy `aerotrack-exports`:** los objetos se eliminan automáticamente a los 7 días de su creación. La policy se aplica al momento de crear el bucket desde el DAG de inicialización de Airflow. Los enlaces de descarga firmados tienen expiración de 1 hora (CU-27 / CU-38).
+
 **PocketBase — Operational Layer (SQLite interno)**
 
 PocketBase v0.22.4 gestiona todos los datos operativos vía REST API en `:8090`.
@@ -135,7 +137,7 @@ El mismo patrón se replica en `scripts/config.py` y `dags/config.py` para sus r
 
 El sistema usa dos capas de configuración:
 
-- **`.env`** — solo credenciales de infraestructura (claves MinIO, SECRET_KEY, credenciales PocketBase/Airflow). Nunca persisten en BD.
+- **`.env`** — solo credenciales de infraestructura (claves MinIO, SECRET_KEY, credenciales PocketBase/Airflow, claves de APIs externas). Nunca persisten en BD. Incluye: `GROK_API_KEY` (Grok 3 mini, proveedor primario de narrativa ejecutiva E2) y `GEMINI_API_KEY` (Gemini 2.0 Flash, fallback automático de narrativa ejecutiva E2).
 - **`configuracion_sistema` en PocketBase** — todos los parámetros de negocio que el Admin puede cambiar desde la UI sin reiniciar servicios.
 
 | Grupo | Claves clave |
@@ -616,6 +618,70 @@ sequenceDiagram
   FastAPI-->>Analyst: {respuesta, justificacion_datos}
 
   Note over FastAPI,LLM: Respuesta target < 30 seg (CU-41)
+```
+
+#### Flujo de Datos Analíticos — Entrega 2
+
+```mermaid
+graph TD
+  MinIO_src[("MinIO\naerotrack-dims\nfact_vuelo.parquet")]
+  Pandas["pandas\nagregación / filtrado"]
+  Router["FastAPI router\nmódulo analítico"]
+
+  subgraph RamaA["Rama A — Visualización"]
+    JsonData["JSON\nchart_data"]
+    Jinja2["Jinja2 template"]
+    Charts["Plotly / Chart.js\nen el browser"]
+  end
+
+  subgraph RamaB["Rama B — Narrativa IA"]
+    KPIsDict["KPIs dict\n~10-20 métricas"]
+    IaNarrativa["ia_narrativa.py\nGrok 3 mini / Gemini 2.0 Flash"]
+    Parrafo["párrafo ejecutivo\nen español"]
+    CardIA["card con badge\nproveedor + caché"]
+  end
+
+  subgraph RamaC["Rama C — Exportación"]
+    DataFrame["DataFrame\nfiltrado"]
+    Exporters["WeasyPrint\nopenpyxl"]
+    MinIO_exp[("MinIO\naerotrack-exports\nPDF / .xlsx")]
+    LinkFirmado["enlace firmado\n1 hora de expiración"]
+  end
+
+  MinIO_src --> Pandas
+  Pandas --> Router
+  Router --> JsonData
+  Router --> KPIsDict
+  Router --> DataFrame
+  JsonData --> Jinja2 --> Charts
+  KPIsDict --> IaNarrativa --> Parrafo --> CardIA
+  DataFrame --> Exporters --> MinIO_exp --> LinkFirmado
+```
+
+#### Patrón Fallback IA — `app/utils/ia_narrativa.py`
+
+```mermaid
+flowchart TD
+  Start["generar_narrativa(kpis_dict)"]
+  Cache{"caché MD5\n¿hit?"}
+  RetCache["retornar\ndesde caché"]
+  Grok["Grok 3 mini\ntemperatura=0.4"]
+  GrokOK{"¿respuesta\nOK?"}
+  Gemini["Gemini 2.0 Flash\ntemperatura=0.4"]
+  GeminiOK{"¿respuesta\nOK?"}
+  Cachear["cachear resultado\nTTL 300s\nclave=MD5(prompt)"]
+  Retornar["retornar narrativa"]
+  TextoNeutro["retornar texto neutro\n(sistema no rompe)"]
+
+  Start --> Cache
+  Cache -- HIT --> RetCache
+  Cache -- MISS --> Grok
+  Grok --> GrokOK
+  GrokOK -- "OK" --> Cachear --> Retornar
+  GrokOK -- "HTTP 429/402/503\no timeout >12s" --> Gemini
+  Gemini --> GeminiOK
+  GeminiOK -- "OK" --> Cachear
+  GeminiOK -- "error" --> TextoNeutro
 ```
 
 ---

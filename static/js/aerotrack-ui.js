@@ -255,13 +255,22 @@
     });
   }
 
-  /* ─── Back button — shown at top of content on sub-pages ─────────── */
+  /* ─── Back button — injected inline with page heading ────────────── */
   function initBackButton() {
     var bc = document.querySelector('.topbar-breadcrumb');
     if (!bc) return;
     var allLinks = bc.querySelectorAll('a');
     if (!allLinks.length) return;
     var parentLink = allLinks[allLinks.length - 1];
+
+    var heading = document.querySelector('.page-heading');
+    if (!heading) return;
+
+    /* Skip if the template already placed a back button inside the heading */
+    if (heading.querySelector('.page-heading-meta')) return;
+
+    var h1 = heading.querySelector('h1');
+    if (!h1) return;
 
     var label = (parentLink.textContent || '').trim() || 'Volver';
 
@@ -282,14 +291,100 @@
       }
     });
 
-    var wrap = document.createElement('div');
-    wrap.className = 'at-back-btn-wrap';
-    wrap.appendChild(btn);
+    var meta = document.createElement('div');
+    meta.className = 'page-heading-meta';
+    heading.insertBefore(meta, h1);
+    meta.appendChild(h1);
+    meta.appendChild(btn);
+  }
 
-    var content = document.getElementById('content');
-    if (content) {
-      content.insertBefore(wrap, content.firstChild);
+  /* ─── Sidebar scroll preservation ───────────────────────────────
+     Guarda scrollTop del sidebar en sessionStorage antes de navegar
+     y lo restaura al cargar la nueva página.                          */
+  var _SIDEBAR_SCROLL_KEY = 'at_sidebar_scroll';
+
+  function initSidebarScrollRestore() {
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+
+    /* Restaurar posición guardada */
+    var saved = sessionStorage.getItem(_SIDEBAR_SCROLL_KEY);
+    if (saved !== null) {
+      sidebar.scrollTop = parseInt(saved, 10) || 0;
+      sessionStorage.removeItem(_SIDEBAR_SCROLL_KEY);
     }
+
+    /* Guardar antes de navegar */
+    sidebar.querySelectorAll('.nav-item-link[href]').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) === '#' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        sessionStorage.setItem(_SIDEBAR_SCROLL_KEY, sidebar.scrollTop);
+      });
+    });
+  }
+
+  /* ─── Page navigation loading bar ───────────────────────────────── */
+  function initNavLoadingBar() {
+    var styleEl = document.createElement('style');
+    styleEl.textContent =
+      '@keyframes at-page-load{0%{width:0;opacity:1}85%{width:78%;opacity:1}100%{width:94%;opacity:.8}}' +
+      '#at-nav-bar{position:fixed;top:0;left:0;height:2px;background:var(--at-blue-500);z-index:9999;' +
+        'border-radius:0 2px 2px 0;animation:at-page-load 10s ease-out forwards;pointer-events:none}';
+    document.head.appendChild(styleEl);
+
+    var links = document.querySelectorAll('#sidebar .nav-item-link[href]');
+    links.forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        var href = link.getAttribute('href');
+        if (!href || href.charAt(0) === '#' || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        if (document.getElementById('at-nav-bar')) return;
+        var bar = document.createElement('div');
+        bar.id = 'at-nav-bar';
+        document.body.appendChild(bar);
+      });
+    });
+  }
+
+  /* ─── Async narrativa ─────────────────────────────────────────────
+     Busca <div id="narrativa-async" data-narrativa-url="/MODULE/narrativa">
+     en la página y lo rellena con una petición fetch tras la carga.      */
+  function initNarrativaAsync() {
+    var el = document.getElementById('narrativa-async');
+    if (!el) return;
+    var baseUrl = el.getAttribute('data-narrativa-url');
+    if (!baseUrl) return;
+
+    /* Skeleton mientras carga */
+    el.style.display = '';
+    el.innerHTML =
+      '<div class="chart-title" style="margin-bottom:12px">' +
+        '<i class="bi bi-stars" aria-hidden="true"></i> Narrativa ejecutiva' +
+      '</div>' +
+      '<div style="height:13px;background:rgba(255,255,255,.1);border-radius:4px;width:52%;margin-bottom:10px;animation:at-page-load 2s ease infinite alternate"></div>' +
+      '<div style="height:11px;background:rgba(255,255,255,.07);border-radius:4px;width:91%;margin-bottom:7px"></div>' +
+      '<div style="height:11px;background:rgba(255,255,255,.07);border-radius:4px;width:76%;margin-bottom:7px"></div>' +
+      '<div style="height:11px;background:rgba(255,255,255,.07);border-radius:4px;width:84%"></div>';
+
+    /* Reusa los query params actuales (filtros ya aplicados en la URL) */
+    var qs = global.location.search;
+    var url = baseUrl + (qs ? qs : '');
+
+    fetch(url, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.texto) { el.style.display = 'none'; return; }
+        var provider = _escapeHtml(data.proveedor) + (data.desde_cache ? ' — cach\xe9' : '');
+        el.innerHTML =
+          '<div class="chart-title" style="margin-bottom:12px">' +
+            '<i class="bi bi-stars" aria-hidden="true"></i> Narrativa ejecutiva' +
+          '</div>' +
+          '<span class="narrativa-badge">' +
+            '<i class="bi bi-cpu" aria-hidden="true"></i> ' + provider +
+          '</span>' +
+          '<div class="narrativa-body">' + _escapeHtml(data.texto) + '</div>';
+      })
+      .catch(function () { el.style.display = 'none'; });
   }
 
   /* ─── Init ────────────────────────────────────────────────────────── */
@@ -300,6 +395,9 @@
     initFlashAutoDismiss();
     initDropdownStyling();
     initBackButton();
+    initSidebarScrollRestore();
+    initNavLoadingBar();
+    initNarrativaAsync();
   }
 
   if (document.readyState === 'loading') {
@@ -315,6 +413,7 @@
     startAutoRefresh:     startAutoRefresh,
     highlightSidebarActive: highlightSidebarActive,
     liveFilter:           liveFilter,
+    initNarrativaAsync:   initNarrativaAsync,
 
     /* Convenience shorthands */
     success: function (msg, dur) { toast('success', msg, dur); },
