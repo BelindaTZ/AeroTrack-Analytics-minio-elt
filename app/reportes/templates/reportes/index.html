@@ -9,19 +9,114 @@
 
 {% block head_extra %}
 <style>
-  .report-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  @media(max-width:800px){ .report-grid { grid-template-columns:1fr; } }
-  .report-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:24px 28px; box-shadow:var(--at-shadow-sm); }
-  .report-card-title { font-size:15px; font-weight:700; color:var(--at-text); margin-bottom:18px; display:flex; align-items:center; gap:10px; }
-  .report-card-title i { width:34px; height:34px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; font-size:16px; }
-  .pdf-icon { background:rgba(239,68,68,.12); color:#ef4444; }
-  .excel-icon { background:rgba(16,185,129,.12); color:#10b981; }
-  .section-check { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04); font-size:13px; }
+  /* ── Layout ── */
+  .report-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px; }
+  @media(max-width:960px){ .report-grid-3 { grid-template-columns:1fr 1fr; } }
+  @media(max-width:620px){ .report-grid-3 { grid-template-columns:1fr; } }
+
+  .report-card {
+    background:var(--at-surface); border:1px solid var(--at-border);
+    border-radius:var(--at-r-lg); padding:22px 26px;
+    box-shadow:var(--at-shadow-sm);
+  }
+  .report-card-title {
+    font-size:14px; font-weight:700; color:var(--at-text);
+    margin-bottom:16px; display:flex; align-items:center; gap:10px;
+  }
+  .card-icon {
+    width:34px; height:34px; border-radius:9px; display:inline-flex;
+    align-items:center; justify-content:center; font-size:15px; flex-shrink:0;
+  }
+  .icon-pdf   { background:rgba(239,68,68,.13);  color:#ef4444; }
+  .icon-xlsx  { background:rgba(16,185,129,.13);  color:#10b981; }
+  .icon-csv   { background:rgba(245,158,11,.13);  color:#f59e0b; }
+  .icon-filter{ background:rgba(99,102,241,.13);  color:#6366f1; }
+  .icon-hist  { background:rgba(148,163,184,.13); color:#94a3b8; }
+
+  /* ── Filter panel ── */
+  .filter-rows { display:flex; flex-direction:column; gap:12px; }
+  .filter-row  { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .filter-field { display:flex; flex-direction:column; gap:4px; }
+  .filter-label {
+    font-size:10px; font-weight:700; color:var(--at-muted);
+    text-transform:uppercase; letter-spacing:.6px;
+  }
+  .filter-divider {
+    width:1px; background:var(--at-border); margin:0 4px; align-self:stretch;
+  }
+  @media(max-width:620px){ .filter-divider { display:none; } }
+
+  /* ── Preview card ── */
+  .preview-bar {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:10px; margin-top:4px;
+  }
+  .preview-stat {
+    background:rgba(99,102,241,.07); border:1px solid rgba(99,102,241,.15);
+    border-radius:var(--at-r-md); padding:12px 14px; text-align:center;
+  }
+  .preview-stat-val { font-size:20px; font-weight:800; color:var(--at-text); line-height:1.1; }
+  .preview-stat-lbl { font-size:10px; color:var(--at-muted); text-transform:uppercase;
+                      letter-spacing:.5px; margin-top:3px; }
+  .preview-stat-val.otp  { color:#10b981; }
+  .preview-stat-val.warn { color:#f59e0b; }
+  .preview-stat-val.err  { color:#ef4444; }
+
+  /* ── Section checkboxes ── */
+  .section-check {
+    display:flex; align-items:center; gap:8px; padding:6px 0;
+    border-bottom:1px solid rgba(255,255,255,.04); font-size:13px;
+  }
   .section-check:last-child { border:none; }
-  .result-bar { display:none; padding:12px 16px; border-radius:var(--at-r-md); margin-top:12px; font-size:13px; }
-  .result-bar.ok { background:rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.2); display:flex; align-items:center; gap:8px; }
-  .result-bar.error { background:rgba(239,68,68,.12); color:#ef4444; border:1px solid rgba(239,68,68,.2); display:block; }
-  .unavailable-notice { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.2); border-radius:var(--at-r-lg); padding:14px 18px; margin-bottom:20px; font-size:13px; color:#f59e0b; display:flex; align-items:center; gap:8px; }
+
+  /* ── Result bars ── */
+  .result-bar { display:none; padding:10px 14px; border-radius:var(--at-r-md); margin-top:10px; font-size:13px; }
+  .result-bar.ok  { background:rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.2); display:flex; align-items:center; gap:8px; }
+  .result-bar.err { background:rgba(239,68,68,.12);  color:#ef4444; border:1px solid rgba(239,68,68,.2);  display:block; }
+
+  /* ── Historial ── */
+  .hist-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .hist-table th { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--at-muted);
+                   font-weight:600; padding:6px 8px; border-bottom:1px solid var(--at-border); text-align:left; }
+  .hist-table td { padding:8px 8px; border-bottom:1px solid rgba(255,255,255,.04); }
+  .hist-table tr:last-child td { border:none; }
+  .hist-badge {
+    display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700;
+    text-transform:uppercase; letter-spacing:.5px;
+  }
+  .badge-pdf  { background:rgba(239,68,68,.14);  color:#ef4444; }
+  .badge-xlsx { background:rgba(16,185,129,.14);  color:#10b981; }
+  .badge-csv  { background:rgba(245,158,11,.14);  color:#f59e0b; }
+
+  .unavailable-notice {
+    background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.2);
+    border-radius:var(--at-r-lg); padding:12px 16px; margin-bottom:18px;
+    font-size:13px; color:#f59e0b; display:flex; align-items:center; gap:8px;
+  }
+  .btn-outline-sm {
+    display:inline-flex; align-items:center; gap:5px; padding:5px 12px;
+    border:1px solid var(--at-border); border-radius:var(--at-r-md);
+    background:transparent; color:var(--at-sub); font-size:12px; cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .btn-outline-sm:hover { border-color:var(--at-blue-500); color:var(--at-blue-500); }
+
+  /* ── Charts card ── */
+  .charts-grid {
+    display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:16px; margin-top:4px;
+  }
+  @media(max-width:900px){ .charts-grid { grid-template-columns:1fr 1fr; } }
+  @media(max-width:560px){ .charts-grid { grid-template-columns:1fr; } }
+  .chart-panel { display:flex; flex-direction:column; gap:8px; }
+  .chart-panel-title {
+    font-size:11px; font-weight:700; color:var(--at-muted);
+    text-transform:uppercase; letter-spacing:.6px;
+  }
+  .chart-canvas-wrap {
+    position:relative; width:100%; background:rgba(255,255,255,.02);
+    border-radius:var(--at-r-md); border:1px solid var(--at-border); padding:10px;
+  }
+  #charts-card { display:none; }
 </style>
 {% endblock %}
 
@@ -29,197 +124,632 @@
 
 <div class="page-heading">
   <h1>
-    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-file-earmark-pdf"></i></span>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-file-earmark-text"></i></span>
     Reportes
   </h1>
-  <p>Exporta los análisis como Excel (.xlsx) o PDF con secciones seleccionables.</p>
+  <p>Exporta los análisis en Excel, PDF o CSV con filtros avanzados.</p>
 </div>
 
 {% if not weasyprint_ok %}
 <div class="unavailable-notice">
   <i class="bi bi-exclamation-triangle-fill"></i>
-  <span>WeasyPrint no está instalado — la generación de PDF no estará disponible. Solo se puede exportar Excel.</span>
+  <span>WeasyPrint no instalado — la generación de PDF no está disponible. Puedes exportar Excel y CSV.</span>
 </div>
 {% endif %}
 
-<!-- Filtros comunes -->
-<div class="report-card" style="margin-bottom:20px">
+<!-- ═══════════════════════════════════════════════════════
+     FILTROS
+═══════════════════════════════════════════════════════ -->
+<div class="report-card" style="margin-bottom:18px">
   <div class="report-card-title" style="margin-bottom:14px">
-    <i class="bi bi-funnel-fill" style="background:rgba(99,102,241,.12);color:#6366f1;width:34px;height:34px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:14px"></i>
+    <i class="bi bi-funnel-fill card-icon icon-filter" style="font-size:14px"></i>
     Filtros del período
+    <button class="btn-outline-sm" style="margin-left:auto" onclick="limpiarFiltros()">
+      <i class="bi bi-arrow-counterclockwise"></i> Limpiar
+    </button>
   </div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap">
-    <div>
-      <label style="font-size:11px;font-weight:600;color:var(--at-muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Año</label>
-      <select id="f-year" class="form-control-at" style="width:100px">
-        <option value="">Todos</option>
-        {% for y in years %}
-        <option value="{{ y }}">{{ y }}</option>
-        {% endfor %}
-      </select>
+
+  <div class="filter-rows">
+    <!-- Fila 1: temporales -->
+    <div class="filter-row">
+      <div class="filter-field">
+        <span class="filter-label">Año</span>
+        <select id="f-year" class="form-control-at" style="width:90px">
+          <option value="">Todos</option>
+          {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">Trimestre</span>
+        <select id="f-quarter" class="form-control-at" style="width:130px">
+          <option value="">Todos</option>
+          <option value="1">Q1 (Ene–Mar)</option>
+          <option value="2">Q2 (Abr–Jun)</option>
+          <option value="3">Q3 (Jul–Sep)</option>
+          <option value="4">Q4 (Oct–Dic)</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">Mes</span>
+        <select id="f-month" class="form-control-at" style="width:110px">
+          <option value="">Todos</option>
+          {% for m,l in [("1","Ene"),("2","Feb"),("3","Mar"),("4","Abr"),("5","May"),("6","Jun"),
+                         ("7","Jul"),("8","Ago"),("9","Sep"),("10","Oct"),("11","Nov"),("12","Dic")] %}
+          <option value="{{ m }}">{{ l }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">Día de semana</span>
+        <select id="f-dow" class="form-control-at" style="width:120px">
+          <option value="">Todos</option>
+          <option value="1">Lunes</option>
+          <option value="2">Martes</option>
+          <option value="3">Miércoles</option>
+          <option value="4">Jueves</option>
+          <option value="5">Viernes</option>
+          <option value="6">Sábado</option>
+          <option value="7">Domingo</option>
+        </select>
+      </div>
     </div>
-    <div>
-      <label style="font-size:11px;font-weight:600;color:var(--at-muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Mes</label>
-      <select id="f-month" class="form-control-at" style="width:110px">
-        <option value="">Todos</option>
-        {% for m,l in [("1","Ene"),("2","Feb"),("3","Mar"),("4","Abr"),("5","May"),("6","Jun"),("7","Jul"),("8","Ago"),("9","Sep"),("10","Oct"),("11","Nov"),("12","Dic")] %}
-        <option value="{{ m }}">{{ l }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label style="font-size:11px;font-weight:600;color:var(--at-muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">Aerolínea</label>
-      <select id="f-airline" class="form-control-at" style="width:130px">
-        <option value="">Todas</option>
-        {% for al in aerolinas %}
-        <option value="{{ al }}">{{ al }}</option>
-        {% endfor %}
-      </select>
+
+    <!-- Fila 2: operativos -->
+    <div class="filter-row">
+      <div class="filter-field">
+        <span class="filter-label">Aerolínea</span>
+        <select id="f-airline" class="form-control-at" style="width:130px">
+          <option value="">Todas</option>
+          {% for al in aerolinas %}<option value="{{ al }}">{{ al }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">Aeropuerto origen</span>
+        <select id="f-origin" class="form-control-at" style="width:130px">
+          <option value="">Todos</option>
+          {% for o in origins %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <span class="filter-label">Aeropuerto destino</span>
+        <select id="f-dest" class="form-control-at" style="width:130px">
+          <option value="">Todos</option>
+          {% for d in dests %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="filter-divider"></div>
+      <div class="filter-field">
+        <span class="filter-label">Cancelaciones</span>
+        <select id="f-cancel-filter" class="form-control-at" style="width:190px">
+          <option value="">Todos los vuelos</option>
+          <option value="cancelados">Solo cancelados</option>
+          <option value="code:A">Cancelados — Aerolínea (A)</option>
+          <option value="code:B">Cancelados — Meteorología (B)</option>
+          <option value="code:C">Cancelados — Sistema Aéreo (C)</option>
+          <option value="code:D">Cancelados — Seguridad (D)</option>
+        </select>
+      </div>
     </div>
   </div>
 </div>
 
-<div class="report-grid">
+<!-- ═══════════════════════════════════════════════════════
+     PREVIEW
+═══════════════════════════════════════════════════════ -->
+<div id="preview-card" class="report-card" style="margin-bottom:18px;display:none">
+  <div class="report-card-title" style="margin-bottom:12px">
+    <i class="bi bi-speedometer2 card-icon icon-filter" style="font-size:14px"></i>
+    Vista previa del período seleccionado
+    <span id="preview-loading" style="margin-left:8px;font-size:12px;color:var(--at-muted);font-weight:400;display:none">
+      <span class="spinner-border spinner-border-sm" role="status"></span> Calculando…
+    </span>
+  </div>
+  <div id="preview-stats" class="preview-bar"></div>
+</div>
 
-  <!-- Excel -->
+<!-- ═══════════════════════════════════════════════════════
+     GRÁFICOS DE PREVISUALIZACIÓN
+═══════════════════════════════════════════════════════ -->
+<div id="charts-card" class="report-card" style="margin-bottom:18px">
+  <div class="report-card-title" style="margin-bottom:14px">
+    <i class="bi bi-graph-up-arrow card-icon icon-filter" style="font-size:14px"></i>
+    Gráficos del período
+    <span id="charts-loading" style="margin-left:8px;font-size:12px;color:var(--at-muted);font-weight:400;display:none">
+      <span class="spinner-border spinner-border-sm" role="status"></span> Cargando…
+    </span>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-panel">
+      <div class="chart-panel-title">OTP mensual (%)</div>
+      <div class="chart-canvas-wrap" style="height:200px">
+        <canvas id="chart-otp-mensual"></canvas>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-panel-title">Causas de retraso (min.)</div>
+      <div class="chart-canvas-wrap" style="height:200px">
+        <canvas id="chart-causas"></canvas>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-panel-title">Peores rutas — OTP (%)</div>
+      <div class="chart-canvas-wrap" style="height:200px">
+        <canvas id="chart-rutas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     TARJETAS DE EXPORTACIÓN
+═══════════════════════════════════════════════════════ -->
+<div class="report-grid-3" style="margin-bottom:20px">
+
+  <!-- ── Excel ── -->
   <div class="report-card">
     <div class="report-card-title">
-      <i class="bi bi-file-earmark-spreadsheet-fill excel-icon"></i>
-      Exportar Excel (.xlsx)
+      <i class="bi bi-file-earmark-spreadsheet-fill card-icon icon-xlsx"></i>
+      Excel (.xlsx)
     </div>
-    <p style="font-size:13px;color:var(--at-sub);margin-bottom:18px">
-      Genera un archivo Excel con hojas separadas para Puntualidad, Rutas, Cancelaciones y Resumen.
+    <p style="font-size:13px;color:var(--at-sub);margin-bottom:16px;line-height:1.5">
+      5 hojas: Resumen, Puntualidad OTP <span style="color:#10b981;font-size:11px">●</span>,
+      Rutas <span style="color:#10b981;font-size:11px">●</span>, Cancelaciones, Tendencia mensual.
+      Colores condicionales en OTP.
     </p>
     <form id="form-excel" method="post" action="/reportes/excel">
-      <input type="hidden" name="year" id="fx-year">
-      <input type="hidden" name="month" id="fx-month">
-      <input type="hidden" name="airline" id="fx-airline">
+      {% for k in ["year","quarter","month","dow","airline","origin","dest","cancel_code","solo_cancelados"] %}
+      <input type="hidden" name="{{ k }}" id="fh-{{ k }}">
+      {% endfor %}
       <button type="submit" class="btn-at-primary" style="width:100%">
-        <i class="bi bi-download" aria-hidden="true"></i>
-        Descargar Excel
+        <i class="bi bi-download"></i> Descargar Excel
       </button>
     </form>
     <div id="excel-result" class="result-bar"></div>
   </div>
 
-  <!-- PDF -->
+  <!-- ── PDF ── -->
   <div class="report-card">
     <div class="report-card-title">
-      <i class="bi bi-file-earmark-pdf-fill pdf-icon"></i>
-      Exportar PDF
+      <i class="bi bi-file-earmark-pdf-fill card-icon icon-pdf"></i>
+      PDF
     </div>
     {% if weasyprint_ok %}
-    <p style="font-size:13px;color:var(--at-sub);margin-bottom:14px">
-      Selecciona las secciones a incluir en el PDF.
+    <p style="font-size:13px;color:var(--at-sub);margin-bottom:12px;line-height:1.5">
+      Selecciona las secciones a incluir. El PDF se sube a MinIO con link de descarga (1 h).
     </p>
-    <div style="margin-bottom:16px">
+    <div style="margin-bottom:14px">
       {% for s in secciones %}
       <div class="section-check">
         <input type="checkbox" id="sec-{{ s.clave }}" name="secciones" value="{{ s.clave }}" checked
                style="width:14px;height:14px;accent-color:var(--at-blue-500)">
-        <label for="sec-{{ s.clave }}" style="cursor:pointer">{{ s.label }}</label>
+        <label for="sec-{{ s.clave }}" style="cursor:pointer;font-size:13px">{{ s.label }}</label>
       </div>
       {% endfor %}
     </div>
     <button type="button" class="btn-at-primary" style="width:100%" id="btn-pdf" onclick="generarPdf()">
-      <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
-      Generar PDF
+      <i class="bi bi-file-earmark-pdf"></i> Generar PDF
     </button>
     <div id="pdf-result" class="result-bar"></div>
     {% else %}
-    <div style="text-align:center;padding:24px 0;color:var(--at-muted)">
+    <div style="text-align:center;padding:28px 0;color:var(--at-muted)">
       <i class="bi bi-exclamation-circle" style="font-size:28px;display:block;margin-bottom:8px"></i>
-      WeasyPrint no está disponible en este servidor.
+      WeasyPrint no disponible en este servidor.
     </div>
     {% endif %}
   </div>
 
+  <!-- ── CSV ── -->
+  <div class="report-card">
+    <div class="report-card-title">
+      <i class="bi bi-filetype-csv card-icon icon-csv"></i>
+      CSV (datos crudos)
+    </div>
+    <p style="font-size:13px;color:var(--at-sub);margin-bottom:16px;line-height:1.5">
+      Exporta el fact table filtrado: fechas, aerolíneas, retrasos, cancelaciones y tiempos de vuelo.
+      Ideal para análisis externo.
+    </p>
+    <form id="form-csv" method="post" action="/reportes/csv">
+      {% for k in ["year","quarter","month","dow","airline","origin","dest","cancel_code","solo_cancelados"] %}
+      <input type="hidden" name="{{ k }}" id="fc-{{ k }}">
+      {% endfor %}
+      <button type="submit" class="btn-at-primary" style="width:100%;background:rgba(245,158,11,.15);
+              color:#f59e0b;border:1px solid rgba(245,158,11,.3)" id="btn-csv">
+        <i class="bi bi-download"></i> Descargar CSV
+      </button>
+    </form>
+    <div id="csv-result" class="result-bar"></div>
+  </div>
+
 </div>
+
+<!-- ═══════════════════════════════════════════════════════
+     HISTORIAL DE EXPORTACIONES
+═══════════════════════════════════════════════════════ -->
+<div class="report-card">
+  <div class="report-card-title" style="margin-bottom:14px">
+    <i class="bi bi-clock-history card-icon icon-hist" style="font-size:14px"></i>
+    Últimas exportaciones
+    <button class="btn-outline-sm" style="margin-left:auto" onclick="cargarHistorial()">
+      <i class="bi bi-arrow-clockwise"></i> Actualizar
+    </button>
+  </div>
+  <div id="historial-content">
+    <div style="color:var(--at-muted);font-size:13px;text-align:center;padding:16px 0">
+      <span class="spinner-border spinner-border-sm me-2" role="status"></span> Cargando historial…
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
-// Sync filtros a formularios
-function syncFiltros() {
-  var year = document.getElementById('f-year').value;
-  var month = document.getElementById('f-month').value;
-  var airline = document.getElementById('f-airline').value;
-  ['fx-year','fx-month','fx-airline'].forEach(function(id, i) {
-    var el = document.getElementById(id);
-    if (el) el.value = [year, month, airline][i];
-  });
-}
-['f-year','f-month','f-airline'].forEach(function(id) {
-  var el = document.getElementById(id);
-  if (el) el.addEventListener('change', syncFiltros);
-});
-syncFiltros();
+/* ── Chart.js helpers ──────────────────────────────────────────────────── */
+(function() {
+  var _charts = {};
+  var COLORS_DONUT = ['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+  var COLORS_BAR   = ['#ef4444','#f59e0b','#f97316','#dc2626','#b45309',
+                      '#e11d48','#d97706','#ca8a04','#c2410c','#b91c1c'];
 
-// Excel form submit feedback
-var formExcel = document.getElementById('form-excel');
-if (formExcel) {
-  formExcel.addEventListener('submit', function() {
-    syncFiltros();
-    var result = document.getElementById('excel-result');
-    result.className = 'result-bar ok';
-    result.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando Excel, la descarga comenzará en segundos…';
-    result.style.display = 'flex';
-    setTimeout(function() { result.style.display = 'none'; }, 8000);
-  });
-}
+  function destroyChart(id) {
+    if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+  }
 
-// PDF via AJAX
-function generarPdf() {
-  syncFiltros();
-  var btn = document.getElementById('btn-pdf');
-  var result = document.getElementById('pdf-result');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Generando PDF…';
-  result.style.display = 'none';
-
-  var secciones = Array.from(document.querySelectorAll('input[name="secciones"]:checked')).map(function(c){return c.value;});
-  var formData = new FormData();
-  formData.append('year', document.getElementById('f-year').value);
-  formData.append('month', document.getElementById('f-month').value);
-  formData.append('airline', document.getElementById('f-airline').value);
-  secciones.forEach(function(s) { formData.append('secciones', s); });
-
-  fetch('/reportes/pdf', { method: 'POST', body: formData, credentials: 'same-origin' })
-    .then(function(r) {
-      if (r.headers.get('content-type') && r.headers.get('content-type').includes('application/pdf')) {
-        return r.blob().then(function(blob) {
-          var url = URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          a.href = url; a.download = 'aerotrack_reporte.pdf'; a.click();
-          return { ok: true, url: null };
-        });
+  function lineOTP(canvasId, labels, values) {
+    destroyChart(canvasId);
+    var ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    _charts[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'OTP %', data: values, tension: 0.35,
+          borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.12)',
+          fill: true, pointRadius: 4, pointBackgroundColor: values.map(function(v) {
+            return v >= 80 ? '#10b981' : v >= 70 ? '#f59e0b' : '#ef4444';
+          }),
+          pointBorderColor: 'transparent',
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(c) { return c.parsed.y.toFixed(1) + '%'; } } }
+        },
+        scales: {
+          x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y: { min: 50, max: 100,
+               ticks: { color: '#64748b', font: { size: 10 }, callback: function(v) { return v + '%'; } },
+               grid: { color: 'rgba(255,255,255,.05)' } }
+        }
       }
-      return r.json();
-    })
-    .then(function(data) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Generar PDF';
-      if (data && data.url) {
-        result.className = 'result-bar ok';
-        result.innerHTML = '<i class="bi bi-check-circle-fill"></i> PDF generado. <a href="' + data.url + '" target="_blank" style="color:inherit;font-weight:700;margin-left:6px">Descargar PDF</a> (enlace válido 1 hora)';
-        result.style.display = 'flex';
-      } else if (data && data.error) {
-        result.className = 'result-bar error';
-        result.textContent = data.error;
-        result.style.display = 'block';
-      } else if (data && data.ok) {
-        result.className = 'result-bar ok';
-        result.innerHTML = '<i class="bi bi-check-circle-fill"></i> PDF descargado.';
-        result.style.display = 'flex';
-      }
-    })
-    .catch(function(e) {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Generar PDF';
-      result.className = 'result-bar error';
-      result.textContent = 'Error: ' + e;
-      result.style.display = 'block';
     });
-}
+  }
+
+  function doughnutCausas(canvasId, labels, values) {
+    destroyChart(canvasId);
+    var ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    _charts[canvasId] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{ data: values, backgroundColor: COLORS_DONUT,
+                     borderColor: '#0f1117', borderWidth: 2 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, padding: 8 } },
+          tooltip: { callbacks: { label: function(c) {
+            var total = c.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+            return c.label + ': ' + (c.parsed / total * 100).toFixed(1) + '%';
+          }}}
+        }
+      }
+    });
+  }
+
+  function barRutas(canvasId, labels, values) {
+    destroyChart(canvasId);
+    var ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+    _charts[canvasId] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'OTP %', data: values,
+          backgroundColor: values.map(function(v) {
+            return v >= 80 ? 'rgba(16,185,129,.7)' : v >= 70 ? 'rgba(245,158,11,.7)' : 'rgba(239,68,68,.7)';
+          }),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(c) { return c.parsed.x.toFixed(1) + '%'; } } }
+        },
+        scales: {
+          x: { min: 0, max: 100,
+               ticks: { color: '#64748b', font: { size: 9 }, callback: function(v) { return v + '%'; } },
+               grid: { color: 'rgba(255,255,255,.05)' } },
+          y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  window.renderCharts = function(d) {
+    var card = document.getElementById('charts-card');
+    if (!card) return;
+    if (d.otp_mensual && d.otp_mensual.labels && d.otp_mensual.labels.length) {
+      lineOTP('chart-otp-mensual', d.otp_mensual.labels, d.otp_mensual.values);
+      card.style.display = 'block';
+    }
+    if (d.causas && d.causas.labels && d.causas.labels.length) {
+      doughnutCausas('chart-causas', d.causas.labels, d.causas.values);
+      card.style.display = 'block';
+    }
+    if (d.peores_rutas && d.peores_rutas.labels && d.peores_rutas.labels.length) {
+      barRutas('chart-rutas', d.peores_rutas.labels, d.peores_rutas.values);
+      card.style.display = 'block';
+    }
+  };
+
+  window.cargarCharts = function(filtros) {
+    var loading = document.getElementById('charts-loading');
+    if (loading) loading.style.display = 'inline';
+    var params = new URLSearchParams();
+    if (filtros) Object.keys(filtros).forEach(function(k) { if (filtros[k]) params.append(k, filtros[k]); });
+
+    fetch('/reportes/preview-charts?' + params.toString(), { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (loading) loading.style.display = 'none';
+        renderCharts(d);
+      })
+      .catch(function() { if (loading) loading.style.display = 'none'; });
+  };
+})();
+
+(function() {
+  var FILTRO_IDS = ['year','quarter','month','dow','airline','origin','dest'];
+  var cancelFilterId = 'f-cancel-filter';
+
+  /* ── helpers ──────────────────────────────────────── */
+  function getFiltroValues() {
+    var v = {};
+    FILTRO_IDS.forEach(function(k) {
+      v[k] = document.getElementById('f-' + k).value;
+    });
+    // parse cancel-filter composite
+    var cf = document.getElementById(cancelFilterId).value;
+    v['solo_cancelados'] = '';
+    v['cancel_code'] = '';
+    if (cf === 'cancelados') {
+      v['solo_cancelados'] = '1';
+    } else if (cf.indexOf('code:') === 0) {
+      v['cancel_code'] = cf.split(':')[1];
+    }
+    return v;
+  }
+
+  function syncHidden(prefix) {
+    var vals = getFiltroValues();
+    Object.keys(vals).forEach(function(k) {
+      var el = document.getElementById(prefix + k);
+      if (el) el.value = vals[k];
+    });
+  }
+
+  function debounce(fn, ms) {
+    var t;
+    return function() { clearTimeout(t); t = setTimeout(fn, ms); };
+  }
+
+  /* ── preview ──────────────────────────────────────── */
+  var previewCard    = document.getElementById('preview-card');
+  var previewStats   = document.getElementById('preview-stats');
+  var previewLoading = document.getElementById('preview-loading');
+
+  function numFmt(n) {
+    if (n === null || n === undefined) return '—';
+    return Number(n).toLocaleString('es-EC');
+  }
+
+  function cargarPreview() {
+    var vals = getFiltroValues();
+    var params = new URLSearchParams();
+    Object.keys(vals).forEach(function(k) { if (vals[k]) params.append(k, vals[k]); });
+
+    previewCard.style.display = 'block';
+    previewLoading.style.display = 'inline';
+    previewStats.innerHTML = '';
+
+    fetch('/reportes/preview?' + params.toString(), { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        previewLoading.style.display = 'none';
+        if (d.error) {
+          previewStats.innerHTML = '<span style="color:var(--at-muted);font-size:13px">' + d.error + '</span>';
+          return;
+        }
+        var otpClass   = (d.otp !== null && d.otp >= 85) ? 'otp' : (d.otp < 70 ? 'err' : 'warn');
+        var cancClass  = (d.cancel_pct <= 3) ? '' : (d.cancel_pct <= 7 ? 'warn' : 'err');
+        var otpStr     = (d.otp !== null) ? d.otp.toFixed(1) + '%' : '—';
+        var retrasoStr = (d.retraso !== null) ? d.retraso.toFixed(1) + ' min' : '—';
+        previewStats.innerHTML =
+          stat(numFmt(d.total),   'Vuelos totales',     '') +
+          stat(otpStr,            'OTP',                otpClass) +
+          stat(numFmt(d.cancelados), 'Cancelados',      '') +
+          stat(d.cancel_pct.toFixed(1)+'%', 'Tasa cancel.', cancClass) +
+          stat(retrasoStr,        'Retraso prom.',      '') +
+          stat(numFmt(d.aerolinas), 'Aerolíneas',       '') +
+          stat(numFmt(d.rutas),   'Rutas únicas',       '');
+      })
+      .catch(function() { previewLoading.style.display = 'none'; });
+  }
+
+  function stat(val, lbl, cls) {
+    return '<div class="preview-stat"><div class="preview-stat-val ' + cls + '">' +
+           val + '</div><div class="preview-stat-lbl">' + lbl + '</div></div>';
+  }
+
+  function cargarTodo() {
+    var vals = getFiltroValues();
+    cargarPreview();
+    if (window.cargarCharts) cargarCharts(vals);
+  }
+
+  var debouncedTodo = debounce(cargarTodo, 500);
+
+  FILTRO_IDS.forEach(function(k) {
+    var el = document.getElementById('f-' + k);
+    if (el) el.addEventListener('change', debouncedTodo);
+  });
+  document.getElementById(cancelFilterId).addEventListener('change', debouncedTodo);
+
+  /* ── limpiar filtros ──────────────────────────────── */
+  window.limpiarFiltros = function() {
+    FILTRO_IDS.forEach(function(k) {
+      var el = document.getElementById('f-' + k);
+      if (el) el.selectedIndex = 0;
+    });
+    document.getElementById(cancelFilterId).selectedIndex = 0;
+    cargarTodo();
+  };
+
+  /* ── sync forms ───────────────────────────────────── */
+  var formExcel = document.getElementById('form-excel');
+  if (formExcel) {
+    formExcel.addEventListener('submit', function() {
+      syncHidden('fh-');
+      var res = document.getElementById('excel-result');
+      res.className = 'result-bar ok';
+      res.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando Excel, la descarga comenzará en segundos…';
+      res.style.display = 'flex';
+      setTimeout(function() { res.style.display = 'none'; cargarHistorial(); }, 9000);
+    });
+  }
+
+  var formCsv = document.getElementById('form-csv');
+  if (formCsv) {
+    formCsv.addEventListener('submit', function() {
+      syncHidden('fc-');
+      var res = document.getElementById('csv-result');
+      res.className = 'result-bar ok';
+      res.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando CSV, la descarga comenzará en segundos…';
+      res.style.display = 'flex';
+      setTimeout(function() { res.style.display = 'none'; cargarHistorial(); }, 9000);
+    });
+  }
+
+  /* ── PDF via AJAX ─────────────────────────────────── */
+  window.generarPdf = function() {
+    var vals = getFiltroValues();
+    var btn  = document.getElementById('btn-pdf');
+    var res  = document.getElementById('pdf-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Generando PDF…';
+    res.style.display = 'none';
+
+    var fd = new FormData();
+    Object.keys(vals).forEach(function(k) { fd.append(k, vals[k]); });
+    var secs = document.querySelectorAll('input[name="secciones"]:checked');
+    secs.forEach(function(c) { fd.append('secciones', c.value); });
+
+    fetch('/reportes/pdf', { method:'POST', body:fd, credentials:'same-origin' })
+      .then(function(r) {
+        if (r.headers.get('content-type') && r.headers.get('content-type').includes('application/pdf')) {
+          return r.blob().then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = 'aerotrack_reporte.pdf'; a.click();
+            return { ok: true, url: null };
+          });
+        }
+        return r.json();
+      })
+      .then(function(data) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Generar PDF';
+        if (data && data.url) {
+          res.className = 'result-bar ok';
+          res.innerHTML = '<i class="bi bi-check-circle-fill"></i> PDF listo. ' +
+            '<a href="' + data.url + '" target="_blank" style="color:inherit;font-weight:700;margin-left:6px">' +
+            'Descargar ↗</a> <span style="opacity:.6;font-size:11px;margin-left:6px">(válido 1 hora)</span>';
+          res.style.display = 'flex';
+          cargarHistorial();
+        } else if (data && data.error) {
+          res.className = 'result-bar err';
+          res.textContent = data.error;
+          res.style.display = 'block';
+        } else if (data && data.ok) {
+          res.className = 'result-bar ok';
+          res.innerHTML = '<i class="bi bi-check-circle-fill"></i> PDF descargado.';
+          res.style.display = 'flex';
+          cargarHistorial();
+        }
+      })
+      .catch(function(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-file-earmark-pdf"></i> Generar PDF';
+        res.className = 'result-bar err';
+        res.textContent = 'Error: ' + e;
+        res.style.display = 'block';
+      });
+  };
+
+  /* ── historial ────────────────────────────────────── */
+  var TIPO_ICON = { pdf:'bi-file-earmark-pdf-fill', xlsx:'bi-file-earmark-spreadsheet-fill', csv:'bi-filetype-csv' };
+  var TIPO_BADGE = { pdf:'badge-pdf', xlsx:'badge-xlsx', csv:'badge-csv' };
+
+  window.cargarHistorial = function() {
+    var cont = document.getElementById('historial-content');
+    cont.innerHTML = '<div style="color:var(--at-muted);font-size:13px;text-align:center;padding:12px 0">' +
+      '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Cargando…</div>';
+
+    fetch('/reportes/historial', { credentials:'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d.items || d.items.length === 0) {
+          cont.innerHTML = '<p style="color:var(--at-muted);font-size:13px;text-align:center;padding:14px 0">' +
+            '<i class="bi bi-inbox" style="font-size:20px;display:block;margin-bottom:6px"></i>' +
+            'Aún no hay exportaciones guardadas.</p>';
+          return;
+        }
+        var rows = d.items.map(function(item) {
+          var icon  = TIPO_ICON[item.tipo]  || 'bi-file-earmark';
+          var badge = TIPO_BADGE[item.tipo] || '';
+          var link  = item.url
+            ? '<a href="' + item.url + '" target="_blank" style="color:var(--at-blue-500);font-weight:600">' +
+              '<i class="bi ' + icon + '" style="margin-right:4px"></i>' + item.nombre + '</a>'
+            : '<span style="color:var(--at-muted)">' + item.nombre + '</span>';
+          return '<tr><td>' + link + '</td>' +
+            '<td><span class="hist-badge ' + badge + '">' + item.tipo.toUpperCase() + '</span></td>' +
+            '<td style="color:var(--at-sub)">' + item.fecha + '</td>' +
+            '<td style="color:var(--at-muted);text-align:right">' + item.tamanio_kb + ' KB</td></tr>';
+        }).join('');
+        cont.innerHTML = '<table class="hist-table"><thead><tr>' +
+          '<th>Archivo</th><th>Tipo</th><th>Generado</th><th style="text-align:right">Tamaño</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table>';
+      })
+      .catch(function() {
+        cont.innerHTML = '<p style="color:var(--at-muted);font-size:13px;padding:10px 0">No se pudo cargar el historial.</p>';
+      });
+  };
+
+  /* ── init ─────────────────────────────────────────── */
+  cargarHistorial();
+  cargarPreview();
+  if (window.cargarCharts) cargarCharts(getFiltroValues());
+})();
 </script>
 {% endblock %}

@@ -8,7 +8,7 @@ import pandas as pd
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from app.shared.analytics import load_enriched_fact, get_aerolinas, get_years
+from app.shared.analytics import load_agg, get_aerolinas, get_years
 from app.shared.deps import render, require_permission
 from app.utils.ia_narrativa import generar_narrativa
 
@@ -21,6 +21,14 @@ _MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 _page_cache: dict = {}
 _PAGE_TTL = 300
 
+_CAUSA_LABEL_MAP = {
+    "carrierdelay":      "Carrier",
+    "weatherdelay":      "Weather",
+    "nasdelay":          "NAS",
+    "securitydelay":     "Security",
+    "lateaircraftdelay": "LateAircraft",
+}
+
 
 def _safe(v: Any) -> Any:
     if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
@@ -28,110 +36,72 @@ def _safe(v: Any) -> Any:
     return v
 
 
-def _otp_por_aerolinea(df: pd.DataFrame) -> list[dict]:
-    if "Reporting_Airline" not in df.columns or "ArrDel15" not in df.columns:
+def _otp_por_aerolinea_agg(df_otp: pd.DataFrame) -> list[dict]:
+    """Tabla OTP por aerolínea desde agg_otp_aerolinea_mes."""
+    if "carrier" not in df_otp.columns or df_otp.empty:
         return []
-    vuelos_op = df[df["Cancelled"] == 0] if "Cancelled" in df.columns else df
-    grp = (
-        vuelos_op.groupby("Reporting_Airline")
-        .agg(total=("pk_vuelo", "count"), otp_sum=("ArrDel15", lambda x: (x == 0).sum()))
-        .reset_index()
-    )
-    grp["otp"] = (grp["otp_sum"] / grp["total"] * 100).round(2)
+    grp = df_otp.groupby("carrier").agg(
+        total=("total_vuelos", "sum"),
+        vuelos_at=("vuelos_a_tiempo", "sum"),
+    ).reset_index()
+    grp["otp"] = (grp["vuelos_at"] / grp["total"].replace(0, float("nan")) * 100).fillna(0.0).round(2)
     grp = grp[grp["total"] >= 50].sort_values("total", ascending=False).head(25)
-    return grp[["Reporting_Airline", "total", "otp"]].rename(
-        columns={"Reporting_Airline": "aerolinea"}
-    ).to_dict("records")
+    return grp[["carrier", "total", "otp"]].rename(columns={"carrier": "aerolinea"}).to_dict("records")
 
 
-def _causas_retraso(df: pd.DataFrame, airline: str = "") -> dict:
-    causas_cols = ["CarrierDelay", "WeatherDelay", "NASDelay", "SecurityDelay", "LateAircraftDelay"]
-    result = {"labels": [], "counts": []}
-    work = df.copy()
-    if airline and "Reporting_Airline" in work.columns:
-        work = work[work["Reporting_Airline"] == airline]
-
-    for col in causas_cols:
-        if col in work.columns:
-            total = float(work[col].fillna(0).sum())
+def _causas_retraso_agg(df_causas: pd.DataFrame) -> dict:
+    """Distribución de causas de retraso desde agg_causas_retraso_mes."""
+    result: dict = {"labels": [], "counts": []}
+    if df_causas.empty:
+        return result
+    for col, label in _CAUSA_LABEL_MAP.items():
+        if col in df_causas.columns:
+            total = float(df_causas[col].fillna(0).sum())
             if total > 0:
-                result["labels"].append(col.replace("Delay", "").replace("LateAircraft", "LateAircraft"))
+                result["labels"].append(label)
                 result["counts"].append(round(_safe(total), 0))
     return result
 
 
-def _tendencias_otp_mensual(df: pd.DataFrame, airline: str = "") -> dict:
-    if "Month" not in df.columns or "ArrDel15" not in df.columns:
+def _tendencias_otp_mensual_agg(df_otp: pd.DataFrame, airline: str = "") -> dict:
+    """Tendencia OTP mensual desde agg_otp_aerolinea_mes."""
+    if "month" not in df_otp.columns or df_otp.empty:
         return {"meses": [], "otp": [], "airline": airline}
-    work = df.copy()
-    if airline and "Reporting_Airline" in work.columns:
-        work = work[work["Reporting_Airline"] == airline]
-    vuelos_op = work[work["Cancelled"] == 0] if "Cancelled" in work.columns else work
-
-    grp = (
-        vuelos_op.groupby("Month")
-        .agg(total=("pk_vuelo", "count"), otp_sum=("ArrDel15", lambda x: (x == 0).sum()))
-        .reset_index()
-    )
-    grp["otp"] = (grp["otp_sum"] / grp["total"] * 100).round(1)
-    meses = [_MESES[int(m) - 1] for m in grp["Month"].tolist()]
+    grp = df_otp.groupby("month").agg(
+        total=("total_vuelos", "sum"),
+        vuelos_at=("vuelos_a_tiempo", "sum"),
+    ).reset_index().sort_values("month")
+    grp["otp"] = (grp["vuelos_at"] / grp["total"].replace(0, float("nan")) * 100).fillna(0.0).round(1)
+    meses = [_MESES[int(m) - 1] if 1 <= int(m) <= 12 else str(m) for m in grp["month"].tolist()]
     return {"meses": meses, "otp": grp["otp"].tolist(), "airline": airline}
 
 
-def _tendencias_dia_semana(df: pd.DataFrame) -> dict:
-    if "DayOfWeek" not in df.columns or "ArrDel15" not in df.columns:
+def _tendencias_dia_semana_agg(df_dia: pd.DataFrame) -> dict:
+    """OTP por día de semana desde agg_otp_dia_semana."""
+    if "day_of_week" not in df_dia.columns or df_dia.empty:
         return {"dias": [], "otp": []}
-    vuelos_op = df[df["Cancelled"] == 0] if "Cancelled" in df.columns else df
     dias_label = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-    grp = (
-        vuelos_op.groupby("DayOfWeek")
-        .agg(total=("pk_vuelo", "count"), otp_sum=("ArrDel15", lambda x: (x == 0).sum()))
-        .reset_index()
-    )
-    grp["otp"] = (grp["otp_sum"] / grp["total"] * 100).round(1)
-    dias = [dias_label[int(d) - 1] if 1 <= int(d) <= 7 else str(d) for d in grp["DayOfWeek"].tolist()]
-    return {"dias": dias, "otp": grp["otp"].tolist()}
+    grp = df_dia.sort_values("day_of_week")
+    dias = [dias_label[int(d) - 1] if 1 <= int(d) <= 7 else str(d) for d in grp["day_of_week"].tolist()]
+    return {"dias": dias, "otp": grp["otp_pct"].tolist()}
 
 
-def _comparar_aerolineas(df: pd.DataFrame, ruta: str) -> list[dict]:
-    """Compara OTP de aerolíneas en la misma ruta."""
-    if not ruta or "Reporting_Airline" not in df.columns:
-        return []
-    parts = ruta.split("-")
-    if len(parts) != 2:
-        return []
-    origen, dest = parts
-    mask = (df["OriginCode"] == origen) & (df["DestCode"] == dest)
-    sub = df[mask & (df["Cancelled"] == 0)] if "Cancelled" in df.columns else df[mask]
-    if len(sub) == 0:
-        return []
-    grp = (
-        sub.groupby("Reporting_Airline")
-        .agg(total=("pk_vuelo", "count"),
-             otp_sum=("ArrDel15", lambda x: (x == 0).sum()) if "ArrDel15" in sub.columns else ("pk_vuelo", "count"),
-             retraso=("ArrDelayMinutes", "mean") if "ArrDelayMinutes" in sub.columns else ("pk_vuelo", lambda x: 0.0))
-        .reset_index()
-    )
-    if "ArrDel15" in sub.columns:
-        grp["otp"] = (grp["otp_sum"] / grp["total"] * 100).round(1)
-    else:
-        grp["otp"] = 0.0
-    return grp[["Reporting_Airline", "total", "otp", "retraso"]].rename(
-        columns={"Reporting_Airline": "aerolinea"}
-    ).to_dict("records")
-
-
-def _compute_page(filtros: dict, airline: str = "") -> dict:
+def _compute_page(filtros: dict) -> dict:
+    """Computa todos los datos del módulo OTP desde agregaciones; cacheado 5 min."""
     key = str(sorted(filtros.items()))
     entry = _page_cache.get(key)
     if entry and time.time() < entry["expires"]:
         return entry["data"]
-    df = load_enriched_fact(filtros or None)
+
+    df_otp    = load_agg("agg_otp_aerolinea_mes",  filtros)
+    df_causas = load_agg("agg_causas_retraso_mes",  filtros)
+    df_dia    = load_agg("agg_otp_dia_semana")          # sin filtros de aerolínea/mes
+
     data = {
-        "datos_otp": _otp_por_aerolinea(df),
-        "causas": _causas_retraso(df, airline),
-        "tendencias": _tendencias_otp_mensual(df, airline),
-        "tendencias_dia": _tendencias_dia_semana(df),
+        "datos_otp":     _otp_por_aerolinea_agg(df_otp),
+        "causas":        _causas_retraso_agg(df_causas),
+        "tendencias":    _tendencias_otp_mensual_agg(df_otp, filtros.get("airline", "")),
+        "tendencias_dia":_tendencias_dia_semana_agg(df_dia),
     }
     _page_cache[key] = {"data": data, "expires": time.time() + _PAGE_TTL}
     return data
@@ -142,16 +112,16 @@ def index_otp(request: Request, year: str = "", month: str = "", airline: str = 
     user = _perm_ver(request)
     error = None
     datos_otp: list[dict] = []
-    causas: dict = {"labels": [], "values": []}
+    causas: dict = {"labels": [], "counts": []}
     tendencias: dict = {"meses": [], "otp": []}
     tendencias_dia: dict = {"dias": [], "otp": []}
 
     try:
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
-        data = _compute_page(filtros, airline)
-        datos_otp = data["datos_otp"]
-        causas = data["causas"]
-        tendencias = data["tendencias"]
+        data = _compute_page(filtros)
+        datos_otp      = data["datos_otp"]
+        causas         = data["causas"]
+        tendencias     = data["tendencias"]
         tendencias_dia = data["tendencias_dia"]
 
     except FileNotFoundError:
@@ -160,14 +130,14 @@ def index_otp(request: Request, year: str = "", month: str = "", airline: str = 
         error = f"Error al cargar datos: {exc}"
 
     return render(request, "puntualidad/index.html", {
-        "datos_otp": datos_otp,
-        "causas": causas,
-        "tendencias": tendencias,
+        "datos_otp":      datos_otp,
+        "causas":         causas,
+        "tendencias":     tendencias,
         "tendencias_dia": tendencias_dia,
-        "aerolinas": get_aerolinas(),
-        "years": get_years(),
-        "filtros": {"year": year, "month": month, "airline": airline},
-        "error": error,
+        "aerolinas":      get_aerolinas(),
+        "years":          get_years(),
+        "filtros":        {"year": year, "month": month, "airline": airline},
+        "error":          error,
     })
 
 
@@ -176,7 +146,7 @@ def narrativa_json(request: Request, year: str = "", month: str = "", airline: s
     _perm_ver(request)
     try:
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
-        data = _compute_page(filtros, airline)
+        data = _compute_page(filtros)
         datos_otp = data["datos_otp"]
         causas = data["causas"]
         otp_prom = sum(r["otp"] for r in datos_otp) / len(datos_otp) if datos_otp else 0
@@ -197,30 +167,40 @@ def comparar(request: Request, ruta: str = "", year: str = ""):
     datos: list[dict] = []
 
     try:
-        filtros = {k: v for k, v in {"year": year}.items() if v}
-        df = load_enriched_fact(filtros or None)
-        if ruta:
-            datos = _comparar_aerolineas(df, ruta)
+        if ruta and "-" in ruta:
+            partes = ruta.split("-", 1)
+            origen, dest = partes[0], partes[1]
+            filtros = {"year": year} if year else {}
+            df_rutas = load_agg("agg_rutas_eficiencia", filtros)
+            if "origin" in df_rutas.columns and "dest" in df_rutas.columns:
+                sub = df_rutas[(df_rutas["origin"] == origen) & (df_rutas["dest"] == dest)]
+                if len(sub) > 0 and "carrier" in sub.columns:
+                    datos = (
+                        sub[["carrier", "total_vuelos", "otp_pct", "retraso_prom"]]
+                        .rename(columns={
+                            "carrier":      "aerolinea",
+                            "total_vuelos": "total",
+                            "otp_pct":      "otp",
+                            "retraso_prom": "retraso",
+                        })
+                        .sort_values("total", ascending=False)
+                        .to_dict("records")
+                    )
     except Exception as exc:
         error = str(exc)
 
     rutas_disponibles: list[str] = []
     try:
-        from app.shared.clients.minio_client import read_parquet
-        from app.config import MINIO_BUCKET_DIMS
-        from app.shared.analytics import _desnormalizar
-        dim_r = _desnormalizar(read_parquet(MINIO_BUCKET_DIMS, "dim_ruta"))
-        if "OriginCode" in dim_r.columns and "DestCode" in dim_r.columns:
-            rutas_disponibles = (
-                (dim_r["OriginCode"].astype(str) + "-" + dim_r["DestCode"].astype(str))
-                .dropna().unique().tolist()
+        df_r = load_agg("agg_rutas_eficiencia")
+        if "origin" in df_r.columns and "dest" in df_r.columns:
+            rutas_disponibles = sorted(
+                (df_r["origin"].astype(str) + "-" + df_r["dest"].astype(str))
+                .dropna().unique().tolist()[:500]
             )
-            rutas_disponibles = sorted(rutas_disponibles[:500])
     except Exception:
         pass
 
-    years = get_years()
     return render(request, "puntualidad/comparar.html", {
         "datos": datos, "ruta": ruta, "year": year,
-        "rutas_disponibles": rutas_disponibles, "years": years, "error": error,
+        "rutas_disponibles": rutas_disponibles, "years": get_years(), "error": error,
     })

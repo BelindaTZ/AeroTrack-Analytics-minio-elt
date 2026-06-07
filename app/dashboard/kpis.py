@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from app.shared.analytics import load_enriched_fact, get_aerolinas, get_years
+from app.shared.analytics import load_agg, get_aerolinas, get_years
 from app.shared.clients import pb_client
 from app.shared.deps import render, require_permission
 from app.utils.ia_narrativa import generar_narrativa
@@ -20,7 +20,6 @@ _perm_ver = require_permission("dashboard", "ver")
 _umbrales_cache: dict = {"data": None, "expires": 0.0}
 _UMBRALES_TTL = 60
 
-# Caché de resultados computados (KPIs + gráficos) — TTL 5 min, clave = filtros
 _page_cache: dict = {}
 _PAGE_TTL = 300
 
@@ -46,45 +45,40 @@ def _safe(v: Any) -> Any:
     return v
 
 
-def _calcular_kpis(df: pd.DataFrame) -> dict:
-    total = len(df)
-    if total == 0:
+def _calcular_kpis_agg(df_otp: pd.DataFrame) -> dict:
+    """Calcula KPIs globales desde agg_otp_aerolinea_mes (ya filtrado)."""
+    if df_otp.empty:
         return {
             "total_vuelos": 0, "otp_global": 0.0, "tasa_cancelacion": 0.0,
             "retraso_promedio": 0.0, "top3_aerolineas": [],
         }
 
-    cancelados = int(df["Cancelled"].sum()) if "Cancelled" in df.columns else 0
-    tasa_cancel = cancelados / total
+    col_total = "total_vuelos_todos" if "total_vuelos_todos" in df_otp.columns else "total_vuelos"
+    total = int(df_otp[col_total].sum())
 
-    vuelos_op = df[df["Cancelled"] == 0] if "Cancelled" in df.columns else df
-    otp = 0.0
-    if "ArrDel15" in vuelos_op.columns and len(vuelos_op) > 0:
-        otp = float((vuelos_op["ArrDel15"] == 0).sum() / len(vuelos_op))
-    elif "ArrDelay" in vuelos_op.columns and len(vuelos_op) > 0:
-        otp = float((vuelos_op["ArrDelay"].fillna(0) <= 15).sum() / len(vuelos_op))
+    total_cancelados = int(df_otp["total_cancelados"].sum()) if "total_cancelados" in df_otp.columns else 0
+    tasa_cancel = total_cancelados / total if total > 0 else 0.0
+
+    vuelos_op = int(df_otp["total_vuelos"].sum())
+    vuelos_at = int(df_otp["vuelos_a_tiempo"].sum()) if "vuelos_a_tiempo" in df_otp.columns else 0
+    otp = vuelos_at / vuelos_op if vuelos_op > 0 else 0.0
 
     retraso_prom = 0.0
-    if "ArrDelayMinutes" in vuelos_op.columns:
-        retraso_prom = float(vuelos_op["ArrDelayMinutes"].fillna(0).mean())
-    elif "ArrDelay" in vuelos_op.columns:
-        retraso_prom = float(vuelos_op["ArrDelay"].fillna(0).clip(lower=0).mean())
+    if "delay_avg" in df_otp.columns and vuelos_op > 0:
+        retraso_prom = float((df_otp["delay_avg"] * df_otp["total_vuelos"]).sum()) / vuelos_op
 
     top3: list[dict] = []
-    if "Reporting_Airline" in df.columns and "ArrDel15" in df.columns:
-        grp = (
-            vuelos_op.groupby("Reporting_Airline")
-            .agg(total=("pk_vuelo", "count"), otp_sum=("ArrDel15", lambda x: (x == 0).sum()))
-            .reset_index()
-        )
-        grp["otp"] = grp["otp_sum"] / grp["total"]
+    if "carrier" in df_otp.columns:
+        grp = df_otp.groupby("carrier").agg(
+            total=("total_vuelos", "sum"),
+            vuelos_at=("vuelos_a_tiempo", "sum"),
+        ).reset_index()
+        grp["otp"] = (grp["vuelos_at"] / grp["total"].replace(0, float("nan"))).fillna(0.0).round(4)
         top3 = (
-            grp.nlargest(3, "total")[["Reporting_Airline", "total", "otp"]]
-            .rename(columns={"Reporting_Airline": "aerolinea"})
+            grp.nlargest(3, "total")[["carrier", "total", "otp"]]
+            .rename(columns={"carrier": "aerolinea"})
             .to_dict("records")
         )
-        for r in top3:
-            r["otp"] = round(_safe(r["otp"]), 4)
 
     return {
         "total_vuelos": total,
@@ -124,20 +118,21 @@ def _evaluar_alertas(kpis: dict, umbrales: dict) -> list[dict]:
     return alertas
 
 
-def _grafico_otp_por_aerolinea(df: pd.DataFrame) -> str:
-    if "Reporting_Airline" not in df.columns or "ArrDel15" not in df.columns:
+def _grafico_otp_por_aerolinea_agg(df_otp: pd.DataFrame) -> str:
+    """Bar chart OTP por aerolínea desde agg_otp_aerolinea_mes."""
+    if "carrier" not in df_otp.columns or df_otp.empty:
         return "{}"
-    vuelos_op = df[df["Cancelled"] == 0] if "Cancelled" in df.columns else df
-    grp = (
-        vuelos_op.groupby("Reporting_Airline")
-        .agg(total=("pk_vuelo", "count"), otp_sum=("ArrDel15", lambda x: (x == 0).sum()))
-        .reset_index()
-    )
-    grp["otp"] = (grp["otp_sum"] / grp["total"] * 100).round(1)
+    grp = df_otp.groupby("carrier").agg(
+        total=("total_vuelos", "sum"),
+        vuelos_at=("vuelos_a_tiempo", "sum"),
+    ).reset_index()
+    grp["otp"] = (grp["vuelos_at"] / grp["total"].replace(0, float("nan")) * 100).fillna(0.0).round(1)
     grp = grp[grp["total"] >= 100].nlargest(20, "total")
+    if grp.empty:
+        return "{}"
 
     fig = go.Figure(go.Bar(
-        x=grp["Reporting_Airline"].tolist(),
+        x=grp["carrier"].tolist(),
         y=grp["otp"].tolist(),
         marker_color="#3b82f6",
         hovertemplate="%{x}<br>OTP: %{y:.1f}%<extra></extra>",
@@ -153,27 +148,31 @@ def _grafico_otp_por_aerolinea(df: pd.DataFrame) -> str:
     return fig.to_json()
 
 
-def _grafico_vuelos_por_mes(df: pd.DataFrame) -> str:
-    if "Month" not in df.columns:
+def _grafico_vuelos_por_mes_agg(df_otp: pd.DataFrame) -> str:
+    """Bar chart vuelos por mes desde agg_otp_aerolinea_mes."""
+    if "month" not in df_otp.columns or df_otp.empty:
         return "{}"
-    grp = df.groupby("Month").agg(
-        total=("pk_vuelo", "count"),
-        cancelados=("Cancelled", "sum") if "Cancelled" in df.columns else ("pk_vuelo", lambda x: 0)
-    ).reset_index()
+    col_total = "total_vuelos_todos" if "total_vuelos_todos" in df_otp.columns else "total_vuelos"
+    col_canc = "total_cancelados"
+
+    grp = df_otp.groupby("month").agg(
+        total=(col_total, "sum"),
+        cancelados=(col_canc, "sum") if col_canc in df_otp.columns else (col_total, lambda x: 0),
+    ).reset_index().sort_values("month")
 
     nombres_mes = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
                    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-    grp["mes_label"] = grp["Month"].apply(lambda m: nombres_mes[int(m) - 1] if 1 <= int(m) <= 12 else str(m))
+    grp["mes_label"] = grp["month"].apply(lambda m: nombres_mes[int(m) - 1] if 1 <= int(m) <= 12 else str(m))
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         name="Vuelos operados", x=grp["mes_label"].tolist(),
-        y=(grp["total"] - grp.get("cancelados", 0)).tolist(),
+        y=(grp["total"] - grp["cancelados"]).tolist(),
         marker_color="#3b82f6",
     ))
     fig.add_trace(go.Bar(
         name="Cancelados", x=grp["mes_label"].tolist(),
-        y=grp.get("cancelados", pd.Series([0] * len(grp))).tolist(),
+        y=grp["cancelados"].tolist(),
         marker_color="#f87171",
     ))
     fig.update_layout(
@@ -190,21 +189,21 @@ def _grafico_vuelos_por_mes(df: pd.DataFrame) -> str:
 
 
 def _compute_page(filtros: dict) -> dict:
-    """Computa KPIs y gráficos; resultado cacheado 5 min por combinación de filtros."""
+    """Computa KPIs y gráficos desde agregaciones; resultado cacheado 5 min."""
     key = str(sorted(filtros.items()))
     entry = _page_cache.get(key)
     if entry and time.time() < entry["expires"]:
         return entry["data"]
-    df = load_enriched_fact(filtros or None)
-    kpis = _calcular_kpis(df)
+
+    df_otp = load_agg("agg_otp_aerolinea_mes", filtros)
+    kpis = _calcular_kpis_agg(df_otp)
     umbrales = _get_umbrales()
     alertas = _evaluar_alertas(kpis, umbrales)
     data = {
         "kpis": kpis,
         "alertas": alertas,
-        "grafico_otp": _grafico_otp_por_aerolinea(df),
-        "grafico_meses": _grafico_vuelos_por_mes(df),
-        "df": df,
+        "grafico_otp": _grafico_otp_por_aerolinea_agg(df_otp),
+        "grafico_meses": _grafico_vuelos_por_mes_agg(df_otp),
     }
     _page_cache[key] = {"data": data, "expires": time.time() + _PAGE_TTL}
     return data
@@ -277,10 +276,7 @@ def kpis_json(
     _perm_ver(request)
     try:
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
-        df = load_enriched_fact(filtros or None)
-        kpis = _calcular_kpis(df)
-        umbrales = _get_umbrales()
-        alertas = _evaluar_alertas(kpis, umbrales)
-        return JSONResponse({"kpis": kpis, "alertas": alertas})
+        data = _compute_page(filtros)
+        return JSONResponse({"kpis": data["kpis"], "alertas": data["alertas"]})
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)

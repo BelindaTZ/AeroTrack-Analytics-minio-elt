@@ -4,14 +4,29 @@ import io
 from typing import Optional
 
 import pandas as pd
+import urllib3
 from minio import Minio
 from minio.error import S3Error
 
 from app.config import MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
 
+# Timeout para operaciones de red hacia MinIO.
+# Sin timeout, response.read() bloquea indefinidamente si MinIO tiene lentitud
+# o el objeto fue escrito parcialmente (parquet truncado), dejando la app colgada.
+_HTTP_CLIENT = urllib3.PoolManager(
+    timeout=urllib3.util.Timeout(connect=5, read=60),
+    maxsize=10,
+)
+
 
 def get_client() -> Minio:
-    return Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+    return Minio(
+        MINIO_ENDPOINT,
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=False,
+        http_client=_HTTP_CLIENT,
+    )
 
 
 def read_parquet(bucket: str, tabla: str) -> pd.DataFrame:
@@ -27,6 +42,11 @@ def read_parquet(bucket: str, tabla: str) -> pd.DataFrame:
         if exc.code in ("NoSuchKey", "NoSuchBucket"):
             raise FileNotFoundError(f"'{obj_name}' no existe en bucket '{bucket}'.") from exc
         raise RuntimeError(f"Error MinIO al leer '{obj_name}': {exc}") from exc
+    except FileNotFoundError:
+        raise
+    except Exception as exc:
+        # Incluye ReadTimeoutError, ProtocolError, ArrowInvalid (parquet truncado), etc.
+        raise RuntimeError(f"Error al leer '{obj_name}' desde '{bucket}': {exc}") from exc
 
 
 def write_parquet(bucket: str, tabla: str, df: pd.DataFrame) -> None:

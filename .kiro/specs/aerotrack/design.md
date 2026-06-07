@@ -116,6 +116,41 @@ PocketBase v0.22.4 gestiona todos los datos operativos vía REST API en `:8090`.
 
 Almacena exclusivamente los metadatos internos de Airflow (DAG runs, task instances, XComs). No es accesible por la app FastAPI.
 
+### Timezone Convention
+
+**Zona horaria canónica del sistema: `America/Guayaquil` (UTC-5, sin DST)**
+
+PocketBase almacena su campo `created` siempre en UTC, independientemente de la variable de entorno `TZ` del contenedor. Es comportamiento interno de la librería Go que usa SQLite — no configurable desde afuera. Por tanto, el sistema sigue estas reglas:
+
+| Capa | Comportamiento |
+|---|---|
+| PocketBase `created` | UTC fijo — no modificable |
+| `datetime.now(_TZ)` en FastAPI/DAGs | Hora local Ecuador para timestamps de reportes y nombres de archivo |
+| MinIO `last_modified` | UTC — convertir con `.astimezone(_TZ)` antes de mostrar |
+| JWT `exp` | UTC — correcto, `timezone.utc` explícito en `service.py` |
+
+**Patrón de conversión UTC→Ecuador (implementado en `app/auditoria/log.py`):**
+
+```python
+from datetime import timedelta, timezone
+
+_TZ = timezone(timedelta(hours=-5))  # América/Guayaquil — Ecuador no tiene DST
+
+def _fmt_local(ts: str) -> str:
+    """Convierte timestamp UTC de PocketBase a hora local Ecuador."""
+    if not ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00").replace(" ", "T"))
+        return dt.astimezone(_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return ts[:19]
+```
+
+Este patrón se replica en cualquier módulo que muestre el campo `created` de PocketBase. El campo original en UTC se preserva para ordenamiento y filtrado (`sort="-created"`, `filter='created>=...'`); solo el valor *mostrado al usuario* se convierte.
+
+**Variable `TZ` en docker-compose:** todos los servicios declaran `TZ: America/Guayaquil`. Esto corrige el reloj del SO del contenedor para `datetime.now()` en Python. No afecta el campo `created` de PocketBase.
+
 ### Environment Detection Pattern
 
 ```python
@@ -245,13 +280,13 @@ Los nombres de template en el código (`render(request, "roles/lista.html", ...)
 | `seguridad` | E1 | DONE | PocketBase: app_users, roles, roles_permisos, modulos |
 | `pipeline_elt` | E1 | DONE | Airflow DAG `aerotrack_elt_pipeline`, MinIO, PocketBase |
 | `modelo_dimensional` | E1 | DONE | MinIO aerotrack-dims |
-| `dashboard` | E2 | TODO | modelo_dimensional completo |
-| `puntualidad` | E2 | TODO | modelo_dimensional completo |
-| `rutas` | E2 | TODO | modelo_dimensional completo |
-| `cancelaciones` | E2 | TODO | modelo_dimensional completo |
-| `reportes` | E2 | TODO | dashboard, puntualidad, rutas, cancelaciones |
-| `configuracion` | E2 | TODO | PocketBase: configuracion_sistema |
-| `auditoria` | E2 | TODO | PocketBase: pb_auditoria |
+| `dashboard` | E2 | DONE | modelo_dimensional completo |
+| `puntualidad` | E2 | DONE | modelo_dimensional completo |
+| `rutas` | E2 | DONE | modelo_dimensional completo |
+| `cancelaciones` | E2 | DONE | modelo_dimensional completo |
+| `reportes` | E2 | DONE | dashboard, puntualidad, rutas, cancelaciones |
+| `configuracion` | E2 | DONE | PocketBase: configuracion_sistema |
+| `auditoria` | E2 | DONE | PocketBase: pb_auditoria |
 | `predictivo` | E3 | TODO | dashboard + puntualidad (historial ≥ 12 meses) |
 | `asistente_ia` | E3 | TODO | predictivo + configuracion (grupo 'ia') |
 | `auxiliar` | futuro | PLACEHOLDER | — |
@@ -409,8 +444,13 @@ Prefijos registrados en `app/main.py`: `/auth`, `/pipeline`, `/modelo`, `/dashbo
 | `GET` | `/puntualidad/tendencias` | Analista+ver | puntualidad | CU-21 | OTP trend line by month/day-of-week |
 | `GET` | `/rutas/ranking` | Analista+ver | rutas | CU-22 | Route efficiency ranking |
 | `GET` | `/cancelaciones/causas` | Analista+ver | cancelaciones | CU-24 | Cancellations by FAA code pie chart data |
-| `POST` | `/reportes/pdf` | Analista+exportar | reportes | CU-27 | Generate PDF → upload MinIO exports → return link |
-| `POST` | `/reportes/excel` | Analista+exportar | reportes | CU-28 | Generate .xlsx → direct download |
+| `GET`  | `/reportes` | Analista+ver | reportes | CU-44,46 | Reportes index — filtros avanzados, preview, historial |
+| `GET`  | `/reportes/preview` | Analista+ver | reportes | CU-44 | Live stats for current filters (debounce 500 ms): total, OTP, cancelados, retraso, aerolíneas, rutas |
+| `GET`  | `/reportes/preview-charts` | Analista+ver | reportes | CU-44 | Chart.js data for web preview: `otp_mensual {labels,values}`, `causas {labels,values}`, `peores_rutas {labels,values}`; loaded from agg tables (not 2M-row fact) |
+| `POST` | `/reportes/pdf` | Analista+exportar | reportes | CU-27 | Generate PDF (8 secciones seleccionables, SVG charts inline via WeasyPrint) → upload MinIO → presigned URL 1 h |
+| `POST` | `/reportes/excel` | Analista+exportar | reportes | CU-28 | Generate .xlsx (8 hojas con openpyxl BarChart/LineChart/PieChart) → MinIO upload + direct download |
+| `POST` | `/reportes/csv` | Analista+exportar | reportes | CU-43 | Generate CSV fact table filtrado → MinIO upload + direct download |
+| `GET`  | `/reportes/historial` | Analista+ver | reportes | CU-45 | List last 15 exports from MinIO aerotrack-exports/reportes/ with presigned URLs |
 | `GET` | `/configuracion` | Admin+ver | configuracion | CU-29 | All config groups |
 | `PUT` | `/configuracion/{grupo}` | Admin+configurar | configuracion | CU-30..32 | Save config group |
 | `POST` | `/configuracion/email/test` | Admin+configurar | configuracion | CU-30 | Send test email via SMTP |
@@ -886,6 +926,18 @@ Property 8: Idempotent setup scripts
 Running setup scripts multiple times produces the same result; scripts check existence before inserting to avoid duplicate records.
 
 **Validates: Requirements 2.1**
+
+Property 9: OTP uses BTS official indicator
+
+The `_at` flag (on-time flight) in all pre-computed aggregation tables (`agg_otp_aerolinea_mes`, `agg_otp_dia_semana`, etc.) is computed as `ArrDel15 == 0` (BTS official indicator), never as `ArrDelayMinutes <= 15` derived from `dim_horario`. `dim_horario` deduplicates by `CRSDepTime` (scheduled departure time), causing all flights at the same scheduled time to share the same `ArrDelayMinutes` — making it unreliable on a per-flight basis. `dim_clasificacion_retraso` is the correct join source because it deduplicates by the combination `(DepDel15, ArrDel15, DepartureDelayGroups, ArrivalDelayGroups)`, preserving `ArrDel15` faithfully per flight. The `agregaciones_pipeline()` in `dags/aerotrack_tasks.py` must join `dim_clasificacion_retraso` and use `ArrDel15 == 0`.
+
+**Validates: Requirements 4.1**
+
+Property 10: Timestamps displayed in local timezone
+
+All timestamps shown to the user are converted from PocketBase's UTC `created` field to `America/Guayaquil` (UTC-5) before rendering. The raw UTC value is preserved for database filtering and sorting. MinIO `last_modified` is also converted with `.astimezone(_TZ)`. `datetime.now(_TZ)` is used for all report generation timestamps and export filenames.
+
+**Validates: Requirements 10.1**
 
 ---
 

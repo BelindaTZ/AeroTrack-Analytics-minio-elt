@@ -1,10 +1,10 @@
 """
 AeroTrack Analytics — DAG de Airflow: Pipeline ELT
 ====================================================
-Qué hace: Orquesta el pipeline ELT con 3 tareas explícitas:
+Qué hace: Orquesta el pipeline ELT con 3 tareas:
     [extract]   → PocketBase → Parquet local
     [load]      → Parquet local → MinIO (aerotrack-raw)
-    [transform] → aerotrack-raw → modelo estrella → aerotrack-dims
+    [transform] → aerotrack-raw → modelo estrella + 7 agregaciones → aerotrack-dims
 
 Las funciones importadas usan config.py (también en dags/) que
 detecta automáticamente si corre en Docker y ajusta las URLs.
@@ -70,13 +70,15 @@ def aerotrack_elt():
         """Sube el Parquet local a MinIO (aerotrack-raw) y elimina el archivo temporal."""
         load_pipeline(parquet_path)
 
-    @task(task_id="transform", execution_timeout=timedelta(hours=1))
+    @task(task_id="transform", execution_timeout=timedelta(hours=2))
     def transform() -> None:
-        """Descarga el Parquet crudo y genera el modelo estrella en aerotrack-dims."""
+        """Descarga el Parquet crudo, genera el modelo estrella y las 7 tablas de agregación en aerotrack-dims."""
         transform_pipeline()
 
     parquet_path = extract()
-    load(parquet_path) >> transform()
+    load_task = load(parquet_path)
+    transform_task = transform()
+    load_task >> transform_task
 
 
 dag_instance = aerotrack_elt()

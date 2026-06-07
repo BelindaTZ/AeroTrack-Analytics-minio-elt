@@ -268,26 +268,40 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   - [x] 15.2 Filtros por módulo, acción, usuario, resultado y rango de fechas
   - [x] 15.3 Click en fila muestra detalle JSON del campo detalle
   - [x] 15.4 Endpoint GET /auditoria/export — CSV del resultado filtrado actual
+  - [x] 15.5 Conversión UTC→Ecuador en `_fmt_local()` (log.py): PocketBase guarda `created` siempre en UTC sin importar `TZ` del contenedor; se convierte con `ZoneInfo("America/Guayaquil")` antes de pasar a template y CSV; el campo `created` original se preserva para `sort` y `filter`
 
 #### Wave 2 — Exportación y monitoreo (dependen de módulos anteriores)
 
-- [x] 16. Implementar exportación PDF y Excel
-  **Description:** Generar reportes descargables desde cualquier módulo
-  analítico. PDF con ReportLab incluyendo gráficas, subido a MinIO aerotrack-exports/.
-  Excel con openpyxl con hojas por módulo, descarga directa sin subir a MinIO.
-  El PDF se genera con **WeasyPrint** (renderiza el HTML/CSS del sistema respetando los tokens `--at-*`);
-  se sube al bucket `aerotrack-exports` en MinIO y se retorna un **enlace firmado con expiración de 1 hora**.
-  El bucket `aerotrack-exports` debe estar creado antes de la primera exportación — se crea desde el
-  DAG de inicialización de Airflow con **lifecycle policy de 7 días**.
-  El Excel se genera con **openpyxl** con hojas separadas por módulo analítico (puntualidad, rutas, cancelaciones).
-  **Files:** app/reportes/generar_pdf.py, app/reportes/generar_excel.py
+- [x] 16. Implementar exportación PDF, Excel, CSV + filtros avanzados + historial + gráficos
+  **Description:** Módulo de reportes completo con 9 filtros de período y operación,
+  vista previa dinámica con estadísticas (debounce 500 ms) y gráficos Chart.js interactivos,
+  tres formatos de exportación y historial de exportaciones.
+  El PDF (WeasyPrint) incluye 8 secciones seleccionables con SVG charts inline (sin matplotlib);
+  el Excel (openpyxl) incluye 8 hojas con BarChart/LineChart/PieChart embebidos;
+  el CSV exporta el fact table filtrado con columnas clave.
+  Los tres formatos se suben a MinIO `aerotrack-exports/reportes/` para el historial.
+  El bucket `aerotrack-exports` se crea con lifecycle policy de 7 días.
+  **Files:** app/reportes/router.py, app/reportes/generar_pdf.py,
+  app/reportes/generar_excel.py, app/reportes/templates/reportes/index.html,
+  app/shared/analytics.py (get_origins, get_dests, nuevos filtros),
+  dags/aerotrack_tasks.py (fix OTP flag en agregaciones_pipeline, llamada integrada en transform_pipeline — DAG queda en 3 tareas)
   **Dependencies:** 11, 12, 13
-  **Requirements:** CU-27, CU-28
+  **Requirements:** CU-27, CU-28, CU-43, CU-44, CU-45, CU-46
 
-  - [x] 16.1 Endpoint POST /reportes/pdf — generar PDF con WeasyPrint, subir a MinIO aerotrack-exports, retornar enlace firmado 1h
-  - [x] 16.2 Endpoint POST /reportes/excel — generar .xlsx con openpyxl: puntualidad, rutas, cancelaciones, resumen
+  - [x] 16.1 Endpoint POST /reportes/pdf — generar PDF con WeasyPrint (8 secciones seleccionables: KPIs operacionales, Tendencia OTP mensual, Desempeño aerolíneas, Causas retraso, Rutas problemáticas, OTP por día, Cancelaciones FAA, Top rutas); SVG charts inline (_svg_line_otp, _svg_hbar, _svg_vbar_otp generados como strings Python); datos pre-computados vía _preparar_datos_pdf() desde 4 agg tables + fact enriquecido; subir a MinIO; retornar enlace firmado 1h
+  - [x] 16.2 Endpoint POST /reportes/excel — generar .xlsx con openpyxl: 8 hojas con charts embebidos (Resumen 8 métricas+índice, Puntualidad OTP+BarChart, Tendencia OTP+LineChart, Causas retraso+BarChart, Peores rutas+BarChart, OTP día semana+BarChart, Cancelaciones+PieChart, Rutas eficientes); subir a MinIO + descarga directa
   - [x] 16.3 Formulario de selección de secciones y período antes de exportar PDF
   - [x] 16.4 Verificar/crear bucket aerotrack-exports con lifecycle 7 días al arrancar
+  - [x] 16.5 analytics.py: get_origins() y get_dests() desde dim_ruta; nuevos filtros en load_enriched_fact(): quarter, dow, solo_cancelados, cancel_code (conjuntivos con AND lógico)
+  - [x] 16.6 Endpoint GET /reportes/preview — estadísticas en tiempo real para los filtros activos: total vuelos, OTP%, cancelados, tasa cancelación%, retraso promedio, aerolíneas únicas, rutas únicas; responde < 500 ms gracias al caché del fact table
+  - [x] 16.7 Endpoint POST /reportes/csv — fact table filtrado como CSV (14 columnas clave); subir a MinIO aerotrack-exports/reportes/ + descarga directa; auditoría registrada
+  - [x] 16.8 Endpoint GET /reportes/historial — lista últimas 15 exportaciones (PDF/XLSX/CSV) desde MinIO aerotrack-exports/reportes/ con URL firmada 1h, fecha, tipo y tamaño en KB
+  - [x] 16.9 generar_excel.py: colores condicionales en OTP (verde ≥85%, ámbar 70-85%, rojo <70%) y en índice eficiencia rutas; hoja Tendencia Mensual (OTP, cancelaciones, retraso por mes); hoja Resumen con filtros aplicados y timestamp; freeze_panes y row striping en todas las hojas
+  - [x] 16.10 generar_pdf.py: reescrito con 8 secciones completas y SVG helpers programáticos (_svg_line_otp, _svg_hbar, _svg_vbar_otp) — sin matplotlib (no instalado en Dockerfile); colores dinámicos por umbral OTP (_otp_color); _preparar_datos_pdf(filtros) centraliza la carga desde las 4 agg tables + load_enriched_fact para cancelaciones/rutas
+  - [x] 16.14 Timestamps en reportes con zona horaria correcta: `datetime.now(ZoneInfo("America/Guayaquil"))` en generar_pdf.py, generar_excel.py y router.py (nombres de archivo PDF/XLSX/CSV); MinIO `last_modified` convertido con `.astimezone(_TZ)` en historial de exportaciones
+  - [x] 16.11 index.html: Chart.js 4.4.4 (CDN en {% block scripts %}); tarjeta "Gráficos del período" con 3 paneles (línea OTP mensual, doughnut causas de retraso, barra horizontal peores rutas); renderCharts()/cargarCharts() en IIFE separado previo al IIFE principal; refresh automático en cada cambio de filtro (debounce 500 ms compartido con preview de stats); limpiarFiltros() también refresca los gráficos
+  - [x] 16.12 Endpoint GET /reportes/preview-charts — JSON con otp_mensual {labels,values}, causas {labels,values}, peores_rutas {labels,values}; carga desde agg tables (no fact 2M filas); consumido por Chart.js en index.html con debounce 500 ms
+  - [x] 16.13 Fix OTP flag en agregaciones_pipeline() (dags/aerotrack_tasks.py): join de dim_clasificacion_retraso vía fk_clasificacion_retraso y uso de ArrDel15==0 en lugar de ArrDelayMinutes<=15 (dim_horario deduplica por CRSDepTime → ArrDelayMinutes no es confiable por vuelo); requiere re-ejecutar tarea generar_agregaciones en Airflow para regenerar los Parquet de agg
 
 - [x] 17. Implementar monitoreo de servicios y MinIO
   **Description:** Panel de estado de servicios (MinIO, PocketBase, Airflow)
@@ -387,6 +401,7 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   - [ ] 22.1 Confirmar healthchecks y orden de depends_on para todos los servicios
   - [ ] 22.2 Verificar creación automática de buckets aerotrack-raw, aerotrack-dims, aerotrack-exports
   - [ ] 22.3 Verificar que el servicio fastapi monta ./app:/code/app y todos los servicios Airflow solo montan dags, logs, plugins, scripts, data
+  - [ ] 22.4 Confirmar que todos los servicios declaran `TZ: America/Guayaquil` en su sección `environment` (minio, pocketbase, airflow-init, airflow-webserver, airflow-scheduler, fastapi) — necesario para que `datetime.now()` en Python use hora Ecuador; no corrige el campo `created` de PocketBase que siempre es UTC
 
 - [ ] 23. Generar diagramas finales y actualizar docs/
   **Description:** Actualizar diagrama de componentes y despliegue con el

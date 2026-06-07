@@ -28,6 +28,7 @@ services:
       - "9000:9000"   # API S3
       - "9001:9001"   # Consola web
     environment:
+      TZ: America/Guayaquil
       MINIO_ROOT_USER: ${MINIO_ACCESS}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET}
     command: server /data --console-address ":9001"
@@ -67,6 +68,8 @@ services:
     container_name: pocketbase
     ports:
       - "8090:8090"   # UI en http://localhost:8090/_/
+    environment:
+      TZ: America/Guayaquil
     volumes:
       - pocketbase-data:/pb_data
     networks:
@@ -126,6 +129,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      TZ: America/Guayaquil
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=}
@@ -170,6 +174,7 @@ services:
     ports:
       - "8080:8080"   # UI en http://localhost:8080
     environment:
+      TZ: America/Guayaquil
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=}
@@ -201,6 +206,7 @@ services:
       minio-init:
         condition: service_completed_successfully
     environment:
+      TZ: America/Guayaquil
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
       AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:-ZmDfcTF7_60GrrY167zsiPd67pEvs0aGOv2oasOM1Pg=}
@@ -230,6 +236,7 @@ services:
     env_file:
       - .env
     environment:
+      - TZ=America/Guayaquil
       - MINIO_URL_DOCKER=minio:9000
       - PB_URL_DOCKER=http://pocketbase:8090
       - AIRFLOW_URL=http://airflow-webserver:8080

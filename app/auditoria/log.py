@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -12,6 +13,25 @@ from app.shared.deps import render, require_permission
 
 router = APIRouter()
 _perm_ver = require_permission("seguridad", "ver")
+
+_TZ = timezone(timedelta(hours=-5))  # America/Guayaquil — sin DST
+
+
+def _fmt_local(ts: str) -> str:
+    """Convierte timestamp UTC de PocketBase a hora local Ecuador (UTC-5)."""
+    if not ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00").replace(" ", "T"))
+        return dt.astimezone(_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return ts[:19]
+
+
+def _localizar_registros(registros: list[dict]) -> list[dict]:
+    for r in registros:
+        r["fecha_local"] = _fmt_local(r.get("created", ""))
+    return registros
 
 _PAGE_SIZE = 50
 
@@ -45,13 +65,13 @@ def log_auditoria(
 
     filter_str = "&&".join(filtros_pb)
 
-    registros = pb_client.list_records(
+    registros = _localizar_registros(pb_client.list_records(
         "auditoria",
         filter=filter_str,
         sort="-created",
         page=page,
         per_page=_PAGE_SIZE,
-    )
+    ))
 
     # Contar total para paginación
     total = len(pb_client.list_records_all("auditoria", filter=filter_str)) if filter_str else None
@@ -111,7 +131,7 @@ def export_csv(
                      "Recurso ID", "Resultado", "IP", "Detalle"])
     for r in registros:
         writer.writerow([
-            r.get("created", "")[:19],
+            _fmt_local(r.get("created", "")),
             r.get("usuario_id", ""),
             r.get("usuario_email", ""),
             r.get("modulo", ""),

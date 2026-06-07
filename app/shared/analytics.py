@@ -12,6 +12,10 @@ from app.shared.clients.minio_client import read_parquet
 _fact_cache: dict = {"df": None, "expires": 0.0, "bucket": ""}
 _FACT_TTL = 600  # segundos
 
+# Cache de agregaciones pre-computadas — TTL 10 minutos
+_agg_cache: dict = {}
+_AGG_TTL = 600
+
 # Cache de listas de dimensiones (aerolíneas, años) — TTL 5 minutos
 _dim_cache: dict = {}
 _DIM_TTL = 300
@@ -123,8 +127,46 @@ def load_enriched_fact(
         parts = filtros["ruta"].split("-")
         if len(parts) == 2:
             fact = fact[(fact["OriginCode"] == parts[0]) & (fact["DestCode"] == parts[1])]
+    if filtros.get("quarter") and "Quarter" in fact.columns:
+        fact = fact[fact["Quarter"] == int(filtros["quarter"])]
+    if filtros.get("dow") and "DayOfWeek" in fact.columns:
+        fact = fact[fact["DayOfWeek"] == int(filtros["dow"])]
+    if filtros.get("solo_cancelados") and "Cancelled" in fact.columns:
+        fact = fact[fact["Cancelled"] == 1]
+    if filtros.get("cancel_code") and "CancellationCode" in fact.columns:
+        fact = fact[fact["CancellationCode"] == str(filtros["cancel_code"])]
 
     return fact
+
+
+def load_agg(
+    name: str,
+    filtros: Optional[dict] = None,
+    bucket: str = MINIO_BUCKET_DIMS,
+) -> pd.DataFrame:
+    """Lee una tabla de agregación pre-computada desde MinIO con cache TTL 10 min.
+    filtros: {year, month, airline} — sólo se aplican si la columna existe en el df.
+    """
+    key = f"{bucket}:{name}"
+    entry = _agg_cache.get(key)
+    if entry and time.time() < entry["expires"]:
+        df = entry["df"].copy()
+    else:
+        df = _desnormalizar(read_parquet(bucket, name).copy())
+        _agg_cache[key] = {"df": df, "expires": time.time() + _AGG_TTL}
+        df = df.copy()
+
+    if not filtros:
+        return df
+
+    if filtros.get("year") and "year" in df.columns:
+        df = df[df["year"] == int(filtros["year"])]
+    if filtros.get("month") and "month" in df.columns:
+        df = df[df["month"] == int(filtros["month"])]
+    if filtros.get("airline") and "carrier" in df.columns:
+        df = df[df["carrier"] == filtros["airline"]]
+
+    return df
 
 
 def get_aerolinas(bucket: str = MINIO_BUCKET_DIMS) -> list[str]:
@@ -137,6 +179,38 @@ def get_aerolinas(bucket: str = MINIO_BUCKET_DIMS) -> list[str]:
         col = "Reporting_Airline"
         if col in df.columns:
             result = sorted(df[col].dropna().unique().tolist())
+            _dim_cache[key] = {"data": result, "expires": time.time() + _DIM_TTL}
+            return result
+    except Exception:
+        pass
+    return []
+
+
+def get_origins(bucket: str = MINIO_BUCKET_DIMS) -> list[str]:
+    key = f"origins:{bucket}"
+    entry = _dim_cache.get(key)
+    if entry and time.time() < entry["expires"]:
+        return entry["data"]
+    try:
+        df = read_parquet(bucket, "dim_ruta")
+        if "OriginCode" in df.columns:
+            result = sorted(df["OriginCode"].dropna().unique().tolist())
+            _dim_cache[key] = {"data": result, "expires": time.time() + _DIM_TTL}
+            return result
+    except Exception:
+        pass
+    return []
+
+
+def get_dests(bucket: str = MINIO_BUCKET_DIMS) -> list[str]:
+    key = f"dests:{bucket}"
+    entry = _dim_cache.get(key)
+    if entry and time.time() < entry["expires"]:
+        return entry["data"]
+    try:
+        df = read_parquet(bucket, "dim_ruta")
+        if "DestCode" in df.columns:
+            result = sorted(df["DestCode"].dropna().unique().tolist())
             _dim_cache[key] = {"data": result, "expires": time.time() + _DIM_TTL}
             return result
     except Exception:

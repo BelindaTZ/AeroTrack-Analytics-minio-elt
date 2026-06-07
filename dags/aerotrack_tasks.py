@@ -24,7 +24,9 @@ from __future__ import annotations
  
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+_TZ = timezone(timedelta(hours=-5))  # America/Guayaquil — sin DST
 from pathlib import Path
  
  
@@ -58,7 +60,7 @@ def extract_pipeline() -> str:
     BATCH_SIZE      = 200   # páginas por lote → ~100k registros por escritura a disco
     CAMPOS_INTERNOS = {"id", "collectionId", "collectionName", "created", "updated"}
  
-    parquet_tmp = Path(tempfile.gettempdir()) / f"vuelos_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
+    parquet_tmp = Path(tempfile.gettempdir()) / f"vuelos_raw_{datetime.now(_TZ).strftime('%Y%m%d_%H%M%S')}.parquet"
  
     print(f"[EXTRACT] PocketBase: {PB_BASE_URL} | Colección: {PB_COLLECTION} | {MAX_WORKERS} workers")
  
@@ -540,4 +542,303 @@ def transform_pipeline() -> None:
     subir(fact, "fact_vuelo")
 
     print(f"\n[TRANSFORM] ✅ TRANSFORMACIÓN COMPLETA — fact_vuelo: {len(fact):,} filas")
+
+    agregaciones_pipeline()
+
+
+# ═══════════════════════════════════════════════════════════════
+# AGREGACIONES: fact_vuelo + dims → 7 tablas pre-calculadas
+# ═══════════════════════════════════════════════════════════════
+
+def agregaciones_pipeline() -> None:
+    """Lee fact_vuelo + dimensiones desde aerotrack-dims, genera 7 tablas
+    de agregación pre-calculadas y las sube al mismo bucket.
+
+    Tablas generadas (requeridas):
+      agg_otp_aerolinea_mes   — OTP por aerolínea / año / mes
+      agg_cancelaciones_causa — Cancelaciones por código FAA / año / mes
+      agg_kpi_global_dia      — KPIs globales por día
+      agg_rutas_eficiencia    — Eficiencia por ruta / aerolínea
+
+    Tablas adicionales (eliminan el full-fact en las páginas secundarias):
+      agg_causas_retraso_mes  — Minutos de retraso por causa / aerolínea / mes
+      agg_otp_dia_semana      — OTP por día de la semana
+      agg_desvios_ruta        — Desvíos agregados por ruta / aeropuerto alternativo
+    """
+    import gc
+    import io
+    import os as _os
+    import tempfile
+
+    import pandas as pd
+    import pyarrow.parquet as pq
+    from minio import Minio
+
+    import config
+
+    MINIO_ENDPOINT = config.MINIO_ENDPOINT
+    MINIO_ACCESS   = config.MINIO_ACCESS
+    MINIO_SECRET   = config.MINIO_SECRET
+    BUCKET_DIMS    = config.MINIO_BUCKET_DIMS
+
+    client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=False)
+
+    def read_dim(name: str, cols: list) -> pd.DataFrame:
+        try:
+            resp = client.get_object(BUCKET_DIMS, f"{name}.parquet")
+            buf  = io.BytesIO(resp.read())
+            resp.close()
+            pf   = pq.ParquetFile(buf)
+            ok   = [c for c in cols if c in pf.schema_arrow.names]
+            df   = pf.read(columns=ok).to_pandas()
+            for col in df.columns:
+                if hasattr(df[col], "cat"):
+                    df[col] = df[col].astype(df[col].cat.categories.dtype)
+            return df
+        except Exception as exc:
+            print(f"  ⚠ {name}.parquet no disponible: {exc}")
+            return pd.DataFrame()
+
+    def subir(df: pd.DataFrame, name: str) -> None:
+        tmp = tempfile.mktemp(suffix=".parquet")
+        df.to_parquet(tmp, engine="pyarrow", compression="snappy", index=False)
+        client.fput_object(BUCKET_DIMS, f"{name}.parquet", tmp)
+        _os.remove(tmp)
+        print(f"  ✅ {name}: {len(df):,} filas → s3://{BUCKET_DIMS}/{name}.parquet")
+
+    def norm_pk(df: pd.DataFrame, pk: str) -> None:
+        if pk in df.columns:
+            df[pk] = pd.to_numeric(df[pk], errors="coerce").fillna(0).astype("int64")
+
+    print(f"\n[AGG] Leyendo modelo dimensional desde s3://{BUCKET_DIMS}/")
+
+    # ── fact_vuelo ───────────────────────────────────────────────
+    fact = read_dim("fact_vuelo", [
+        "pk_vuelo", "fk_tiempo", "fk_aerolinea", "fk_ruta",
+        "fk_horario", "fk_cancelacion", "fk_clasificacion_retraso",
+        "fk_retraso_causa", "fk_desvio",
+        "ActualElapsedTime", "CRSElapsedTime",
+    ])
+    if fact.empty:
+        raise RuntimeError("fact_vuelo.parquet no encontrado. Ejecuta la tarea transform primero.")
+    for col in [c for c in fact.columns if c.startswith("fk_") or c == "pk_vuelo"]:
+        fact[col] = pd.to_numeric(fact[col], errors="coerce").fillna(0).astype("int64")
+    print(f"  fact_vuelo: {len(fact):,} filas")
+
+    # ── Dimensiones ──────────────────────────────────────────────
+    dim_t    = read_dim("dim_tiempo",             ["pk_tiempo",        "Year", "Month", "DayofMonth", "DayOfWeek"])
+    dim_al   = read_dim("dim_aerolinea",          ["pk_aerolinea",     "Reporting_Airline"])
+    dim_hor  = read_dim("dim_horario",            ["pk_horario",       "ArrDelayMinutes"])
+    dim_can  = read_dim("dim_cancelacion",        ["pk_cancelacion",   "Cancelled", "CancellationCode", "Diverted"])
+    dim_ruta = read_dim("dim_ruta",               ["pk_ruta",          "OriginCode", "DestCode"])
+    dim_rc   = read_dim("dim_retraso_causa",      ["pk_retraso_causa", "CarrierDelay", "WeatherDelay",
+                                                   "NASDelay", "SecurityDelay", "LateAircraftDelay"])
+    dim_dev  = read_dim("dim_desvio",             ["pk_desvio",        "Div1Airport", "DivArrDelay", "DivDistance"])
+    dim_cl   = read_dim("dim_clasificacion_retraso", ["pk_clasificacion", "ArrDel15"])
+
+    for df_d, pk in [
+        (dim_t,    "pk_tiempo"),     (dim_al,   "pk_aerolinea"),
+        (dim_hor,  "pk_horario"),    (dim_can,  "pk_cancelacion"),
+        (dim_ruta, "pk_ruta"),       (dim_rc,   "pk_retraso_causa"),
+        (dim_dev,  "pk_desvio"),     (dim_cl,   "pk_clasificacion"),
+    ]:
+        norm_pk(df_d, pk)
+
+    # ── Mini-fact enriquecido ─────────────────────────────────────
+    f = fact.copy()
+    if not dim_t.empty    and "fk_tiempo"                 in f.columns: f = f.merge(dim_t,    left_on="fk_tiempo",                 right_on="pk_tiempo",        how="left")
+    if not dim_al.empty   and "fk_aerolinea"              in f.columns: f = f.merge(dim_al,   left_on="fk_aerolinea",              right_on="pk_aerolinea",     how="left")
+    if not dim_hor.empty  and "fk_horario"                in f.columns: f = f.merge(dim_hor,  left_on="fk_horario",                right_on="pk_horario",       how="left")
+    if not dim_can.empty  and "fk_cancelacion"            in f.columns: f = f.merge(dim_can,  left_on="fk_cancelacion",            right_on="pk_cancelacion",   how="left")
+    if not dim_ruta.empty and "fk_ruta"                   in f.columns: f = f.merge(dim_ruta, left_on="fk_ruta",                   right_on="pk_ruta",          how="left")
+    if not dim_rc.empty   and "fk_retraso_causa"          in f.columns: f = f.merge(dim_rc,   left_on="fk_retraso_causa",          right_on="pk_retraso_causa", how="left")
+    if not dim_dev.empty  and "fk_desvio"                 in f.columns: f = f.merge(dim_dev,  left_on="fk_desvio",                 right_on="pk_desvio",        how="left")
+    if not dim_cl.empty   and "fk_clasificacion_retraso"  in f.columns: f = f.merge(dim_cl,   left_on="fk_clasificacion_retraso",  right_on="pk_clasificacion", how="left")
+
+    del fact, dim_t, dim_al, dim_hor, dim_can, dim_ruta, dim_rc, dim_dev, dim_cl
+    gc.collect()
+    print(f"  Mini-fact: {len(f):,} filas × {len(f.columns)} cols")
+
+    # Defaults seguros para columnas que pueden faltar
+    for col, default in [
+        ("Cancelled", 0), ("Diverted", 0), ("ArrDelayMinutes", 0.0),
+        ("Year", 0), ("Month", 0), ("DayofMonth", 0), ("DayOfWeek", 0),
+        ("Reporting_Airline", ""), ("CancellationCode", ""),
+        ("OriginCode", ""), ("DestCode", ""), ("Div1Airport", ""),
+    ]:
+        if col not in f.columns:
+            f[col] = default
+    f["Cancelled"]         = f["Cancelled"].fillna(0).astype(int)
+    f["Diverted"]          = f["Diverted"].fillna(0).astype(int)
+    f["ArrDelayMinutes"]   = pd.to_numeric(f["ArrDelayMinutes"],   errors="coerce").fillna(0.0)
+    f["ActualElapsedTime"] = pd.to_numeric(f["ActualElapsedTime"], errors="coerce")
+    f["CRSElapsedTime"]    = pd.to_numeric(f["CRSElapsedTime"],    errors="coerce")
+    f["_at"] = (f["ArrDel15"] == 0).astype(int)   # usa BTS ArrDel15; ArrDelayMinutes no es confiable (dim_horario deduplica por CRSDepTime)
+
+    # ════════════════════════════════════════════════════════════
+    # 1. agg_otp_aerolinea_mes
+    # GROUP BY carrier / year / month
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 1/7 — agg_otp_aerolinea_mes")
+    G1 = ["Reporting_Airline", "Year", "Month"]
+    if all(c in f.columns for c in G1):
+        tot1 = f.groupby(G1).agg(
+            total_vuelos_todos=("pk_vuelo",  "count"),
+            total_cancelados  =("Cancelled", "sum"),
+        ).reset_index()
+        op1 = f[f["Cancelled"] == 0]
+        op1_agg = op1.groupby(G1).agg(
+            total_vuelos   =("pk_vuelo",       "count"),
+            vuelos_a_tiempo=("_at",            "sum"),
+            delay_sum      =("ArrDelayMinutes", "sum"),
+        ).reset_index()
+        a1 = op1_agg.merge(tot1, on=G1, how="left")
+        d1 = a1["total_vuelos"].replace(0, float("nan"))
+        a1["otp_pct"]   = (a1["vuelos_a_tiempo"] / d1 * 100).fillna(0.0).round(2)
+        a1["delay_avg"] = (a1["delay_sum"]        / d1      ).fillna(0.0).round(2)
+        a1.drop(columns=["delay_sum"], inplace=True)
+        a1.rename(columns={"Reporting_Airline": "carrier", "Year": "year", "Month": "month"}, inplace=True)
+        a1[["year", "month"]] = a1[["year", "month"]].astype(int)
+        subir(a1, "agg_otp_aerolinea_mes")
+
+    # ════════════════════════════════════════════════════════════
+    # 2. agg_cancelaciones_causa
+    # GROUP BY cancellation_code / year / month
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 2/7 — agg_cancelaciones_causa")
+    canc2 = f[f["Cancelled"] == 1].copy()
+    if len(canc2) > 0 and "CancellationCode" in canc2.columns:
+        total_canc = len(canc2)
+        a2 = canc2.groupby(["CancellationCode", "Year", "Month"]).size().reset_index(name="total_cancelados")
+        a2["pct_del_total"] = (a2["total_cancelados"] / total_canc * 100).round(2)
+        a2.rename(columns={"CancellationCode": "cancellation_code", "Year": "year", "Month": "month"}, inplace=True)
+        a2[["year", "month"]] = a2[["year", "month"]].astype(int)
+        subir(a2, "agg_cancelaciones_causa")
+
+    # ════════════════════════════════════════════════════════════
+    # 3. agg_kpi_global_dia
+    # GROUP BY year / month / day_of_month
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 3/7 — agg_kpi_global_dia")
+    G3 = ["Year", "Month", "DayofMonth"]
+    if all(c in f.columns for c in G3):
+        tot3 = f.groupby(G3).agg(
+            total_vuelos    =("pk_vuelo",  "count"),
+            total_cancelados=("Cancelled", "sum"),
+            total_desviados =("Diverted",  "sum"),
+        ).reset_index()
+        op3 = f[f["Cancelled"] == 0]
+        op3_agg = op3.groupby(G3).agg(
+            vuelos_operados =("pk_vuelo",       "count"),
+            vuelos_a_tiempo =("_at",            "sum"),
+            sum_arr_delay   =("ArrDelayMinutes", "sum"),
+        ).reset_index()
+        a3 = tot3.merge(op3_agg, on=G3, how="left")
+        d3 = a3["vuelos_operados"].replace(0, float("nan"))
+        a3["otp_pct"]          = (a3["vuelos_a_tiempo"] / d3 * 100).fillna(0.0).round(2)
+        a3["retraso_promedio"] = (a3["sum_arr_delay"]    / d3      ).fillna(0.0).round(2)
+        a3.rename(columns={"Year": "year", "Month": "month", "DayofMonth": "day_of_month"}, inplace=True)
+        a3[["year", "month", "day_of_month"]] = a3[["year", "month", "day_of_month"]].astype(int)
+        subir(a3, "agg_kpi_global_dia")
+
+    # ════════════════════════════════════════════════════════════
+    # 4. agg_rutas_eficiencia
+    # GROUP BY origin / dest / carrier
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 4/7 — agg_rutas_eficiencia")
+    G4 = [c for c in ["OriginCode", "DestCode", "Reporting_Airline", "Year"] if c in f.columns]
+    op4 = f[
+        (f["Cancelled"] == 0) &
+        f["ActualElapsedTime"].notna() &
+        f["CRSElapsedTime"].notna() &
+        (f["CRSElapsedTime"] > 0)
+    ].copy()
+    if G4 and len(op4) > 0:
+        a4 = op4.groupby(G4).agg(
+            total_vuelos   =("pk_vuelo",          "count"),
+            vuelos_a_tiempo=("_at",               "sum"),
+            tiempo_real_avg=("ActualElapsedTime",  "mean"),
+            tiempo_prog_avg=("CRSElapsedTime",     "mean"),
+            retraso_prom   =("ArrDelayMinutes",    "mean"),
+        ).reset_index()
+        a4 = a4[a4["total_vuelos"] >= 10].copy()
+        d4 = a4["total_vuelos"].replace(0, float("nan"))
+        a4["otp_pct"]           = (a4["vuelos_a_tiempo"] / d4 * 100).fillna(0.0).round(2)
+        a4["indice_eficiencia"] = ((a4["tiempo_real_avg"] - a4["tiempo_prog_avg"]) / a4["tiempo_prog_avg"] * 100).round(2)
+        a4["tiempo_real_avg"]   = a4["tiempo_real_avg"].round(2)
+        a4["tiempo_prog_avg"]   = a4["tiempo_prog_avg"].round(2)
+        a4["retraso_prom"]      = a4["retraso_prom"].fillna(0.0).round(2)
+        ren4 = {}
+        if "OriginCode"        in a4.columns: ren4["OriginCode"]        = "origin"
+        if "DestCode"          in a4.columns: ren4["DestCode"]          = "dest"
+        if "Reporting_Airline" in a4.columns: ren4["Reporting_Airline"] = "carrier"
+        if "Year"              in a4.columns: ren4["Year"]              = "year"
+        a4.rename(columns=ren4, inplace=True)
+        if "year" in a4.columns:
+            a4["year"] = a4["year"].astype(int)
+        subir(a4, "agg_rutas_eficiencia")
+
+    # ════════════════════════════════════════════════════════════
+    # 5. agg_causas_retraso_mes  (elimina full-fact en puntualidad)
+    # GROUP BY carrier / year / month — SUMA de minutos por causa
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 5/7 — agg_causas_retraso_mes")
+    CAUSA_COLS = ["CarrierDelay", "WeatherDelay", "NASDelay", "SecurityDelay", "LateAircraftDelay"]
+    G5 = ["Reporting_Airline", "Year", "Month"]
+    avail5 = [c for c in CAUSA_COLS if c in f.columns]
+    if avail5 and all(c in f.columns for c in G5):
+        f5 = f.copy()
+        for c in avail5:
+            f5[c] = pd.to_numeric(f5[c], errors="coerce").fillna(0.0)
+        a5_spec = {c.lower(): (c, "sum") for c in avail5}
+        a5 = f5.groupby(G5).agg(**a5_spec).reset_index()
+        a5.rename(columns={"Reporting_Airline": "carrier", "Year": "year", "Month": "month"}, inplace=True)
+        a5[["year", "month"]] = a5[["year", "month"]].astype(int)
+        subir(a5, "agg_causas_retraso_mes")
+
+    # ════════════════════════════════════════════════════════════
+    # 6. agg_otp_dia_semana  (elimina full-fact en puntualidad)
+    # GROUP BY day_of_week
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 6/7 — agg_otp_dia_semana")
+    if "DayOfWeek" in f.columns:
+        op6 = f[f["Cancelled"] == 0]
+        a6 = op6.groupby("DayOfWeek").agg(
+            total_vuelos   =("pk_vuelo", "count"),
+            vuelos_a_tiempo=("_at",      "sum"),
+        ).reset_index()
+        d6 = a6["total_vuelos"].replace(0, float("nan"))
+        a6["otp_pct"] = (a6["vuelos_a_tiempo"] / d6 * 100).fillna(0.0).round(2)
+        a6.rename(columns={"DayOfWeek": "day_of_week"}, inplace=True)
+        a6["day_of_week"] = a6["day_of_week"].astype(int)
+        subir(a6, "agg_otp_dia_semana")
+
+    # ════════════════════════════════════════════════════════════
+    # 7. agg_desvios_ruta  (elimina full-fact en cancelaciones)
+    # GROUP BY origin / dest / alt_airport
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 7/7 — agg_desvios_ruta")
+    dev7 = f[f["Diverted"] == 1].copy()
+    G7 = [c for c in ["OriginCode", "DestCode", "Div1Airport"] if c in dev7.columns]
+    if G7 and len(dev7) > 0:
+        a7_spec: dict = {"total_desvios": ("pk_vuelo", "count")}
+        for cd in ["DivArrDelay", "DivDistance"]:
+            if cd in dev7.columns:
+                dev7[cd] = pd.to_numeric(dev7[cd], errors="coerce")
+                a7_spec[f"{cd.lower()}_avg"] = (cd, "mean")
+        a7 = dev7.groupby(G7).agg(**a7_spec).reset_index()
+        ren7 = {}
+        if "OriginCode"  in a7.columns: ren7["OriginCode"]  = "origin"
+        if "DestCode"    in a7.columns: ren7["DestCode"]    = "dest"
+        if "Div1Airport" in a7.columns: ren7["Div1Airport"] = "alt_airport"
+        a7.rename(columns=ren7, inplace=True)
+        for ca in ["divarrdelay_avg", "divdistance_avg"]:
+            if ca in a7.columns:
+                a7[ca] = a7[ca].fillna(0.0).round(1)
+        a7 = a7.sort_values("total_desvios", ascending=False)
+        subir(a7, "agg_desvios_ruta")
+
+    del f
+    gc.collect()
+    print(f"\n[AGG] ✅ 7 agregaciones generadas en s3://{BUCKET_DIMS}/")
  

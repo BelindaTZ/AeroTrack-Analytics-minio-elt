@@ -132,6 +132,26 @@ AIRFLOW__FAB__UPDATE_FAB_PERMS: 'true'
 
 en `airflow-webserver` garantiza que los permisos FAB del rol Admin se sincronicen en cada arranque, evitando errores 403 por permisos desactualizados tras recrear el contenedor.
 
+### `docker-compose up --build` requerido al cambiar el Dockerfile
+
+`docker-compose restart` y `docker-compose up -d` reusan la imagen ya construida — **no** vuelven a ejecutar el `Dockerfile`. Si se agrega un `pip install` o un `apt-get` al Dockerfile y el contenedor se reinicia sin reconstruir, el paquete no estará disponible dentro del contenedor:
+
+```bash
+# ❌ incorrecto — reutiliza imagen antigua, el paquete no aparece
+docker compose restart fastapi
+
+# ✅ correcto — reconstruye la imagen desde el Dockerfile
+docker compose up -d --build fastapi
+```
+
+**Síntoma típico:** un módulo Python aparece como "no instalado" aunque esté en `requirements` o en el `RUN pip install` del Dockerfile. Verificar con:
+
+```bash
+docker compose exec fastapi python -c "import nombre_paquete; print('OK')"
+```
+
+Si devuelve `ModuleNotFoundError`, la imagen está desactualizada. Solución: `docker compose up -d --build fastapi`.
+
 ### `docker-compose restart` NO aplica nuevas variables de entorno
 `docker-compose restart` reinicia el proceso dentro del contenedor existente — **no** re-lee `docker-compose.yml`. Si se agrega o modifica una variable `AIRFLOW__*` después de haber levantado los servicios, el contenedor seguirá usando la configuración antigua hasta que sea recreado:
 
@@ -461,6 +481,52 @@ No requiere cambios en los templates. Se inicializa automáticamente desde `init
 
 ---
 
+### P-06 · Tablas de agregación pre-computadas — eliminar fact_vuelo del path de respuesta
+
+**Problema:** las páginas analíticas (dashboard, puntualidad, rutas, cancelaciones) llamaban a `load_enriched_fact()` que descarga `fact_vuelo.parquet` (2M filas) desde MinIO y hace 8 joins con dimensiones. Esto tarda 10-30 s en el primer acceso en frío, y puede colgar indefinidamente si el archivo está truncado (B-09). Aunque el caché de P-01 amortiza visitas repetidas, el primer acceso (o tras caducar el TTL de 10 min) sigue siendo lento.
+
+**Solución:** `transform_pipeline()` ejecuta internamente `agregaciones_pipeline()` al finalizar el modelo estrella, de modo que el DAG mantiene 3 tareas (`extract → load → transform`). Las 7 tablas de agregación se generan en la misma tarea `transform` y se suben a `aerotrack-dims`. Las páginas principales leen esas tablas (~KB a pocos MB) en lugar del fact completo.
+
+#### Tablas generadas (en `dags/aerotrack_tasks.py` → `agregaciones_pipeline()`)
+
+| Tabla | GROUP BY | Métricas clave | Usada por |
+|---|---|---|---|
+| `agg_otp_aerolinea_mes` | carrier · year · month | total_vuelos_todos, total_cancelados, total_vuelos, vuelos_a_tiempo, otp_pct, delay_avg | dashboard, puntualidad, reportes |
+| `agg_cancelaciones_causa` | cancellation_code · year · month | total_cancelados, pct_del_total | cancelaciones |
+| `agg_kpi_global_dia` | year · month · day_of_month | total_vuelos, total_cancelados, total_desviados, vuelos_operados, vuelos_a_tiempo, sum_arr_delay, otp_pct, retraso_promedio | cancelaciones (total_vuelos) |
+| `agg_rutas_eficiencia` | origin · dest · carrier · year | total_vuelos, vuelos_a_tiempo, otp_pct, tiempo_real_avg, tiempo_prog_avg, indice_eficiencia, retraso_prom | rutas, puntualidad/comparar |
+| `agg_causas_retraso_mes` | carrier · year · month | sum(CarrierDelay, WeatherDelay, NASDelay, SecurityDelay, LateAircraftDelay) | puntualidad (donut causas) |
+| `agg_otp_dia_semana` | day_of_week | total_vuelos, vuelos_a_tiempo, otp_pct | puntualidad (chart día semana) |
+| `agg_desvios_ruta` | origin · dest · alt_airport | total_desvios, divarrdelay_avg, divdistance_avg | cancelaciones (tabla desvíos) |
+
+#### Helper de lectura (`app/shared/analytics.py`)
+
+```python
+def load_agg(name: str, filtros: Optional[dict] = None, bucket: str = ...) -> pd.DataFrame:
+    """Lee una tabla de agregación desde MinIO con caché TTL 10 min.
+    filtros: {year, month, airline} — sólo aplica si la columna existe en el df."""
+```
+
+- Caché `_agg_cache` global, TTL 10 min, clave `"{bucket}:{name}"`.
+- Filtros: `year` → columna `year`, `month` → columna `month`, `airline` → columna `carrier`. Los filtros que no tienen columna correspondiente se ignoran silenciosamente.
+- Lanza `FileNotFoundError` si la tabla no existe (módulos la capturan y muestran "Ejecute el pipeline ELT primero").
+
+#### Qué módulos aún usan `load_enriched_fact()`
+
+| Endpoint | Motivo |
+|---|---|
+| `GET /rutas/{ruta}/detalle` | Necesita distribución fila a fila de eficiencias y retrasos para histogramas |
+
+Todos los demás endpoints analíticos usan exclusivamente tablas de agregación. Si en el futuro se añaden módulos o endpoints que necesiten datos granulares no cubiertos por las 7 tablas, primero evaluar si es posible añadir una nueva tabla de agregación antes de recurrir a `load_enriched_fact()`.
+
+#### Compatibilidad con filtros
+
+Las tablas `agg_otp_aerolinea_mes`, `agg_causas_retraso_mes` y `agg_rutas_eficiencia` tienen columna `carrier`, por lo que el filtro por aerolínea funciona correctamente. `agg_rutas_eficiencia` también tiene columna `year` (añadida en la corrección B-11), por lo que el filtro por año funciona en el módulo Rutas. Las tablas `agg_kpi_global_dia`, `agg_cancelaciones_causa` y `agg_otp_dia_semana` no tienen `carrier`: el filtro por aerolínea se ignora en ellas (impacto menor, sólo afecta la tabla de desvíos y el total_vuelos en cancelaciones cuando se filtra por aerolínea).
+
+**Regla:** antes de añadir `load_enriched_fact()` a un módulo nuevo, comprobar si las 7 tablas de agregación cubren los datos necesarios. En la mayoría de vistas resumen (KPIs, charts de tendencia, rankings) sí lo cubren. Solo acudir al fact completo para vistas de detalle con distribuciones individuales.
+
+---
+
 ## Bugs conocidos y soluciones — Entrega 2
 
 Errores reales encontrados durante la implementación de la Entrega 2. Documentados para evitar reincidencia.
@@ -635,3 +701,104 @@ Orden real de ejecución (incorrecto):
 **Regla:** Nunca cargar una librería de charts con `defer` en `<head>` si el código que la usa vive en un inline script en `{% block scripts %}`. Elegir una de dos alternativas:
 - Mover la librería (sin `defer`) al inicio de `{% block scripts %}`.
 - Envolver todo el código de uso en `document.addEventListener('DOMContentLoaded', ...)` (válido porque DOMContentLoaded espera a defer).
+
+---
+
+### B-09 · `response.read()` en MinIO bloquea indefinidamente — app colgada
+
+**Síntoma:** La app queda aparentemente cargando en el navegador sin llegar a mostrar la página. No aparece ningún error visible. Ocurre especialmente en la primera carga de módulos analíticos o después de ejecutar el pipeline ELT.
+
+**Causa:** `minio_client.get_client()` construía el cliente `Minio` sin `http_client` explícito. urllib3 (usado internamente por el SDK de MinIO) no aplica ningún timeout de lectura por defecto. `response.read()` espera bytes indefinidamente si:
+- MinIO está bajo carga y la transferencia es lenta,
+- el parquet fue escrito parcialmente (proceso OOM-killed o timeout durante `fput_object`),
+- hay un micro-corte en la red Docker interna.
+
+Como el thread de FastAPI queda bloqueado en `response.read()` sin nunca levantar una excepción, el navegador percibe la solicitud HTTP como "en vuelo" para siempre.
+
+**Solución aplicada** en `app/shared/clients/minio_client.py`:
+
+```python
+import urllib3
+
+_HTTP_CLIENT = urllib3.PoolManager(
+    timeout=urllib3.util.Timeout(connect=5, read=60),
+    maxsize=10,
+)
+
+def get_client() -> Minio:
+    return Minio(..., http_client=_HTTP_CLIENT)
+```
+
+Y en `read_parquet()` se añadió un `except Exception` amplio para capturar `ReadTimeoutError`, `ProtocolError` y `ArrowInvalid` (parquet truncado), re-lanzándolos como `RuntimeError`. El router los captura con `except Exception as exc` y muestra un mensaje de error en la UI en lugar de colgar.
+
+**Regla:** Siempre construir el cliente Minio con un `http_client=urllib3.PoolManager(timeout=...)`. Nunca asumir que las lecturas de objetos S3/MinIO se completan sin timeout: un archivo parcial o una red lenta puede bloquear el thread indefinidamente.
+
+---
+
+### B-10 · OTP incorrecto en dashboard por `dim_horario` deduplicando por `CRSDepTime`
+
+**Síntoma:** El dashboard mostraba OTP 78.1% mientras el preview de reportes (mismo dataset, sin filtros) mostraba 80.2%.
+
+**Causa:** En `agregaciones_pipeline()` (`dags/aerotrack_tasks.py`), el flag `_at` ("vuelo a tiempo") se calculaba como:
+
+```python
+f["_at"] = (f["ArrDelayMinutes"] <= 15).astype(int)
+```
+
+`ArrDelayMinutes` llega al mini-fact vía join con `dim_horario`. Pero `dim_horario` se construyó con `drop_duplicates(subset=["CRSDepTime"])` — es decir, **todos los vuelos con la misma hora programada de salida comparten el mismo `ArrDelayMinutes`**, que corresponde al primero que apareció en el dataset para esa hora. El OTP resultante en `agg_otp_aerolinea_mes` era incorrecto para la mayoría de los vuelos.
+
+El preview de reportes usaba `ArrDel15 == 0` desde `load_enriched_fact()`, que obtiene `ArrDel15` de `dim_clasificacion_retraso`. Esta dimensión deduplica por la combinación `[DepDel15, ArrDel15, DepartureDelayGroups, ArrivalDelayGroups]`, preservando correctamente el indicador BTS por vuelo.
+
+**Solución aplicada** en `agregaciones_pipeline()`:
+1. Leer `dim_clasificacion_retraso` con columnas `["pk_clasificacion", "ArrDel15"]`.
+2. Añadir el join al mini-fact via `fk_clasificacion_retraso` (FK ya existente en `fact_vuelo`).
+3. Cambiar el cálculo de `_at`:
+
+```python
+# ❌ Antes — ArrDelayMinutes incorrecto (hereda valor del 1er vuelo con esa CRSDepTime)
+f["_at"] = (f["ArrDelayMinutes"] <= 15).astype(int)
+
+# ✅ Ahora — ArrDel15 correcto por vuelo (indicador oficial BTS)
+f["_at"] = (f["ArrDel15"] == 0).astype(int)
+```
+
+Después de regenerar `agg_otp_aerolinea_mes` con el pipeline, dashboard y reportes muestran el mismo OTP.
+
+**Regla:** Para el flag "vuelo a tiempo" en las agregaciones, usar siempre `ArrDel15 == 0` (indicador BTS oficial), **no** `ArrDelayMinutes <= 15` derivado de `dim_horario`. `dim_horario` es una dimensión de franja horaria de salida, no una fuente de métricas por vuelo individual.
+
+---
+
+### B-11 · Filtro de año ignorado en módulo Rutas — columna `year` ausente en `agg_rutas_eficiencia`
+
+**Síntoma:** Al seleccionar un año en el selector del módulo Rutas, la tabla y el scatter de eficiencia no cambian. El filtro de aerolínea sí funcionaba correctamente.
+
+**Causa:** `agg_rutas_eficiencia` se generaba agrupando solo por `["OriginCode", "DestCode", "Reporting_Airline"]` — sin incluir `Year`. La tabla resultante no tenía columna `year`. El helper `load_agg()` en `analytics.py` aplica el filtro de año con la guarda:
+
+```python
+if filtros.get("year") and "year" in df.columns:
+    df = df[df["year"] == int(filtros["year"])]
+```
+
+Como la columna no existía, la condición `"year" in df.columns` era `False` y el filtro se ignoraba silenciosamente. El filtro de aerolínea sí funcionaba porque la columna `carrier` sí existía en la tabla.
+
+**Solución aplicada** en `dags/aerotrack_tasks.py` → `agregaciones_pipeline()`:
+
+```python
+# ❌ Antes — sin Year en el groupby
+G4 = [c for c in ["OriginCode", "DestCode", "Reporting_Airline"] if c in f.columns]
+
+# ✅ Ahora — Year incluido para soportar filtro por año
+G4 = [c for c in ["OriginCode", "DestCode", "Reporting_Airline", "Year"] if c in f.columns]
+
+# Y en el rename:
+if "Year" in a4.columns: ren4["Year"] = "year"
+if "year" in a4.columns: a4["year"] = a4["year"].astype(int)
+```
+
+Después de aplicar el cambio, re-ejecutar la tarea `transform` en Airflow (que incluye `agregaciones_pipeline()` al final) y reiniciar el contenedor `fastapi-app` para vaciar `_agg_cache` y `_page_cache` (TTL 10 min y 5 min respectivamente).
+
+```bash
+docker restart fastapi-app
+```
+
+**Regla:** Toda tabla de agregación que deba soportar filtro por año o mes debe incluir esas columnas explícitamente en el `GROUP BY` del pipeline. `load_agg()` aplica los filtros solo si la columna existe — los filtros faltantes no producen error, se ignoran silenciosamente. Al añadir una nueva dimensión de filtro a una tabla de agregación existente, re-ejecutar la tarea `transform` en Airflow (ejecuta `agregaciones_pipeline()` internamente) y reiniciar la app para limpiar caches.

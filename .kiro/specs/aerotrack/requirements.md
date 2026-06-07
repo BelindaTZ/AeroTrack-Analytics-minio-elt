@@ -418,26 +418,104 @@ to identify whether weather, airline, or other factors predominate in specific m
 
 #### 8.1 CU-27: Exportar análisis a PDF
 
-WHEN a Data Analyst clicks "Exportar PDF" in any analysis module
-THE SYSTEM SHALL display a form to select which sections to include and the period
+WHEN a Data Analyst clicks "Generar PDF" in the Reportes module
+THE SYSTEM SHALL display a form to select up to eight sections:
+(1) KPIs operacionales, (2) Tendencia OTP mensual, (3) Desempeño por aerolínea,
+(4) Causas de retraso, (5) Rutas problemáticas, (6) OTP por día de semana,
+(7) Cancelaciones FAA, (8) Top rutas eficientes
 
-WHEN the Data Analyst confirms the PDF export
-THE SYSTEM SHALL generate a PDF with charts and tables from the current analysis view,
-upload it to MinIO in the `aerotrack-exports/` path, and provide an immediate download link
+WHEN the Data Analyst confirms the PDF export with active filters and selected sections
+THE SYSTEM SHALL generate a multi-section PDF using WeasyPrint with inline SVG charts
+(line chart for OTP monthly trend, horizontal bar for delay causes, vertical bar for per-route OTP),
+upload it to MinIO `aerotrack-exports/reportes/`, and return a presigned download URL valid for 1 hour
+
+WHEN the PDF is uploaded to MinIO
+THE SYSTEM SHALL make it visible in the export history (CU-45) immediately
 
 ---
 
 #### 8.2 CU-28: Exportar análisis a Excel
 
-WHEN a Data Analyst clicks "Exportar Excel" in any analysis module
-THE SYSTEM SHALL generate a .xlsx file with separate sheets per module:
-puntualidad, rutas, cancelaciones
+WHEN a Data Analyst clicks "Descargar Excel" in the Reportes module with active filters
+THE SYSTEM SHALL generate a .xlsx file with eight sheets and embedded openpyxl charts:
+(1) Resumen — 8 global metrics + applied filters + sheet index + generation timestamp,
+(2) Puntualidad OTP — per-airline OTP% colored green ≥ 85%, amber 70–85%, red < 70% + BarChart,
+(3) Tendencia OTP mensual — month-by-month OTP trend + LineChart (y-axis 50–100%),
+(4) Causas de retraso — delay minutes by cause type + BarChart + per-airline breakdown,
+(5) Peores rutas — routes with lowest OTP sorted ascending + BarChart,
+(6) OTP por día de semana — OTP% per day of week + BarChart,
+(7) Cancelaciones — by FAA code with count and percentage + PieChart,
+(8) Rutas eficientes — top 10 routes by actual/scheduled time ratio (efficiency index)
 
 WHEN the Excel file is generated
-THE SYSTEM SHALL use the data currently visible on screen with active filters applied
+THE SYSTEM SHALL upload it to MinIO `aerotrack-exports/reportes/` for the export history (CU-45)
+and simultaneously stream it as a direct download to the user
 
-WHEN the Excel file is ready
-THE SYSTEM SHALL offer it for direct download without uploading to MinIO
+---
+
+#### 8.3 CU-43: Exportar datos crudos a CSV
+
+WHEN a Data Analyst clicks "Descargar CSV" in the Reportes module
+THE SYSTEM SHALL generate a CSV file with the filtered fact table including columns:
+FlightDate, Reporting_Airline, OriginCode, DestCode, Cancelled, CancellationCode,
+Diverted, ArrDel15, DepDel15, ArrDelayMinutes, DepDelayMinutes,
+ActualElapsedTime, CRSElapsedTime, Distance
+
+WHEN the CSV is generated
+THE SYSTEM SHALL upload it to MinIO `aerotrack-exports/reportes/` for the export history (CU-45)
+and simultaneously stream it as a direct download
+
+---
+
+#### 8.4 CU-44: Vista previa dinámica de filtros antes de exportar
+
+WHEN a Data Analyst changes any filter in the Reportes module
+THE SYSTEM SHALL wait 500 ms (debounce) then fetch aggregate statistics for the current filter combination
+and display them in a live preview panel without requiring a button click
+
+WHEN the preview panel is displayed
+THE SYSTEM SHALL show: total flights, OTP %, cancelled count, cancellation rate %,
+average arrival delay (min), unique airlines count, and unique routes count,
+with color coding: OTP ≥ 85% = green, 70–85% = amber, < 70% = red
+
+WHEN the preview panel loads successfully
+THE SYSTEM SHALL also render three interactive Chart.js charts in a card below the stats:
+(1) OTP mensual — line chart with color-coded dots (green/amber/red) and 80% threshold band,
+(2) Causas de retraso — doughnut chart with delay minutes by cause type (Carrier, Weather, NAS, Security, LateAircraft),
+(3) Peores rutas — horizontal bar chart with OTP% per route, color-coded by performance;
+charts refresh automatically on each filter change with the same 500 ms debounce as the stats panel
+
+---
+
+#### 8.5 CU-45: Historial de exportaciones
+
+WHEN a Data Analyst accesses the Reportes module
+THE SYSTEM SHALL display the last 15 export files stored in MinIO `aerotrack-exports/reportes/`,
+showing: filename, type badge (PDF / XLSX / CSV), generation date/time, and file size in KB
+
+WHEN a Data Analyst clicks a file in the historial
+THE SYSTEM SHALL open a presigned MinIO download URL valid for 1 hour in a new browser tab
+
+WHEN the Data Analyst clicks "Actualizar" in the historial panel
+THE SYSTEM SHALL refresh the list from MinIO without reloading the page
+
+---
+
+#### 8.6 CU-46: Filtros avanzados en el módulo de Reportes
+
+WHEN a Data Analyst accesses the Reportes module
+THE SYSTEM SHALL display two rows of filter controls covering 9 dimensions:
+Row 1 — temporal: Año, Trimestre (Q1–Q4), Mes, Día de semana (Lunes–Domingo)
+Row 2 — operativo: Aerolínea, Aeropuerto origen, Aeropuerto destino, Tipo de cancelación
+(Todos / Solo cancelados / Cancelados por causa FAA A, B, C, D)
+
+WHEN a Data Analyst selects "Limpiar" in the filter panel
+THE SYSTEM SHALL reset all 9 filter controls to their default "Todos" state
+and refresh the preview panel automatically
+
+WHEN a Data Analyst combines multiple filters
+THE SYSTEM SHALL apply all active filters conjunctively (AND logic) to the dataset
+before generating any export (PDF, Excel, or CSV)
 
 ---
 
@@ -650,9 +728,18 @@ WHEN la narrativa para un conjunto de KPIs ya fue generada en los últimos 300s
 THE SYSTEM SHALL retornar la narrativa desde caché sin llamar a ninguna API externa.
 
 WHEN el Analista exporta un análisis
-THE SYSTEM SHALL generar el archivo (PDF vía WeasyPrint, Excel vía openpyxl)
-y almacenarlo en el bucket aerotrack-exports de MinIO, retornando
-un enlace de descarga firmado con expiración de 1 hora.
+THE SYSTEM SHALL generar el archivo (PDF vía WeasyPrint, Excel vía openpyxl, o CSV)
+y almacenarlo en el bucket aerotrack-exports/reportes/ de MinIO, retornando
+un enlace de descarga firmado con expiración de 1 hora (PDF) o descarga directa (Excel, CSV).
+
+WHEN el Analista exporta Excel o CSV
+THE SYSTEM SHALL subir el archivo a MinIO aerotrack-exports/reportes/ para que aparezca
+en el historial (CU-45), y simultáneamente transmitirlo como descarga directa al navegador.
+
+WHEN el módulo de reportes aplica filtros
+THE SYSTEM SHALL soportar hasta 9 dimensiones de filtrado (CU-46):
+year, quarter, month, dow, airline, origin, dest, cancel_code, solo_cancelados;
+todos los filtros se aplican de forma conjuntiva (lógica AND) sobre fact_vuelo enriquecido en caché.
 
 WHEN el Admin guarda configuración de SMTP en CU-30
 THE SYSTEM SHALL enviar un email de prueba inmediatamente y mostrar
