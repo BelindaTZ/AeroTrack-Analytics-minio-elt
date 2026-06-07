@@ -361,6 +361,18 @@ WHEN a Data Analyst clicks on a route
 THE SYSTEM SHALL display: actual vs. scheduled time box plot, delay distribution,
 operating airlines, and seasonality data
 
+WHEN the Rutas module renders route data
+THE SYSTEM SHALL display a Plotly scattergeo geographic map of the contiguous USA (scope "usa")
+showing all routes as arcs between origin and destination airports,
+colored green (rgba 16,185,129) for efficient routes and red (rgba 239,68,68) for inefficient ones,
+with airport markers and hover tooltips showing route code, efficiency index, and average delay
+
+WHEN the geographic map is displayed
+THE SYSTEM SHALL include a collapse/expand toggle button in the map card header;
+the toggle shall animate with a 300 ms CSS transition and persist the user's
+collapsed/expanded preference in localStorage under the key "rutas_mapa_collapsed",
+restoring it automatically on subsequent page loads
+
 ---
 
 #### 6.2 CU-23: Comparar tiempo real vs programado

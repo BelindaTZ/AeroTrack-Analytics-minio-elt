@@ -12,6 +12,13 @@
   .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); margin-bottom:24px; }
   .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
   .chart-title i { width:28px; height:28px; background:var(--at-running-bg); border-radius:7px; display:inline-flex; align-items:center; justify-content:center; color:var(--at-blue-500); font-size:13px; }
+  .chart-card--collapsible .chart-title { margin-bottom:0; cursor:default; }
+  .chart-card--collapsible .chart-body { overflow:hidden; transition:max-height .3s ease, opacity .3s ease, margin-top .3s ease; max-height:600px; opacity:1; margin-top:16px; }
+  .chart-card--collapsible.is-collapsed .chart-body { max-height:0; opacity:0; margin-top:0; }
+  .btn-toggle-map { margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:var(--at-muted); background:none; border:1px solid var(--at-border); border-radius:6px; padding:3px 10px; cursor:pointer; transition:color .15s, border-color .15s; }
+  .btn-toggle-map:hover { color:var(--at-text); border-color:var(--at-blue-500); }
+  .btn-toggle-map .toggle-chevron { transition:transform .3s ease; font-size:12px; }
+  .is-collapsed .btn-toggle-map .toggle-chevron { transform:rotate(-180deg); }
   .badge-ineficiente { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:rgba(239,68,68,.12); color:#ef4444; }
   .narrativa-card  { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; margin-bottom:24px; }
   .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
@@ -62,6 +69,19 @@
     </div>
     {% else %}
 
+    <div class="chart-card chart-card--collapsible" id="mapa-card">
+      <div class="chart-title">
+        <i class="bi bi-geo-alt-fill"></i> Mapa de rutas — eficiencia por trayecto
+        <button class="btn-toggle-map" id="btn-toggle-mapa" aria-expanded="true" aria-controls="mapa-body" type="button">
+          <span class="toggle-label">Ocultar</span>
+          <i class="bi bi-chevron-up toggle-chevron"></i>
+        </button>
+      </div>
+      <div class="chart-body" id="mapa-body">
+        <div id="chart-mapa" style="height:400px"></div>
+      </div>
+    </div>
+
     <div class="chart-card">
       <div class="chart-title"><i class="bi bi-graph-up"></i> Tiempo real vs. programado promedio por ruta</div>
       <div id="chart-scatter" style="height:300px"></div>
@@ -72,8 +92,9 @@
 
     {% endif %}
 
-    <!-- Datos scatter para re-render -->
+    <!-- Datos para re-render -->
     <script id="rutas-chart-data" type="application/json">{{ grafico_scatter | safe }}</script>
+    <script id="rutas-map-data"   type="application/json">{{ grafico_mapa   | safe }}</script>
   </div>
 
   <!-- Tabla (fuera del results para no perder el scroll) -->
@@ -139,18 +160,58 @@
   };
 
   function renderCharts() {
+    // Scatter
     var dataEl = document.getElementById('rutas-chart-data');
-    if (!dataEl) return;
-    try {
-      var sc = JSON.parse(dataEl.textContent);
-      if (sc && sc.data) {
-        Object.assign(sc.layout, layoutBase);
-        Plotly.newPlot('chart-scatter', sc.data, sc.layout, { responsive: true, displayModeBar: false });
+    if (dataEl) {
+      try {
+        var sc = JSON.parse(dataEl.textContent);
+        if (sc && sc.data) {
+          Object.assign(sc.layout, layoutBase);
+          Plotly.newPlot('chart-scatter', sc.data, sc.layout, { responsive: true, displayModeBar: false });
+        }
+      } catch(e) {}
+    }
+    // Mapa
+    var mapEl = document.getElementById('rutas-map-data');
+    if (mapEl) {
+      try {
+        var mp = JSON.parse(mapEl.textContent);
+        if (mp && mp.data) {
+          Plotly.newPlot('chart-mapa', mp.data, mp.layout, { responsive: true, displayModeBar: false });
+        }
+      } catch(e) {}
+    }
+  }
+
+  // ── Toggle collapse del mapa ──────────────────────────────────
+  var _STORAGE_KEY = 'rutas_mapa_collapsed';
+
+  function initToggle() {
+    var card = document.getElementById('mapa-card');
+    var btn  = document.getElementById('btn-toggle-mapa');
+    if (!card || !btn) return;
+
+    // Restaurar estado guardado
+    if (localStorage.getItem(_STORAGE_KEY) === '1') {
+      card.classList.add('is-collapsed');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.querySelector('.toggle-label').textContent = 'Mostrar mapa';
+    }
+
+    btn.addEventListener('click', function () {
+      var collapsed = card.classList.toggle('is-collapsed');
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      btn.querySelector('.toggle-label').textContent = collapsed ? 'Mostrar mapa' : 'Ocultar';
+      localStorage.setItem(_STORAGE_KEY, collapsed ? '1' : '0');
+      // Forzar resize de Plotly cuando se expande
+      if (!collapsed) {
+        setTimeout(function () { Plotly.Plots.resize('chart-mapa'); }, 320);
       }
-    } catch(e) {}
+    });
   }
 
   renderCharts();
+  initToggle();
 
   var selYear    = document.getElementById('sel-year');
   var selAirline = document.getElementById('sel-airline');
@@ -172,6 +233,7 @@
         if (nc && countEl) countEl.textContent = nc.textContent;
         history.replaceState(null, '', '/rutas?' + params);
         renderCharts();
+        initToggle();
       })
       .catch(function(){});
   }

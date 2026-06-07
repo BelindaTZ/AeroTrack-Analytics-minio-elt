@@ -399,7 +399,7 @@ Each module writes its own self-contained script. **Do not use `FormData` to bui
 |---|---|---|---|
 | `dashboard` | `/dashboard` | `dashboard-results` | select: año · mes · aerolínea · ruta |
 | `puntualidad` | `/puntualidad/otp` | `puntualidad-results` | select: aerolínea · período |
-| `rutas` | `/rutas/ranking` | `rutas-results` | select: aerolínea |
+| `rutas` | `/rutas` | `rutas-results` | select: año · aerolínea |
 | `cancelaciones` | `/cancelaciones/causas` | `cancelaciones-results` | select: aerolínea · período |
 | `auditoria` | `/auditoria` | `auditoria-results` | text: usuario · select: módulo · acción · resultado · date range |
 | `predictivo` | `/predictivo/estacionalidad` | `predictivo-results` | select: aerolínea |
@@ -442,7 +442,7 @@ Prefijos registrados en `app/main.py`: `/auth`, `/pipeline`, `/modelo`, `/dashbo
 | `GET` | `/dashboard/kpis` | Analista+ver | dashboard | CU-17 | KPIs: OTP, total flights, cancellation rate, avg delay |
 | `GET` | `/puntualidad/otp` | Analista+ver | puntualidad | CU-19 | OTP by airline bar chart data |
 | `GET` | `/puntualidad/tendencias` | Analista+ver | puntualidad | CU-21 | OTP trend line by month/day-of-week |
-| `GET` | `/rutas/ranking` | Analista+ver | rutas | CU-22 | Route efficiency ranking |
+| `GET` | `/rutas` | Analista+ver | rutas | CU-22 | Route efficiency ranking + Plotly scattergeo USA map (arcs colored by efficiency) with collapse toggle |
 | `GET` | `/cancelaciones/causas` | Analista+ver | cancelaciones | CU-24 | Cancellations by FAA code pie chart data |
 | `GET`  | `/reportes` | Analista+ver | reportes | CU-44,46 | Reportes index — filtros avanzados, preview, historial |
 | `GET`  | `/reportes/preview` | Analista+ver | reportes | CU-44 | Live stats for current filters (debounce 500 ms): total, OTP, cancelados, retraso, aerolíneas, rutas |

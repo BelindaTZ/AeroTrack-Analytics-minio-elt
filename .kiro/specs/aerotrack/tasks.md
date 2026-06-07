@@ -218,16 +218,22 @@ táctico y estratégico a través de una aplicación FastAPI + Jinja2 + Bootstra
   programado). Detalle de ruta con distribución de retrasos y estacionalidad.
   Rutas ineficientes marcadas si superan umbral configurado.
   Los datos de eficiencia se calculan con **pandas** sobre Parquet de MinIO. Los gráficos usan
-  **Plotly** (scatter plot tiempo real vs programado, heatmap de rutas). Incluye card de narrativa
+  **Plotly** (scatter plot tiempo real vs programado; mapa geográfico scattergeo USA). Incluye card de narrativa
   ejecutiva vía `ia_narrativa.py` con badge de proveedor/caché.
   **Files:** app/rutas/ranking_eficiencia.py, app/templates/rutas/
   **Dependencies:** None
   **Requirements:** CU-22, CU-23
 
-  - [x] 12.1 Endpoint GET /rutas/ranking — lista ordenada por índice de eficiencia
+  - [x] 12.1 Endpoint GET /rutas — lista ordenada por índice de eficiencia con filtros año y aerolínea
   - [x] 12.2 Marcar rutas ineficientes si desviación supera umbral de configuracion_sistema
   - [x] 12.3 Vista de detalle de ruta: box plot tiempo real vs programado, distribución retrasos
   - [x] 12.4 Endpoint GET /rutas/{ruta}/detalle — scatter plot eficiencia, distribución retrasos, OTP mensual
+  - [x] 12.5 Mapa geográfico de rutas USA: `_AIRPORTS` (dict estático ~160 aeropuertos IATA con lat/lon) y
+        `_mapa_rutas(rows)` en `ranking_eficiencia.py` generan un Plotly `scattergeo` con arcos verdes
+        (eficientes) y rojos (ineficientes), marcadores de aeropuerto y hover con ruta/eficiencia/retraso;
+        el card incluye toggle collapse con transición CSS 300 ms y preferencia persistida en
+        localStorage ("rutas_mapa_collapsed"); `Plotly.Plots.resize` se llama al expandir para corregir
+        dimensiones; `initToggle()` se re-ejecuta tras cada swap del live filter
 
 - [x] 13. Implementar módulo de cancelaciones
   **Description:** Clasificación por código FAA (A/B/C/D) con gráfica de torta.
