@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+{% block title %}Asistente IA — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-item">Análisis</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Asistente IA</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .chat-layout { display:grid; grid-template-columns:280px 1fr; gap:20px; height:calc(100vh - 140px); min-height:480px; }
+  @media(max-width:800px){ .chat-layout { grid-template-columns:1fr; height:auto; } }
+
+  /* Panel info */
+  .chat-info { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .chat-info-title { font-size:13px; font-weight:700; color:var(--at-text); }
+  .info-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; }
+  .info-badge.active  { background:rgba(16,185,129,.12); color:#10b981; }
+  .info-badge.inactive{ background:rgba(239,68,68,.12);  color:#ef4444; }
+  .info-row { font-size:11.5px; color:var(--at-muted); display:flex; gap:6px; align-items:baseline; }
+  .info-row strong { color:var(--at-sub); font-weight:600; }
+  .example-chip { background:var(--at-bg); border:1px solid var(--at-border); border-radius:6px; padding:7px 10px; font-size:11.5px; color:var(--at-sub); cursor:pointer; transition:background .15s; }
+  .example-chip:hover { background:rgba(255,255,255,.07); color:var(--at-text); }
+  .chip-label { font-size:10px; font-weight:600; color:var(--at-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+
+  /* Panel chat */
+  .chat-main { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); display:flex; flex-direction:column; overflow:hidden; }
+  .chat-header { padding:14px 20px; border-bottom:1px solid var(--at-border); display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .chat-header-title { font-size:13.5px; font-weight:700; color:var(--at-text); }
+  .btn-reset { margin-left:auto; padding:5px 10px; font-size:11px; background:rgba(255,255,255,.05); border:1px solid var(--at-border); border-radius:6px; color:var(--at-muted); cursor:pointer; }
+  .btn-reset:hover { color:var(--at-text); background:rgba(255,255,255,.1); }
+
+  /* Mensajes */
+  .chat-messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .chat-messages::-webkit-scrollbar { width:5px; }
+  .chat-messages::-webkit-scrollbar-track { background:transparent; }
+  .chat-messages::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+
+  .msg { max-width:85%; }
+  .msg.user { align-self:flex-end; }
+  .msg.assistant { align-self:flex-start; }
+  .msg-bubble { padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.65; }
+  .msg.user     .msg-bubble { background:rgba(59,130,246,.18); color:var(--at-text); border-bottom-right-radius:3px; }
+  .msg.assistant .msg-bubble { background:var(--at-bg); border:1px solid var(--at-border); color:var(--at-text); border-bottom-left-radius:3px; }
+  .msg-meta { font-size:10.5px; color:var(--at-muted); margin-top:4px; }
+  .msg.user .msg-meta { text-align:right; }
+
+  .filter-chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+  .filter-chip { display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:600; padding:2px 7px; border-radius:20px; background:rgba(99,102,241,.1); color:#818cf8; }
+
+  /* Empty state */
+  .chat-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:40px; color:var(--at-muted); gap:12px; }
+  .chat-empty i { font-size:40px; opacity:.3; }
+  .chat-empty p { font-size:13px; max-width:360px; line-height:1.6; }
+
+  /* Input */
+  .chat-input-area { border-top:1px solid var(--at-border); padding:14px 16px; display:flex; gap:10px; align-items:flex-end; flex-shrink:0; }
+  #chat-input { flex:1; background:var(--at-bg); border:1px solid var(--at-border); border-radius:var(--at-r-md); color:var(--at-text); font-size:13px; padding:10px 14px; resize:none; min-height:42px; max-height:120px; font-family:inherit; transition:border-color .15s; }
+  #chat-input:focus { outline:none; border-color:var(--at-blue-500); }
+  #chat-input::placeholder { color:var(--at-muted); }
+  .btn-send { width:42px; height:42px; border-radius:var(--at-r-md); background:var(--at-blue-500); border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; transition:background .15s; }
+  .btn-send:hover { background:#2563eb; }
+  .btn-send:disabled { background:rgba(255,255,255,.1); cursor:not-allowed; }
+  .btn-send .spinner { width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:none; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* Typing indicator */
+  .typing-dots { display:inline-flex; align-items:center; gap:4px; padding:12px 16px; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--at-muted); animation:dot-pulse 1.2s ease infinite; }
+  .dot:nth-child(2){ animation-delay:.2s; }
+  .dot:nth-child(3){ animation-delay:.4s; }
+  @keyframes dot-pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  /* Deshabilitado */
+  .disabled-overlay { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:48px; text-align:center; flex:1; }
+  .disabled-overlay i { font-size:48px; color:var(--at-muted); opacity:.3; }
+  .disabled-overlay p { font-size:13px; color:var(--at-muted); max-width:340px; line-height:1.6; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-cpu-fill"></i></span>
+    Asistente IA
+  </h1>
+  <p>Consultas en lenguaje natural sobre los datos de vuelos. Respuestas justificadas con datos reales.</p>
+</div>
+
+<div class="chat-layout">
+
+  <!-- Panel lateral: info y ejemplos -->
+  <aside class="chat-info">
+    <div>
+      <div class="chat-info-title">Estado del módulo</div>
+      <div style="margin-top:8px">
+        {% if activo and tiene_key %}
+        <span class="info-badge active"><i class="bi bi-circle-fill" style="font-size:6px"></i> Activo</span>
+        {% else %}
+        <span class="info-badge inactive"><i class="bi bi-circle-fill" style="font-size:6px"></i> {% if not activo %}Deshabilitado{% else %}Sin API key{% endif %}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if proveedor %}
+    <div>
+      <div class="info-row"><strong>Proveedor:</strong> {{ proveedor | capitalize }}</div>
+      {% if modelo %}<div class="info-row"><strong>Modelo:</strong> {{ modelo }}</div>{% endif %}
+    </div>
+    {% endif %}
+
+    <div style="border-top:1px solid var(--at-border);padding-top:14px">
+      <div class="chip-label">Preguntas de ejemplo</div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:8px">
+        <div class="example-chip" onclick="setExample(this)">¿Cuál fue la aerolínea más puntual en 2022?</div>
+        <div class="example-chip" onclick="setExample(this)">Compara OTP de AA vs DL</div>
+        <div class="example-chip" onclick="setExample(this)">¿Cuáles son las principales causas de retraso?</div>
+        <div class="example-chip" onclick="setExample(this)">¿Qué rutas tienen mayor tasa de cancelación?</div>
+        <div class="example-chip" onclick="setExample(this)">¿Cómo evolucionó el OTP en diciembre 2022?</div>
+        <div class="example-chip" onclick="setExample(this)">¿Qué rutas tienen mayor tasa de cancelación?</div>
+      </div>
+    </div>
+
+    <div style="margin-top:auto;padding-top:14px;border-top:1px solid var(--at-border)">
+      <div style="font-size:10.5px;color:var(--at-muted);line-height:1.7">
+        <i class="bi bi-info-circle" style="color:var(--at-blue-500)"></i>
+        Las respuestas se basan en los datos históricos del modelo dimensional.
+        El historial de sesión se mantiene 30 minutos.
+      </div>
+    </div>
+  </aside>
+
+  <!-- Panel principal de chat -->
+  <div class="chat-main">
+    <div class="chat-header">
+      <i class="bi bi-robot" style="color:var(--at-blue-500);font-size:16px" aria-hidden="true"></i>
+      <span class="chat-header-title">AeroTrack Asistente</span>
+      <button class="btn-reset" id="btn-reset" title="Nueva conversación">
+        <i class="bi bi-arrow-counterclockwise"></i> Nueva conversación
+      </button>
+    </div>
+
+    {% if not activo %}
+    <div class="disabled-overlay">
+      <i class="bi bi-cpu" aria-hidden="true"></i>
+      <p>El módulo Asistente IA está <strong>deshabilitado</strong>. Un administrador puede activarlo en <a href="/configuracion?active=ia" style="color:var(--at-blue-500)">Configuración → IA</a>.</p>
+    </div>
+
+    {% elif not tiene_key %}
+    <div class="disabled-overlay">
+      <i class="bi bi-key" aria-hidden="true"></i>
+      <p>No hay una API key configurada. Configure el proveedor y la clave en <a href="/configuracion?active=ia" style="color:var(--at-blue-500)">Configuración → IA</a>.</p>
+    </div>
+
+    {% else %}
+
+    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-label="Conversación">
+
+      {% if not history %}
+      <div class="chat-empty" id="empty-state">
+        <i class="bi bi-chat-dots" aria-hidden="true"></i>
+        <p>Haz una pregunta sobre los datos de vuelos. Puedo analizar puntualidad, cancelaciones, rutas y causas de retraso.</p>
+      </div>
+      {% else %}
+      {% for msg in history %}
+      <div class="msg {{ msg.role }}">
+        <div class="msg-bubble">{{ msg.content }}</div>
+        <div class="msg-meta">
+          {% if msg.role == 'user' %}Tú{% else %}AeroTrack IA{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+    </div>
+
+    <div class="chat-input-area">
+      <textarea
+        id="chat-input"
+        placeholder="Escribe tu pregunta sobre los datos de vuelos..."
+        rows="1"
+        maxlength="800"
+        aria-label="Mensaje para el asistente"
+      ></textarea>
+      <button class="btn-send" id="btn-send" aria-label="Enviar mensaje" title="Enviar (Enter)">
+        <i class="bi bi-send-fill" id="send-icon"></i>
+        <span class="spinner" id="send-spinner"></span>
+      </button>
+    </div>
+
+    {% endif %}
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var SESSION_ID = {{ session_id | tojson }};
+  var input    = document.getElementById('chat-input');
+  var btnSend  = document.getElementById('btn-send');
+  var msgArea  = document.getElementById('chat-messages');
+  var btnReset = document.getElementById('btn-reset');
+
+  if (!input || !msgArea) return;  // módulo deshabilitado
+
+  // Auto-resize del textarea
+  input.addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  });
+
+  // Scroll to bottom
+  function scrollBottom() {
+    msgArea.scrollTop = msgArea.scrollHeight;
+  }
+  scrollBottom();
+
+  // Convierte markdown básico a HTML (con escape previo para evitar XSS)
+  function mdToHtml(text) {
+    // Escapar entidades HTML
+    text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Negrita y cursiva
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>');
+    // Código inline
+    text = text.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:3px;font-family:\'JetBrains Mono\',monospace;font-size:11.5px">$1</code>');
+    // Listas y párrafos
+    var lines = text.split('\n');
+    var out = [], list = null;
+    lines.forEach(function(line) {
+      var ul = line.match(/^[\-\*] (.+)$/);
+      var ol = line.match(/^\d+\. (.+)$/);
+      if (ul) {
+        if (list !== 'ul') { if (list) out.push('</' + list + '>'); out.push('<ul style="margin:6px 0;padding-left:20px">'); list = 'ul'; }
+        out.push('<li>' + ul[1] + '</li>');
+      } else if (ol) {
+        if (list !== 'ol') { if (list) out.push('</' + list + '>'); out.push('<ol style="margin:6px 0;padding-left:20px">'); list = 'ol'; }
+        out.push('<li>' + ol[1] + '</li>');
+      } else {
+        if (list) { out.push('</' + list + '>'); list = null; }
+        out.push(line === '' ? '<br>' : line + '<br>');
+      }
+    });
+    if (list) out.push('</' + list + '>');
+    return out.join('');
+  }
+
+  // Añadir mensaje al DOM
+  function appendMsg(role, content, filtros) {
+    // Quitar empty state
+    var empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+
+    var div = document.createElement('div');
+    div.className = 'msg ' + role;
+
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    if (role === 'assistant') {
+      bubble.innerHTML = mdToHtml(content);
+    } else {
+      bubble.textContent = content;
+    }
+    div.appendChild(bubble);
+
+    var meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = role === 'user' ? 'Tú' : 'AeroTrack IA';
+    div.appendChild(meta);
+
+    if (filtros && Object.keys(filtros).length > 0) {
+      var chips = document.createElement('div');
+      chips.className = 'filter-chips';
+      Object.entries(filtros).forEach(function(kv) {
+        var chip = document.createElement('span');
+        chip.className = 'filter-chip';
+        chip.innerHTML = '<i class="bi bi-funnel-fill" style="font-size:8px"></i>' + kv[0] + ': ' + kv[1];
+        chips.appendChild(chip);
+      });
+      div.appendChild(chips);
+    }
+
+    msgArea.appendChild(div);
+    scrollBottom();
+  }
+
+  // Indicador "escribiendo..."
+  var typingEl = null;
+  function showTyping() {
+    typingEl = document.createElement('div');
+    typingEl.className = 'msg assistant';
+    typingEl.id = 'typing-indicator';
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-bubble typing-dots';
+    bubble.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+    typingEl.appendChild(bubble);
+    msgArea.appendChild(typingEl);
+    scrollBottom();
+  }
+  function hideTyping() {
+    if (typingEl) { typingEl.remove(); typingEl = null; }
+  }
+
+  // Enviar mensaje
+  function sendMessage() {
+    var q = input.value.trim();
+    if (!q || btnSend.disabled) return;
+
+    appendMsg('user', q);
+    input.value = '';
+    input.style.height = 'auto';
+
+    btnSend.disabled = true;
+    document.getElementById('send-icon').style.display    = 'none';
+    document.getElementById('send-spinner').style.display = 'inline-block';
+    showTyping();
+
+    fetch('/ia/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ mensaje: q, session_id: SESSION_ID }),
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      hideTyping();
+      btnSend.disabled = false;
+      document.getElementById('send-icon').style.display    = '';
+      document.getElementById('send-spinner').style.display = 'none';
+
+      if (data.error) {
+        appendMsg('assistant', '⚠ ' + data.error, {});
+      } else {
+        SESSION_ID = data.session_id || SESSION_ID;
+        appendMsg('assistant', data.respuesta, data.filtros || {});
+      }
+    })
+    .catch(function(err) {
+      hideTyping();
+      btnSend.disabled = false;
+      document.getElementById('send-icon').style.display    = '';
+      document.getElementById('send-spinner').style.display = 'none';
+      appendMsg('assistant', '⚠ Error de conexión. Inténtalo de nuevo.', {});
+    });
+  }
+
+  btnSend.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // Nueva conversación
+  if (btnReset) {
+    btnReset.addEventListener('click', function() {
+      fetch('/ia/reset', { method: 'POST' })
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        SESSION_ID = data.session_id;
+        // Limpiar mensajes
+        msgArea.innerHTML = '<div class="chat-empty" id="empty-state">'
+          + '<i class="bi bi-chat-dots"></i>'
+          + '<p>Haz una pregunta sobre los datos de vuelos.</p>'
+          + '</div>';
+      });
+    });
+  }
+
+  // Preguntas de ejemplo
+  window.setExample = function(el) {
+    if (input) {
+      input.value = el.textContent.trim();
+      input.focus();
+      input.dispatchEvent(new Event('input'));
+    }
+  };
+
+})();
+</script>
+{% endblock %}

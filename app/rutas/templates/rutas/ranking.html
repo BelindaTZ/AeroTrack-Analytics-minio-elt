@@ -20,9 +20,18 @@
   .btn-toggle-map .toggle-chevron { transition:transform .3s ease; font-size:12px; }
   .is-collapsed .btn-toggle-map .toggle-chevron { transform:rotate(-180deg); }
   .badge-ineficiente { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:rgba(239,68,68,.12); color:#ef4444; }
-  .narrativa-card  { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; margin-bottom:24px; }
-  .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
-  .narrativa-body  { font-size:13.5px; line-height:1.7; color:var(--at-text); white-space:pre-wrap; }
+  #ia-popover { position:absolute;z-index:9999;width:340px;max-width:calc(100vw - 24px);background:var(--at-surface);border:1px solid rgba(99,102,241,.4);border-radius:var(--at-r-lg);box-shadow:0 16px 48px rgba(0,0,0,.6);padding:16px 18px;display:none; }
+  .ia-pop-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:10px; }
+  .ia-pop-title  { font-size:12.5px;font-weight:700;color:var(--at-text);display:flex;align-items:center;gap:6px; }
+  .ia-pop-close  { background:none;border:none;color:var(--at-muted);font-size:18px;cursor:pointer;padding:0;line-height:1; }
+  .ia-pop-close:hover { color:var(--at-text); }
+  .ia-pop-badge  { display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(99,102,241,.12);color:#818cf8;margin-bottom:8px; }
+  .ia-pop-body   { font-size:13px;line-height:1.65;color:var(--at-text); }
+  @keyframes ia-skel-pulse { from{opacity:.4} to{opacity:.9} }
+  .ia-skel { height:10px;border-radius:4px;background:rgba(255,255,255,.1);margin-bottom:7px;animation:ia-skel-pulse 1.2s ease infinite alternate; }
+  .btn-ia-row { display:none;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(99,102,241,.15);color:#818cf8;border:none;cursor:pointer;font-size:10px;padding:0;transition:background .15s; }
+  .btn-ia-row:hover { background:rgba(99,102,241,.3); }
+  tr:hover .btn-ia-row { display:inline-flex; }
 </style>
 {% endblock %}
 
@@ -87,8 +96,6 @@
       <div id="chart-scatter" style="height:300px"></div>
     </div>
 
-    <!-- Narrativa IA (carga asíncrona) -->
-    <div id="narrativa-async" class="narrativa-card" data-narrativa-url="/rutas/narrativa" style="display:none"></div>
 
     {% endif %}
 
@@ -125,10 +132,11 @@
             <span class="at-badge at-badge-success"><span class="badge-dot"></span> OK</span>
             {% endif %}
           </td>
-          <td>
+          <td style="display:flex;align-items:center;gap:6px">
             <a href="/rutas/{{ r.ruta }}/detalle" class="btn-icon view" title="Ver detalle" aria-label="Ver detalle de {{ r.ruta }}">
               <i class="bi bi-eye" aria-hidden="true"></i>
             </a>
+            <button class="btn-ia-row" title="Narrativa IA" onclick="openNarrativaBtn(this,'/rutas/narrativa',{tipo:'ruta',ruta_val:'{{ r.ruta }}'})"><i class="bi bi-stars"></i></button>
           </td>
         </tr>
         {% endfor %}
@@ -143,6 +151,14 @@
   </div>
   {% endif %}
   {% endif %}
+</div>
+
+<div id="ia-popover" role="dialog" aria-modal="true" aria-label="Narrativa IA">
+  <div class="ia-pop-header">
+    <span class="ia-pop-title"><i class="bi bi-stars"></i> Narrativa IA — Rutas</span>
+    <button class="ia-pop-close" onclick="document.getElementById('ia-popover').style.display='none'" aria-label="Cerrar">×</button>
+  </div>
+  <div id="ia-pop-body" class="ia-pop-body"></div>
 </div>
 
 {% endblock %}
@@ -241,5 +257,72 @@
   if (selYear)    selYear.addEventListener('change', apply);
   if (selAirline) selAirline.addEventListener('change', apply);
 })();
+
+function _iaFetch(url) {
+  var pop  = document.getElementById('ia-popover');
+  var body = document.getElementById('ia-pop-body');
+  if (!pop || !body) return;
+  body.innerHTML =
+    '<div class="ia-skel" style="width:80%"></div>' +
+    '<div class="ia-skel" style="width:96%"></div>' +
+    '<div class="ia-skel" style="width:65%"></div>' +
+    '<div class="ia-skel" style="width:88%"></div>';
+  pop.style.display = 'block';
+  fetch(url, {credentials:'same-origin'})
+    .then(function(rs){ return rs.json(); })
+    .then(function(data) {
+      if (!data || !data.texto) {
+        body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Sin narrativa disponible.</span>';
+        return;
+      }
+      body.innerHTML =
+        '<div class="ia-pop-badge"><i class="bi bi-cpu"></i> ' +
+        String(data.proveedor || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+        (data.desde_cache ? ' — caché' : '') + '</div>' +
+        '<div style="white-space:pre-wrap">' +
+        String(data.texto).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+    })
+    .catch(function(){
+      body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Error al conectar con la IA.</span>';
+    });
+}
+function _iaPos(cx, cy) {
+  var pop = document.getElementById('ia-popover');
+  if (!pop) return;
+  var pw = 340, ph = 220;
+  var mw = document.getElementById('main-wrapper');
+  var mwRect  = mw ? mw.getBoundingClientRect() : {left:0, top:0};
+  var mwScroll = mw ? mw.scrollTop : 0;
+  var l = cx - mwRect.left;
+  var t = cy - mwRect.top + mwScroll + 12;
+  if (cx + pw + 12 > window.innerWidth) l = cx - mwRect.left - pw;
+  if (l < 8) l = 8;
+  if (cy + ph + 20 > window.innerHeight) t = cy - mwRect.top + mwScroll - ph - 8;
+  if (t < 4) t = 4;
+  pop.style.left = l + 'px';
+  pop.style.top  = t + 'px';
+}
+function _iaQs(extra) {
+  var params = new URLSearchParams(window.location.search);
+  if (extra) Object.keys(extra).forEach(function(k){ params.set(k, extra[k]); });
+  var s = params.toString();
+  return s ? '?' + s : '';
+}
+window.openNarrativaAt = function(nativeEv, url, extra) {
+  _iaPos(nativeEv.clientX, nativeEv.clientY);
+  _iaFetch(url + _iaQs(extra));
+};
+window.openNarrativaBtn = function(btn, url, extra) {
+  var r = btn.getBoundingClientRect();
+  _iaPos(r.left, r.bottom + 8);
+  _iaFetch(url + _iaQs(extra));
+};
+document.addEventListener('click', function(e) {
+  var pop = document.getElementById('ia-popover');
+  if (!pop || pop.style.display === 'none') return;
+  if (pop.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('.btn-ia-inline, .btn-ia-row')) return;
+  pop.style.display = 'none';
+});
 </script>
 {% endblock %}

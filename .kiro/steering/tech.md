@@ -385,6 +385,29 @@ def _get_umbrales() -> dict:
     return result
 ```
 
+**Regla: invalidación explícita al guardar configuración.**
+El `_page_cache` de Capa 3 (TTL 5 min) incluye las alertas calculadas con los umbrales vigentes en ese momento. Si solo se espera a que expire el `_umbrales_cache` (60 s), el dashboard puede tardar hasta **6 minutos** en reflejar un cambio de umbral guardado en Configuración.
+
+La solución es exponer una función `invalidar_cache_alertas()` en el módulo de dashboard y llamarla desde `panel.py` al guardar el grupo `"alertas"`:
+
+```python
+# app/dashboard/kpis.py
+def invalidar_cache_alertas() -> None:
+    global _umbrales_cache
+    _umbrales_cache = {"data": None, "expires": 0.0}
+    _page_cache.clear()
+```
+
+```python
+# app/configuracion/panel.py  ·  dentro de guardar_grupo()
+from app.dashboard.kpis import invalidar_cache_alertas
+
+if grupo == "alertas":
+    invalidar_cache_alertas()
+```
+
+Con esto, el cambio de umbral se refleja en la próxima visita al dashboard, sin esperar expiración. El mismo patrón aplica a cualquier módulo cuyo `_page_cache` incluya datos derivados de `configuracion_sistema`.
+
 ---
 
 ### P-02 · Narrativa IA asíncrona

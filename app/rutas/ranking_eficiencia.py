@@ -130,6 +130,12 @@ def _get_umbral_ruta() -> float:
     return result
 
 
+def invalidar_cache_umbral_ruta() -> None:
+    global _umbral_cache
+    _umbral_cache = {"data": None, "expires": 0.0}
+    _page_cache.clear()
+
+
 def _safe(v: Any) -> Any:
     if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
         return 0.0
@@ -280,6 +286,7 @@ def _scatter_eficiencia_agg(df_rutas: pd.DataFrame) -> str:
         mode="markers",
         marker=dict(color="#3b82f6", size=5, opacity=0.6),
         hovertemplate="Prog: %{x:.0f} min<br>Real: %{y:.0f} min<extra></extra>",
+        showlegend=False,
     ))
     max_val = float(max(df["tiempo_prog_avg"].max(), df["tiempo_real_avg"].max())) + 20
     fig.add_trace(go.Scatter(
@@ -389,20 +396,67 @@ def ranking(request: Request, year: str = "", month: str = "", airline: str = ""
 
 
 @router.get("/narrativa")
-def narrativa_json(request: Request, year: str = "", month: str = "", airline: str = ""):
+def narrativa_json(
+    request: Request,
+    year: str = "", month: str = "", airline: str = "",
+    tipo: str = "", ruta_val: str = "",
+):
     _perm_ver(request)
     try:
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
         data = _compute_page(filtros)
-        rows = data["rows"]
-        total_ineficientes = sum(1 for r in rows if r["ineficiente"])
-        ctx = {
-            "Rutas analizadas": len(rows),
-            "Rutas ineficientes": total_ineficientes,
-            "Umbral ineficiencia": f"{data['umbral']:.0%}",
-            "Mejor ruta": rows[0]["ruta"] if rows else "N/A",
-        }
-        return JSONResponse(generar_narrativa(ctx, "Eficiencia de Rutas"))
+        rows   = data["rows"]
+        umbral = data["umbral"]
+
+        total        = len(rows)
+        ineficientes = [r for r in rows if r["ineficiente"]]
+        pct_inef     = len(ineficientes) / total * 100 if total > 0 else 0
+        ctx: dict = {}
+        focus = ""
+
+        if tipo == "ruta" and ruta_val:
+            row = next((r for r in rows if r["ruta"] == ruta_val), None)
+            if row:
+                rank = next((i + 1 for i, r in enumerate(rows) if r["ruta"] == ruta_val), None)
+                eficientes = [r for r in rows if not r["ineficiente"]]
+                mejor_global = min((r for r in rows), key=lambda r: r["eficiencia_media"]) if rows else None
+                ctx["Ruta"]                  = ruta_val
+                ctx["Índice de eficiencia"]  = f"{row['eficiencia_media']:.3f}"
+                ctx["Estado eficiencia"]     = (
+                    f"INEFICIENTE (índice > {1 + umbral:.2f})" if row["ineficiente"]
+                    else f"EFICIENTE (índice ≤ {1 + umbral:.2f})"
+                )
+                ctx["Retraso promedio"]      = f"{row['retraso_prom']:.1f} min"
+                ctx["Vuelos operados"]       = f"{row['total']:,}"
+                ctx["Posición en ranking"]   = f"#{rank} de {total}"
+                ctx["% rutas ineficientes global"] = f"{pct_inef:.0f}%"
+                if mejor_global and mejor_global["ruta"] != ruta_val:
+                    ctx["Ruta más eficiente del período"] = (
+                        f"{mejor_global['ruta']} (índice {mejor_global['eficiencia_media']:.3f})"
+                    )
+                focus = f"la eficiencia operacional de la ruta {ruta_val}"
+        else:
+            ctx["Rutas analizadas"]         = total
+            ctx["Rutas ineficientes"]       = f"{len(ineficientes)} de {total} ({pct_inef:.0f}%)"
+            ctx["Umbral de ineficiencia"]   = f"índice > {1 + umbral:.2f}"
+            ctx["Estado eficiencia global"] = (
+                "CUMPLE: mayoría eficiente" if pct_inef <= 30 else "NO CUMPLE: alta proporción ineficiente"
+            )
+            if ineficientes:
+                peor = max(ineficientes, key=lambda r: r["eficiencia_media"])
+                ctx["Ruta más ineficiente"] = (
+                    f"{peor['ruta']} (índice {peor['eficiencia_media']:.3f}, "
+                    f"retraso {peor['retraso_prom']:.1f} min)"
+                )
+            eficientes = [r for r in rows if not r["ineficiente"]]
+            if eficientes:
+                mejor = min(eficientes, key=lambda r: r["eficiencia_media"])
+                ctx["Ruta más eficiente"] = f"{mejor['ruta']} (índice {mejor['eficiencia_media']:.3f})"
+            if rows:
+                ctx["Retraso promedio global"] = f"{sum(r['retraso_prom'] for r in rows)/len(rows):.1f} min"
+            focus = "el porcentaje de rutas ineficientes y la ruta con peor eficiencia"
+
+        return JSONResponse(generar_narrativa(ctx, "Eficiencia de Rutas", focus))
     except Exception:
         return JSONResponse({"texto": "", "proveedor": "", "desde_cache": False})
 

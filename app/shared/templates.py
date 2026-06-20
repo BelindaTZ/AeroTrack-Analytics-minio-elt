@@ -19,6 +19,8 @@ templates.env.loader = FileSystemLoader([
     str(_BASE / "configuracion" / "templates"),
     str(_BASE / "auditoria" / "templates"),
     str(_BASE / "reportes" / "templates"),
+    str(_BASE / "predictivo" / "templates"),
+    str(_BASE / "asistente_ia" / "templates"),
 ])
 
 # Tablas del modelo dimensional con sus PKs e iconos
@@ -49,6 +51,7 @@ MODULOS_SIDEBAR = [
     {"clave": "cancelaciones",      "label": "Cancelaciones",      "icon": "bi-x-circle-fill",      "url": "/cancelaciones",    "entrega": 2},
     {"clave": "reportes",           "label": "Reportes",           "icon": "bi-file-earmark-pdf",   "url": "/reportes",         "entrega": 2},
     {"clave": "predictivo",         "label": "Predictivo IA",      "icon": "bi-graph-up-arrow",     "url": "/predictivo",       "entrega": 3},
+    {"clave": "asistente_ia",       "label": "Asistente IA",       "icon": "bi-cpu-fill",           "url": "/ia",               "entrega": 3},
 ]
 
 # Menú de administración (requiere permiso seguridad.ver)

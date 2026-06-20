@@ -1,6 +1,6 @@
 """
 Narrativa ejecutiva en español para módulos analíticos.
-Patrón: Grok 3 mini (primario) → Gemini 2.0 Flash (fallback en 429/402/503 o timeout >12s)
+Patrón: Groq llama-3.1-8b-instant (primario) → Gemini 2.5 Flash (fallback en 429/402/503 o timeout >12s)
 Caché en memoria TTL 300s, clave = MD5(prompt). Temperatura 0.4.
 Contexto = solo KPIs agregados, nunca filas raw.
 """
@@ -33,6 +33,11 @@ def _get_ia_config() -> dict:
     return result
 
 
+def invalidar_cfg_cache() -> None:
+    global _cfg_cache
+    _cfg_cache = {"data": None, "expires": 0.0}
+
+
 def _cache_key(prompt: str) -> str:
     return hashlib.md5(prompt.encode()).hexdigest()
 
@@ -48,16 +53,16 @@ def _store(key: str, text: str, provider: str) -> None:
     _cache[key] = {"text": text, "provider": provider, "expires": time.time() + _TTL}
 
 
-def _call_grok(prompt: str, api_key: str) -> str:
+def _call_groq(prompt: str, api_key: str) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
-        "model": "grok-3-mini",
+        "model": "llama-3.1-8b-instant",
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.4,
-        "max_tokens": 400,
+        "temperature": 0.15,
+        "max_tokens": 180,
     }
     r = requests.post(
-        "https://api.x.ai/v1/chat/completions",
+        "https://api.groq.com/openai/v1/chat/completions",
         json=payload, headers=headers, timeout=_TIMEOUT
     )
     r.raise_for_status()
@@ -67,11 +72,11 @@ def _call_grok(prompt: str, api_key: str) -> str:
 def _call_gemini(prompt: str, api_key: str) -> str:
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={api_key}"
+        f"gemini-2.5-flash:generateContent?key={api_key}"
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 400},
+        "generationConfig": {"temperature": 0.15, "maxOutputTokens": 180},
     }
     r = requests.post(url, json=payload, timeout=_TIMEOUT)
     r.raise_for_status()
@@ -79,10 +84,11 @@ def _call_gemini(prompt: str, api_key: str) -> str:
     return "".join(p["text"] for p in parts).strip()
 
 
-def generar_narrativa(contexto: dict, modulo: str) -> dict:
+def generar_narrativa(contexto: dict, modulo: str, focus: str = "") -> dict:
     """
-    Genera narrativa ejecutiva en español (≤3 párrafos).
+    Genera narrativa ejecutiva en español (2 oraciones).
     Returns {"texto": str, "proveedor": str, "desde_cache": bool}
+    focus: describe qué debe protagonizar el análisis (ej. "el volumen de vuelos").
     """
     empty = {"texto": "", "proveedor": "", "desde_cache": False}
 
@@ -91,20 +97,27 @@ def generar_narrativa(contexto: dict, modulo: str) -> dict:
     except Exception:
         return empty
 
-    api_key_grok = cfg.get("ia_api_key_grok", "")
+    api_key_groq = cfg.get("ia_api_key_groq", "")
     api_key_gemini = cfg.get("ia_api_key_gemini", "")
 
-    if not api_key_grok and not api_key_gemini:
+    if cfg.get("ia_activa", "false").lower() != "true":
+        return empty
+
+    if not api_key_groq and not api_key_gemini:
         return empty
 
     metricas_texto = "\n".join(f"- {k}: {v}" for k, v in contexto.items())
+    tema = focus if focus else "el KPI más crítico según su Estado"
     prompt = (
-        f"Eres un analista senior de aviación comercial. "
-        f"Genera una narrativa ejecutiva en español (máximo 3 párrafos cortos) "
-        f"sobre los siguientes KPIs del módulo {modulo}:\n\n"
-        f"{metricas_texto}\n\n"
-        f"Destaca tendencias relevantes, valores atípicos y recomendaciones clave. "
-        f"Sé conciso y profesional."
+        f"Eres un analista de aviación. Datos del módulo '{modulo}':\n{metricas_texto}\n\n"
+        f"REGLAS ABSOLUTAS:\n"
+        f"- SOLO puedes mencionar números que aparezcan LITERALMENTE en los datos anteriores.\n"
+        f"- PROHIBIDO calcular, estimar, redondear o inferir cualquier cifra nueva.\n"
+        f"- Los campos 'Estado *' ya indican CUMPLE/NO CUMPLE — úsalos tal cual, sin recomputar.\n\n"
+        f"Escribe exactamente 2 oraciones en español centradas en {tema}: "
+        f"la primera interpreta el dato principal citando su valor exacto; "
+        f"la segunda da una recomendación operativa específica basada solo en los datos. "
+        f"Sin introducción, sin markdown, texto plano."
     )
 
     key = _cache_key(prompt)
@@ -112,25 +125,24 @@ def generar_narrativa(contexto: dict, modulo: str) -> dict:
     if cached:
         return {"texto": cached[0], "proveedor": cached[1], "desde_cache": True}
 
-    if api_key_grok:
+    if api_key_groq:
         try:
-            texto = _call_grok(prompt, api_key_grok)
-            _store(key, texto, "Grok 3 mini")
-            return {"texto": texto, "proveedor": "Grok 3 mini", "desde_cache": False}
+            texto = _call_groq(prompt, api_key_groq)
+            _store(key, texto, "Groq llama-3.1")
+            return {"texto": texto, "proveedor": "Groq llama-3.1", "desde_cache": False}
         except requests.HTTPError as exc:
             if exc.response is None or exc.response.status_code not in (429, 402, 503):
-                log.warning("ia_narrativa grok error: %s", exc)
-                # fallthrough to Gemini
+                log.warning("ia_narrativa groq error: %s", exc)
         except requests.Timeout:
-            pass  # fallthrough to Gemini
+            pass
         except Exception as exc:
-            log.warning("ia_narrativa grok unexpected: %s", exc)
+            log.warning("ia_narrativa groq unexpected: %s", exc)
 
     if api_key_gemini:
         try:
             texto = _call_gemini(prompt, api_key_gemini)
-            _store(key, texto, "Gemini 2.0 Flash")
-            return {"texto": texto, "proveedor": "Gemini 2.0 Flash", "desde_cache": False}
+            _store(key, texto, "Gemini 2.5 Flash")
+            return {"texto": texto, "proveedor": "Gemini 2.5 Flash", "desde_cache": False}
         except Exception as exc:
             log.warning("ia_narrativa gemini error: %s", exc)
 

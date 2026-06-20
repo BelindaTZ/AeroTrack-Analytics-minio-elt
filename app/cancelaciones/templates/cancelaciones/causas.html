@@ -18,9 +18,23 @@
   .kpi-mini { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:14px 18px; }
   .kpi-mini-label { font-size:11px; font-weight:600; color:var(--at-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
   .kpi-mini-val { font-family:'JetBrains Mono',monospace; font-size:22px; font-weight:700; color:var(--at-text); }
-  .narrativa-card  { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; margin-bottom:24px; }
-  .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
-  .narrativa-body  { font-size:13.5px; line-height:1.7; color:var(--at-text); white-space:pre-wrap; }
+  #ia-popover { position:absolute;z-index:9999;width:340px;max-width:calc(100vw - 24px);background:var(--at-surface);border:1px solid rgba(99,102,241,.4);border-radius:var(--at-r-lg);box-shadow:0 16px 48px rgba(0,0,0,.6);padding:16px 18px;display:none; }
+  .ia-pop-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:10px; }
+  .ia-pop-title  { font-size:12.5px;font-weight:700;color:var(--at-text);display:flex;align-items:center;gap:6px; }
+  .ia-pop-close  { background:none;border:none;color:var(--at-muted);font-size:18px;cursor:pointer;padding:0;line-height:1; }
+  .ia-pop-close:hover { color:var(--at-text); }
+  .ia-pop-badge  { display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(99,102,241,.12);color:#818cf8;margin-bottom:8px; }
+  .ia-pop-body   { font-size:13px;line-height:1.65;color:var(--at-text); }
+  @keyframes ia-skel-pulse { from{opacity:.4} to{opacity:.9} }
+  .ia-skel { height:10px;border-radius:4px;background:rgba(255,255,255,.1);margin-bottom:7px;animation:ia-skel-pulse 1.2s ease infinite alternate; }
+  .btn-ia-inline { position:absolute;top:8px;right:8px;display:none;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:rgba(99,102,241,.2);color:#818cf8;border:none;cursor:pointer;font-size:11px;padding:0;transition:background .15s; }
+  .btn-ia-inline:hover { background:rgba(99,102,241,.35); }
+  .kpi-mini { position:relative; }
+  .kpi-mini:hover .btn-ia-inline { display:inline-flex; }
+  .btn-ia-row { display:none;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(99,102,241,.15);color:#818cf8;border:none;cursor:pointer;font-size:10px;padding:0;transition:background .15s; }
+  .btn-ia-row:hover { background:rgba(99,102,241,.3); }
+  tr:hover .btn-ia-row { display:inline-flex; }
+  .chart-ia-hint { display:block;text-align:right;font-size:11px;color:var(--at-muted);margin-top:6px; }
 </style>
 {% endblock %}
 
@@ -75,18 +89,22 @@
 
     <div class="kpi-mini-row">
       <div class="kpi-mini">
+        <button class="btn-ia-inline" title="Narrativa IA" onclick="openNarrativaBtn(this,'/cancelaciones/narrativa',{tipo:'tasa'})"><i class="bi bi-stars"></i></button>
         <div class="kpi-mini-label">Total cancelados</div>
         <div class="kpi-mini-val">{{ "{:,}".format(causas_data.total_cancelados) }}</div>
       </div>
       <div class="kpi-mini">
+        <button class="btn-ia-inline" title="Narrativa IA" onclick="openNarrativaBtn(this,'/cancelaciones/narrativa',{tipo:'tasa'})"><i class="bi bi-stars"></i></button>
         <div class="kpi-mini-label">Tasa cancelación</div>
         <div class="kpi-mini-val" style="color:{{ '#ef4444' if causas_data.tasa > 0.05 else '#10b981' }}">{{ "%.1f"|format(causas_data.tasa * 100) }}%</div>
       </div>
       <div class="kpi-mini">
+        <button class="btn-ia-inline" title="Narrativa IA" onclick="openNarrativaBtn(this,'/cancelaciones/narrativa',{tipo:'tasa'})"><i class="bi bi-stars"></i></button>
         <div class="kpi-mini-label">Total vuelos</div>
         <div class="kpi-mini-val">{{ "{:,}".format(causas_data.total_vuelos) }}</div>
       </div>
       <div class="kpi-mini">
+        <button class="btn-ia-inline" title="Narrativa IA" onclick="openNarrativaBtn(this,'/cancelaciones/narrativa',{})"><i class="bi bi-stars"></i></button>
         <div class="kpi-mini-label">Causas FAA distintas</div>
         <div class="kpi-mini-val">{{ causas_data.labels | length }}</div>
       </div>
@@ -97,6 +115,7 @@
         <div class="chart-title"><i class="bi bi-pie-chart-fill"></i> Causas por código FAA</div>
         {% if causas_data.labels %}
         <canvas id="chart-faa" style="max-height:260px"></canvas>
+        <span class="chart-ia-hint"><i class="bi bi-stars" style="font-size:10px"></i> Clic en segmento → narrativa IA</span>
         {% else %}
         <div class="at-empty" style="padding:20px"><p style="margin:0;font-size:13px">Sin datos de cancelaciones en este período.</p></div>
         {% endif %}
@@ -105,14 +124,13 @@
         <div class="chart-title"><i class="bi bi-bar-chart-fill"></i> Tendencia mensual de cancelaciones</div>
         {% if tendencias.meses %}
         <canvas id="chart-tend" style="max-height:260px"></canvas>
+        <span class="chart-ia-hint"><i class="bi bi-stars" style="font-size:10px"></i> Clic en barra → narrativa IA</span>
         {% else %}
         <div class="at-empty" style="padding:20px"><p style="margin:0;font-size:13px">Sin datos mensuales disponibles.</p></div>
         {% endif %}
       </div>
     </div>
 
-    <!-- Narrativa IA (carga asíncrona) -->
-    <div id="narrativa-async" class="narrativa-card" data-narrativa-url="/cancelaciones/narrativa" style="display:none"></div>
 
     {% if desvios %}
     <div class="at-table-wrapper" style="margin-bottom:0">
@@ -123,7 +141,7 @@
       <div class="at-table-scroll">
         <table class="at-table">
           <thead>
-            <tr><th>Ruta</th><th>Aeropuerto alternativo</th><th>Desvíos</th><th>DivArrDelay prom.</th><th>DivDistance prom.</th></tr>
+            <tr><th>Ruta</th><th>Aeropuerto alternativo</th><th>Desvíos</th><th>Retraso llegada prom.</th><th>Dist. desvío prom.</th><th></th></tr>
           </thead>
           <tbody>
             {% for d in desvios %}
@@ -133,6 +151,7 @@
               <td class="at-mono">{{ "{:,}".format(d.count) }}</td>
               <td class="at-mono">{{ d.div_arr_delay }} min</td>
               <td class="at-mono">{{ d.div_distance }} mi</td>
+              <td><button class="btn-ia-row" title="Narrativa IA" onclick="openNarrativaBtn(this,'/cancelaciones/narrativa',{tipo:'desvio',ruta:'{{ d.ruta }}'})"><i class="bi bi-stars"></i></button></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -146,6 +165,7 @@
     <!-- Datos Chart.js embebidos -->
     <script id="canc-chart-data" type="application/json">
     {
+      "faa_codes":  {{ causas_data.labels | tojson }},
       "faa_descs":  {{ causas_data.descriptions | tojson }},
       "faa_counts": {{ causas_data.counts | tojson }},
       "tend_meses": {{ tendencias.meses | tojson }},
@@ -154,6 +174,14 @@
     }
     </script>
   </div>
+</div>
+
+<div id="ia-popover" role="dialog" aria-modal="true" aria-label="Narrativa IA">
+  <div class="ia-pop-header">
+    <span class="ia-pop-title"><i class="bi bi-stars"></i> Narrativa IA — Cancelaciones</span>
+    <button class="ia-pop-close" onclick="document.getElementById('ia-popover').style.display='none'" aria-label="Cerrar">×</button>
+  </div>
+  <div id="ia-pop-body" class="ia-pop-body"></div>
 </div>
 
 {% endblock %}
@@ -179,13 +207,24 @@
     var d;
     try { d = JSON.parse(dataEl.textContent); } catch(e) { return; }
 
+    var onHov = function(ev, els) { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+
     var ctxFaa = document.getElementById('chart-faa');
     if (ctxFaa && d.faa_counts && d.faa_counts.length) {
       destroyChart('chart-faa');
       _charts['chart-faa'] = new Chart(ctxFaa, {
         type: 'doughnut',
         data: { labels: d.faa_descs, datasets: [{ data: d.faa_counts, backgroundColor: ['#3b82f6','#f59e0b','#10b981','#ef4444'], hoverOffset: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: labelColor, font: fontCfg, padding: 12 } } } }
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { color: labelColor, font: fontCfg, padding: 12 } } },
+          onClick: function(ev, els, chart) {
+            if (!els.length) return;
+            var code = d.faa_codes ? d.faa_codes[els[0].index] : '';
+            openNarrativaAt(ev.native, '/cancelaciones/narrativa', {tipo:'causa_faa', code: code});
+          },
+          onHover: onHov
+        }
       });
     }
 
@@ -200,7 +239,16 @@
       _charts['chart-tend'] = new Chart(ctxTend, {
         type: 'bar',
         data: { labels: d.tend_meses, datasets: datasets },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: labelColor, font: fontCfg } } }, scales: { x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid }, y: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid } } }
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: labelColor, font: fontCfg } } },
+          scales: { x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid }, y: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid } },
+          onClick: function(ev, els, chart) {
+            if (!els.length) return;
+            openNarrativaAt(ev.native, '/cancelaciones/narrativa', {tipo:'mes', mes: chart.data.labels[els[0].index]});
+          },
+          onHover: onHov
+        }
       });
     }
   }
@@ -237,5 +285,72 @@
   if (selMonth)   selMonth.addEventListener('change', apply);
   if (selAirline) selAirline.addEventListener('change', apply);
 })();
+
+function _iaFetch(url) {
+  var pop  = document.getElementById('ia-popover');
+  var body = document.getElementById('ia-pop-body');
+  if (!pop || !body) return;
+  body.innerHTML =
+    '<div class="ia-skel" style="width:80%"></div>' +
+    '<div class="ia-skel" style="width:96%"></div>' +
+    '<div class="ia-skel" style="width:65%"></div>' +
+    '<div class="ia-skel" style="width:88%"></div>';
+  pop.style.display = 'block';
+  fetch(url, {credentials:'same-origin'})
+    .then(function(rs){ return rs.json(); })
+    .then(function(data) {
+      if (!data || !data.texto) {
+        body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Sin narrativa disponible.</span>';
+        return;
+      }
+      body.innerHTML =
+        '<div class="ia-pop-badge"><i class="bi bi-cpu"></i> ' +
+        String(data.proveedor || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+        (data.desde_cache ? ' — caché' : '') + '</div>' +
+        '<div style="white-space:pre-wrap">' +
+        String(data.texto).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+    })
+    .catch(function(){
+      body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Error al conectar con la IA.</span>';
+    });
+}
+function _iaPos(cx, cy) {
+  var pop = document.getElementById('ia-popover');
+  if (!pop) return;
+  var pw = 340, ph = 220;
+  var mw = document.getElementById('main-wrapper');
+  var mwRect  = mw ? mw.getBoundingClientRect() : {left:0, top:0};
+  var mwScroll = mw ? mw.scrollTop : 0;
+  var l = cx - mwRect.left;
+  var t = cy - mwRect.top + mwScroll + 12;
+  if (cx + pw + 12 > window.innerWidth) l = cx - mwRect.left - pw;
+  if (l < 8) l = 8;
+  if (cy + ph + 20 > window.innerHeight) t = cy - mwRect.top + mwScroll - ph - 8;
+  if (t < 4) t = 4;
+  pop.style.left = l + 'px';
+  pop.style.top  = t + 'px';
+}
+function _iaQs(extra) {
+  var params = new URLSearchParams(window.location.search);
+  if (extra) Object.keys(extra).forEach(function(k){ params.set(k, extra[k]); });
+  var s = params.toString();
+  return s ? '?' + s : '';
+}
+window.openNarrativaAt = function(nativeEv, url, extra) {
+  _iaPos(nativeEv.clientX, nativeEv.clientY);
+  _iaFetch(url + _iaQs(extra));
+};
+window.openNarrativaBtn = function(btn, url, extra) {
+  var r = btn.getBoundingClientRect();
+  _iaPos(r.left, r.bottom + 8);
+  _iaFetch(url + _iaQs(extra));
+};
+document.addEventListener('click', function(e) {
+  var pop = document.getElementById('ia-popover');
+  if (!pop || pop.style.display === 'none') return;
+  if (pop.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('.btn-ia-inline, .btn-ia-row')) return;
+  pop.style.display = 'none';
+});
 </script>
 {% endblock %}

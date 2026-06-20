@@ -564,6 +564,7 @@ def agregaciones_pipeline() -> None:
       agg_causas_retraso_mes  — Minutos de retraso por causa / aerolínea / mes
       agg_otp_dia_semana      — OTP por día de la semana
       agg_desvios_ruta        — Desvíos agregados por ruta / aeropuerto alternativo
+      agg_cancelaciones_ruta  — Tasa de cancelación y retraso por ruta (para asistente IA)
     """
     import gc
     import io
@@ -838,7 +839,78 @@ def agregaciones_pipeline() -> None:
         a7 = a7.sort_values("total_desvios", ascending=False)
         subir(a7, "agg_desvios_ruta")
 
+    # ════════════════════════════════════════════════════════════
+    # 8. agg_cancelaciones_ruta  (para el asistente IA)
+    # GROUP BY origin / dest — tasa de cancelación por ruta
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 8/8 — agg_cancelaciones_ruta")
+    G8 = [c for c in ["OriginCode", "DestCode"] if c in f.columns]
+    if len(G8) == 2 and "Cancelled" in f.columns:
+        a8_spec: dict = {
+            "total_vuelos":     ("pk_vuelo", "count"),
+            "total_cancelados": ("Cancelled", "sum"),
+        }
+        if "ArrDelayMinutes" in f.columns:
+            op8 = f[f["Cancelled"] == 0]
+            delay8 = op8.groupby(G8)["ArrDelayMinutes"].mean().rename("retraso_prom_min").reset_index()
+        else:
+            delay8 = None
+
+        a8 = f.groupby(G8).agg(**a8_spec).reset_index()
+        a8.rename(columns={"OriginCode": "origin", "DestCode": "dest"}, inplace=True)
+        a8["total_cancelados"] = a8["total_cancelados"].fillna(0).astype(int)
+        a8["tasa_cancelacion"] = (
+            a8["total_cancelados"] / a8["total_vuelos"].replace(0, float("nan"))
+        ).fillna(0.0).round(4)
+
+        if delay8 is not None:
+            delay8.rename(columns={"OriginCode": "origin", "DestCode": "dest"}, inplace=True)
+            a8 = a8.merge(delay8, on=["origin", "dest"], how="left")
+            a8["retraso_prom_min"] = a8["retraso_prom_min"].fillna(0.0).round(1)
+
+        a8 = a8[a8["total_vuelos"] >= 30].sort_values("tasa_cancelacion", ascending=False)
+        subir(a8, "agg_cancelaciones_ruta")
+
+    # ════════════════════════════════════════════════════════════
+    # 9. agg_cancelaciones_aerolinea_causa
+    # GROUP BY carrier / cancellation_code / year / month
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 9/10 — agg_cancelaciones_aerolinea_causa")
+    canc9 = f[f["Cancelled"] == 1].copy()
+    G9 = ["Reporting_Airline", "CancellationCode", "Year", "Month"]
+    if all(c in canc9.columns for c in G9) and len(canc9) > 0:
+        a9 = canc9.groupby(G9).size().reset_index(name="total_cancelados")
+        tot9 = a9.groupby(["Reporting_Airline", "Year", "Month"])["total_cancelados"].transform("sum")
+        a9["pct_del_carrier"] = (a9["total_cancelados"] / tot9.replace(0, float("nan")) * 100).fillna(0.0).round(2)
+        a9.rename(columns={
+            "Reporting_Airline": "carrier",
+            "CancellationCode":  "cancellation_code",
+            "Year":              "year",
+            "Month":             "month",
+        }, inplace=True)
+        a9[["year", "month"]] = a9[["year", "month"]].astype(int)
+        subir(a9, "agg_cancelaciones_aerolinea_causa")
+
+    # ════════════════════════════════════════════════════════════
+    # 10. agg_otp_aerolinea_dia_semana
+    # GROUP BY carrier / day_of_week
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 10/10 — agg_otp_aerolinea_dia_semana")
+    G10 = ["Reporting_Airline", "DayOfWeek"]
+    if all(c in f.columns for c in G10):
+        op10 = f[f["Cancelled"] == 0]
+        a10 = op10.groupby(G10).agg(
+            total_vuelos   =("pk_vuelo", "count"),
+            vuelos_a_tiempo=("_at",      "sum"),
+        ).reset_index()
+        a10["otp_pct"] = (
+            a10["vuelos_a_tiempo"] / a10["total_vuelos"].replace(0, float("nan")) * 100
+        ).fillna(0.0).round(2)
+        a10.rename(columns={"Reporting_Airline": "carrier", "DayOfWeek": "day_of_week"}, inplace=True)
+        a10["day_of_week"] = a10["day_of_week"].astype(int)
+        subir(a10, "agg_otp_aerolinea_dia_semana")
+
     del f
     gc.collect()
-    print(f"\n[AGG] ✅ 7 agregaciones generadas en s3://{BUCKET_DIMS}/")
+    print(f"\n[AGG] ✅ 10 agregaciones generadas en s3://{BUCKET_DIMS}/")
  

@@ -142,20 +142,107 @@ def index_otp(request: Request, year: str = "", month: str = "", airline: str = 
 
 
 @router.get("/narrativa")
-def narrativa_json(request: Request, year: str = "", month: str = "", airline: str = ""):
+def narrativa_json(
+    request: Request,
+    year: str = "", month: str = "", airline: str = "",
+    tipo: str = "", airline_val: str = "", causa: str = "", mes: str = "", dia: str = "",
+):
     _perm_ver(request)
     try:
+        from app.shared.airline_names import airline_name
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
         data = _compute_page(filtros)
-        datos_otp = data["datos_otp"]
-        causas = data["causas"]
-        otp_prom = sum(r["otp"] for r in datos_otp) / len(datos_otp) if datos_otp else 0
-        ctx = {
-            "Aerolíneas analizadas": len(datos_otp),
-            "OTP promedio": f"{otp_prom:.1f}%",
-            "Principales causas": ", ".join(causas["labels"][:3]) if causas["labels"] else "N/A",
-        }
-        return JSONResponse(generar_narrativa(ctx, "Puntualidad OTP"))
+        datos_otp     = data["datos_otp"]
+        causas        = data["causas"]
+        tendencias    = data["tendencias"]
+        tendencias_dia = data["tendencias_dia"]
+
+        ctx: dict = {}
+        focus = ""
+
+        if tipo == "aerolinea" and airline_val:
+            al = next((r for r in datos_otp if r["aerolinea"] == airline_val), None)
+            if al:
+                otp_prom = sum(r["otp"] for r in datos_otp) / len(datos_otp)
+                rank = sorted(datos_otp, key=lambda x: x["otp"], reverse=True)
+                pos  = next((i + 1 for i, r in enumerate(rank) if r["aerolinea"] == airline_val), None)
+                ctx["Aerolínea"]              = airline_name(airline_val)
+                ctx["OTP"]                    = f"{al['otp']:.1f}%"
+                ctx["Estado OTP"]             = "CUMPLE (≥80%)" if al["otp"] >= 80 else "NO CUMPLE (<80%)"
+                ctx["Vuelos analizados"]      = f"{al['total']:,}"
+                ctx["Posición en ranking"]    = f"{pos} de {len(datos_otp)}"
+                ctx["OTP promedio del período"] = f"{otp_prom:.1f}%"
+                ctx["Diferencia vs promedio"] = f"{al['otp'] - otp_prom:+.1f}%"
+                focus = f"el desempeño OTP de {airline_name(airline_val)}"
+
+        elif tipo == "causa" and causa:
+            total_c = sum(causas["counts"]) if causas.get("counts") else 0
+            idx = causas["labels"].index(causa) if causa in causas.get("labels", []) else -1
+            if idx >= 0 and total_c > 0:
+                count = causas["counts"][idx]
+                pct   = count / total_c * 100
+                ctx["Causa de retraso"]         = causa
+                ctx["Minutos acumulados"]        = f"{count:,.0f}"
+                ctx["Proporción del total"]      = f"{pct:.0f}%"
+                ctx["Posición entre causas"]     = f"#{idx + 1} de {len(causas['labels'])}"
+                otras = [f"{causas['labels'][j]} ({causas['counts'][j]/total_c*100:.0f}%)"
+                         for j in range(min(2, len(causas["labels"]))) if j != idx]
+                if otras:
+                    ctx["Otras causas principales"] = ", ".join(otras)
+                focus = f"la causa '{causa}' como factor de retraso"
+
+        elif tipo == "mes" and mes:
+            meses  = tendencias.get("meses", [])
+            otps   = tendencias.get("otp", [])
+            idx    = meses.index(mes) if mes in meses else -1
+            if idx >= 0 and otps:
+                otp_mes  = otps[idx]
+                otp_prom = sum(otps) / len(otps)
+                mejor_m  = meses[otps.index(max(otps))]
+                peor_m   = meses[otps.index(min(otps))]
+                ctx["Mes"]                  = mes
+                ctx["OTP"]                  = f"{otp_mes:.1f}%"
+                ctx["Estado OTP"]           = "CUMPLE (≥80%)" if otp_mes >= 80 else "NO CUMPLE (<80%)"
+                ctx["OTP promedio anual"]   = f"{otp_prom:.1f}%"
+                ctx["Diferencia vs promedio"] = f"{otp_mes - otp_prom:+.1f}%"
+                ctx["Mejor mes del período"] = mejor_m
+                ctx["Peor mes del período"]  = peor_m
+                focus = f"el OTP del mes de {mes} en contexto anual"
+
+        elif tipo == "dia" and dia:
+            dias = tendencias_dia.get("dias", [])
+            otps = tendencias_dia.get("otp", [])
+            idx  = dias.index(dia) if dia in dias else -1
+            if idx >= 0 and otps:
+                otp_dia  = otps[idx]
+                otp_prom = sum(otps) / len(otps)
+                mejor_d  = dias[otps.index(max(otps))]
+                ctx["Día de semana"]             = dia
+                ctx["OTP"]                       = f"{otp_dia:.1f}%"
+                ctx["Estado OTP"]                = "CUMPLE (≥80%)" if otp_dia >= 80 else "NO CUMPLE (<80%)"
+                ctx["OTP promedio semanal"]      = f"{otp_prom:.1f}%"
+                ctx["Diferencia vs promedio"]    = f"{otp_dia - otp_prom:+.1f}%"
+                ctx["Día con mejor puntualidad"] = mejor_d
+                focus = f"la puntualidad del {dia} como día de operación"
+
+        else:
+            if datos_otp:
+                otp_prom = sum(r["otp"] for r in datos_otp) / len(datos_otp)
+                sorted_al = sorted(datos_otp, key=lambda x: x["otp"])
+                ctx["Aerolíneas analizadas"]         = len(datos_otp)
+                ctx["OTP promedio"]                  = f"{otp_prom:.1f}%"
+                ctx["Estado OTP global"]             = "CUMPLE (≥80%)" if otp_prom >= 80 else "NO CUMPLE (<80%)"
+                ctx["Aerolínea con mejor OTP"]       = f"{airline_name(sorted_al[-1]['aerolinea'])} ({sorted_al[-1]['otp']:.1f}%)"
+                ctx["Aerolínea con peor OTP"]        = f"{airline_name(sorted_al[0]['aerolinea'])} ({sorted_al[0]['otp']:.1f}%)"
+                ctx["Aerolíneas bajo el umbral 80%"] = f"{sum(1 for r in datos_otp if r['otp'] < 80)} de {len(datos_otp)}"
+            if causas.get("labels") and causas.get("counts"):
+                total_causas = sum(causas["counts"])
+                for i, (label, count) in enumerate(zip(causas["labels"][:2], causas["counts"][:2])):
+                    pct = count / total_causas * 100 if total_causas > 0 else 0
+                    ctx[f"Causa #{i + 1}"] = f"{label} ({pct:.0f}%)"
+            focus = "el OTP global del período y las aerolíneas más críticas"
+
+        return JSONResponse(generar_narrativa(ctx, "Puntualidad OTP", focus))
     except Exception:
         return JSONResponse({"texto": "", "proveedor": "", "desde_cache": False})
 

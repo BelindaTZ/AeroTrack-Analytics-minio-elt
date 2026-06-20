@@ -21,6 +21,11 @@ from app.configuracion.monitoreo import router as monitoreo_router
 from app.auditoria.log import router as auditoria_router
 from app.reportes.router import router as reportes_router
 
+# Entrega 3
+from app.predictivo.proyeccion_riesgo import router as predictivo_router
+from app.predictivo.informe_ejecutivo import router as informe_router
+from app.asistente_ia.router import router as ia_router
+
 from app.shared.deps import _redirect_to_login, get_current_user, render
 
 app = FastAPI(title="AeroTrack Analytics", version="1.0.0")
@@ -46,6 +51,11 @@ app.include_router(configuracion_router,prefix="/configuracion",             tag
 app.include_router(monitoreo_router,    prefix="/configuracion/estado",      tags=["monitoreo"])
 app.include_router(auditoria_router,    prefix="/auditoria",                 tags=["auditoria"])
 app.include_router(reportes_router,     prefix="/reportes",                  tags=["reportes"])
+
+# Entrega 3
+app.include_router(predictivo_router,   prefix="/predictivo",                tags=["predictivo"])
+app.include_router(informe_router,      prefix="/predictivo",                tags=["predictivo"])
+app.include_router(ia_router,           prefix="/ia",                        tags=["asistente_ia"])
 
 
 # ── Root redirect ─────────────────────────────────────────────────────────────

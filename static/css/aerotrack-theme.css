@@ -263,6 +263,7 @@ td.at-code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-featu
   flex-direction: column;
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
 }
 
 /* ─── Topbar ─────────────────────────────────────────────────────────── */

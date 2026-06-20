@@ -32,11 +32,61 @@
   .narrativa-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:10px; }
   .narrativa-body  { font-size:13.5px; line-height:1.7; color:var(--at-text); white-space:pre-wrap; }
   .top3-table th { font-size:11px; font-weight:700; color:var(--at-muted); text-transform:uppercase; letter-spacing:.5px; padding:6px 10px; border-bottom:1px solid var(--at-border); }
-  .top3-table td { font-size:13px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.04); }
+  .top3-table td { font-size:13px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
   .otp-bar-wrap { background:rgba(255,255,255,.06); border-radius:4px; height:6px; flex:1; min-width:80px; }
   .otp-bar-fill { height:100%; border-radius:4px; background:var(--at-blue-500); }
   .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
   @media(max-width:900px){ .charts-grid { grid-template-columns:1fr; } }
+
+  /* ── Botón IA inline (aparece en hover) ───────────────────── */
+  .kpi-ia-btn {
+    position:absolute; top:10px; right:10px;
+    display:none; align-items:center; gap:4px;
+    font-size:10.5px; font-weight:700;
+    padding:3px 9px; border-radius:20px;
+    background:rgba(99,102,241,.15); color:#818cf8;
+    border:1px solid rgba(99,102,241,.25);
+    cursor:pointer; white-space:nowrap; z-index:3;
+    transition:background .15s;
+  }
+  .kpi-ia-btn:hover { background:rgba(99,102,241,.32); }
+  .kpi-card:hover .kpi-ia-btn { display:flex; }
+
+  .ia-row-btn {
+    display:none; align-items:center; gap:3px;
+    font-size:10.5px; font-weight:700;
+    padding:2px 7px; border-radius:20px;
+    background:rgba(99,102,241,.15); color:#818cf8;
+    border:1px solid rgba(99,102,241,.25);
+    cursor:pointer; margin-left:8px;
+    transition:background .15s; vertical-align:middle;
+  }
+  .ia-row-btn:hover { background:rgba(99,102,241,.32); }
+  .top3-row:hover .ia-row-btn { display:inline-flex; }
+
+  .chart-ia-hint {
+    font-size:10.5px; color:var(--at-muted); margin-left:auto;
+    display:flex; align-items:center; gap:4px; font-weight:400;
+  }
+
+  /* ── Popover IA ───────────────────────────────────────────── */
+  #ia-popover {
+    position:absolute; z-index:9999;
+    width:340px; max-width:calc(100vw - 24px);
+    background:var(--at-surface);
+    border:1px solid rgba(99,102,241,.4);
+    border-radius:var(--at-r-lg);
+    box-shadow:0 16px 48px rgba(0,0,0,.6);
+    padding:16px 18px;
+    display:none;
+  }
+  .ia-pop-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .ia-pop-title  { font-size:12.5px; font-weight:700; color:var(--at-text); display:flex; align-items:center; gap:6px; }
+  .ia-pop-close  { background:none; border:none; color:var(--at-muted); font-size:18px; cursor:pointer; padding:0; line-height:1; }
+  .ia-pop-close:hover { color:var(--at-text); }
+  .ia-pop-badge  { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:20px; background:rgba(99,102,241,.12); color:#818cf8; margin-bottom:8px; }
+  .ia-pop-body   { font-size:13px; line-height:1.65; color:var(--at-text); }
+  .ia-skel { height:10px; border-radius:4px; background:rgba(255,255,255,.08); margin-bottom:7px; animation:at-page-load 1.5s ease infinite alternate; }
 </style>
 {% endblock %}
 
@@ -91,7 +141,7 @@
     </div>
     {% else %}
 
-    <!-- Alertas (dentro del results para que se actualicen con el filtro) -->
+    <!-- Alertas -->
     {% if alertas %}
     <div style="padding:0 20px 16px">
       {% for a in alertas %}
@@ -108,11 +158,13 @@
     <!-- KPI cards -->
     <div class="kpi-grid">
       <div class="kpi-card blue">
+        <button class="kpi-ia-btn" onclick="openIaPopover('vuelos','',event)"><i class="bi bi-stars"></i> IA</button>
         <div class="kpi-label"><i class="bi bi-airplane" aria-hidden="true"></i> Total vuelos</div>
         <div class="kpi-value">{{ "{:,}".format(kpis.total_vuelos) }}</div>
         <div class="kpi-sub">Registros analizados</div>
       </div>
       <div class="kpi-card {{ 'green' if kpis.otp_global >= 0.80 else ('amber' if kpis.otp_global >= 0.70 else 'red') }}">
+        <button class="kpi-ia-btn" onclick="openIaPopover('otp','',event)"><i class="bi bi-stars"></i> IA</button>
         <div class="kpi-label"><i class="bi bi-clock-history" aria-hidden="true"></i> OTP Global</div>
         <div class="kpi-value">{{ "%.1f"|format(kpis.otp_global * 100) }}%</div>
         <div class="kpi-sub">A tiempo (≤15 min retraso)</div>
@@ -122,6 +174,7 @@
         </span>
       </div>
       <div class="kpi-card {{ 'green' if kpis.tasa_cancelacion <= 0.05 else 'red' }}">
+        <button class="kpi-ia-btn" onclick="openIaPopover('cancelacion','',event)"><i class="bi bi-stars"></i> IA</button>
         <div class="kpi-label"><i class="bi bi-x-circle" aria-hidden="true"></i> Tasa Cancelación</div>
         <div class="kpi-value">{{ "%.1f"|format(kpis.tasa_cancelacion * 100) }}%</div>
         <div class="kpi-sub">Vuelos cancelados</div>
@@ -131,6 +184,7 @@
         </span>
       </div>
       <div class="kpi-card {{ 'green' if kpis.retraso_promedio <= 15 else ('amber' if kpis.retraso_promedio <= 30 else 'red') }}">
+        <button class="kpi-ia-btn" onclick="openIaPopover('retraso','',event)"><i class="bi bi-stars"></i> IA</button>
         <div class="kpi-label"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Retraso Promedio</div>
         <div class="kpi-value">{{ "%.1f"|format(kpis.retraso_promedio) }}<span style="font-size:16px;margin-left:4px">min</span></div>
         <div class="kpi-sub">En vuelos operados</div>
@@ -140,11 +194,17 @@
     <!-- Gráficos -->
     <div class="charts-grid">
       <div class="chart-card">
-        <div class="chart-title"><i class="bi bi-bar-chart-fill" aria-hidden="true"></i> OTP por aerolínea (top 20)</div>
+        <div class="chart-title">
+          <i class="bi bi-bar-chart-fill" aria-hidden="true"></i> OTP por aerolínea (top 20)
+          <span class="chart-ia-hint"><i class="bi bi-stars" style="font-size:11px"></i> Clic en barra → narrativa IA</span>
+        </div>
         <div id="chart-otp" style="height:280px"></div>
       </div>
       <div class="chart-card">
-        <div class="chart-title"><i class="bi bi-calendar3" aria-hidden="true"></i> Vuelos por mes</div>
+        <div class="chart-title">
+          <i class="bi bi-calendar3" aria-hidden="true"></i> Vuelos por mes
+          <span class="chart-ia-hint"><i class="bi bi-stars" style="font-size:11px"></i> Clic en barra → narrativa IA</span>
+        </div>
         <div id="chart-meses" style="height:280px"></div>
       </div>
     </div>
@@ -157,9 +217,14 @@
         <thead><tr><th>#</th><th>Aerolínea</th><th>Vuelos</th><th>OTP</th><th style="width:140px">Barra</th></tr></thead>
         <tbody>
           {% for al in kpis.top3_aerolineas %}
-          <tr>
+          <tr class="top3-row">
             <td style="font-weight:700;color:var(--at-blue-500)">{{ loop.index }}</td>
-            <td style="font-weight:600">{{ al.aerolinea }}</td>
+            <td style="font-weight:600">
+              {{ al.aerolinea }}
+              <button class="ia-row-btn" onclick="openIaPopover('aerolinea','{{ al.aerolinea }}',event)">
+                <i class="bi bi-stars"></i> IA
+              </button>
+            </td>
             <td class="at-mono" style="color:var(--at-muted)">{{ "{:,}".format(al.total) }}</td>
             <td style="font-weight:600;color:{{ '#10b981' if al.otp >= 0.80 else '#f59e0b' }}">{{ "%.1f"|format(al.otp * 100) }}%</td>
             <td><div class="otp-bar-wrap"><div class="otp-bar-fill" style="width:{{ al.otp * 100 }}%"></div></div></td>
@@ -170,9 +235,6 @@
     </div>
     {% endif %}
 
-    <!-- Narrativa IA (carga asíncrona) -->
-    <div id="narrativa-async" class="narrativa-card" data-narrativa-url="/dashboard/narrativa" style="display:none"></div>
-
     </div>{# /padding div #}
     {% endif %}
 
@@ -181,6 +243,15 @@
     {"otp": {{ grafico_otp | safe }}, "meses": {{ grafico_meses | safe }}}
     </script>
   </div>
+</div>
+
+<!-- Popover IA — fuera de #dashboard-results para persistir entre filtros -->
+<div id="ia-popover" role="dialog" aria-modal="true" aria-label="Narrativa IA">
+  <div class="ia-pop-header">
+    <span class="ia-pop-title"><i class="bi bi-stars" aria-hidden="true"></i> <span id="ia-pop-label">Narrativa IA</span></span>
+    <button class="ia-pop-close" onclick="closeIaPopover()" aria-label="Cerrar">×</button>
+  </div>
+  <div id="ia-pop-body" class="ia-pop-body"></div>
 </div>
 
 {% endblock %}
@@ -195,24 +266,142 @@
     margin: { l: 40, r: 20, t: 20, b: 60 },
     xaxis: { gridcolor: 'rgba(255,255,255,0.06)' },
     yaxis: { gridcolor: 'rgba(255,255,255,0.06)' },
+    clickmode: 'event',
+    dragmode: false,
   };
+
+  var MES_LABELS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* ── Gráficos ───────────────────────────────────────────────── */
+  function attachPlotlyClicks() {
+    var otpEl = document.getElementById('chart-otp');
+    if (otpEl && typeof otpEl.on === 'function') {
+      otpEl.removeAllListeners('plotly_click');
+      otpEl.on('plotly_click', function(ev) {
+        if (!ev.points || !ev.points.length) return;
+        var x = ev.event ? ev.event.clientX : 0;
+        var y = ev.event ? ev.event.clientY : 0;
+        _showIaPopover('aerolinea', ev.points[0].x, x, y + 10);
+      });
+      otpEl.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+    }
+    var mesEl = document.getElementById('chart-meses');
+    if (mesEl && typeof mesEl.on === 'function') {
+      mesEl.removeAllListeners('plotly_click');
+      mesEl.on('plotly_click', function(ev) {
+        if (!ev.points || !ev.points.length) return;
+        var num = MES_LABELS.indexOf(ev.points[0].x) + 1;
+        if (num < 1) return;
+        var x = ev.event ? ev.event.clientX : 0;
+        var y = ev.event ? ev.event.clientY : 0;
+        _showIaPopover('mes', String(num), x, y + 10);
+      });
+      mesEl.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+    }
+  }
 
   function renderCharts() {
     var dataEl = document.getElementById('dash-chart-data');
     if (!dataEl) return;
     try {
-      var data = JSON.parse(dataEl.textContent);
-      if (data.otp && data.otp.data) {
-        Object.assign(data.otp.layout, layoutBase);
-        Plotly.newPlot('chart-otp', data.otp.data, data.otp.layout, { responsive: true, displayModeBar: false });
+      var d = JSON.parse(dataEl.textContent);
+      var plots = [];
+      if (d.otp && d.otp.data) {
+        Object.assign(d.otp.layout, layoutBase);
+        plots.push(Plotly.newPlot('chart-otp', d.otp.data, d.otp.layout, { responsive: true, displayModeBar: false }));
       }
-      if (data.meses && data.meses.data) {
-        Object.assign(data.meses.layout, layoutBase);
-        Plotly.newPlot('chart-meses', data.meses.data, data.meses.layout, { responsive: true, displayModeBar: false });
+      if (d.meses && d.meses.data) {
+        Object.assign(d.meses.layout, layoutBase);
+        plots.push(Plotly.newPlot('chart-meses', d.meses.data, d.meses.layout, { responsive: true, displayModeBar: false }));
       }
+      Promise.all(plots).then(function() { attachPlotlyClicks(); });
     } catch(e) {}
   }
 
+  /* ── Popover IA ─────────────────────────────────────────────── */
+  var _TITLES = {
+    otp:        'Análisis OTP',
+    cancelacion:'Análisis de Cancelaciones',
+    retraso:    'Análisis de Retrasos',
+    vuelos:     'Análisis de Volumen',
+  };
+  var _MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  function _showIaPopover(tipo, id, left, top) {
+    var pop  = document.getElementById('ia-popover');
+    var body = document.getElementById('ia-pop-body');
+    var lbl  = document.getElementById('ia-pop-label');
+
+    var title = _TITLES[tipo] || (tipo === 'aerolinea' ? 'Aerolínea ' + id
+              : tipo === 'mes' ? (_MESES_FULL[+id - 1] || id) : 'Narrativa IA');
+    if (lbl) lbl.textContent = title;
+
+    body.innerHTML =
+      '<div class="ia-skel" style="width:78%"></div>' +
+      '<div class="ia-skel" style="width:95%"></div>' +
+      '<div class="ia-skel" style="width:64%"></div>' +
+      '<div class="ia-skel" style="width:88%"></div>';
+
+    pop.style.display = 'block';
+    var pw = 340;
+    var ph = 200;
+    var mw = document.getElementById('main-wrapper');
+    var mwRect = mw ? mw.getBoundingClientRect() : {left: 0, top: 0};
+    var mwScroll = mw ? mw.scrollTop : 0;
+    var l = Math.min(left, window.innerWidth - pw - 12);
+    if (l < 8) l = 8;
+    var t = top;
+    if (t + ph > window.innerHeight - 12) t = top - ph - 20;
+    if (t < 8) t = 8;
+    pop.style.left = (l - mwRect.left) + 'px';
+    pop.style.top  = (t - mwRect.top + mwScroll) + 'px';
+
+    var qs = new URLSearchParams(window.location.search);
+    qs.set('tipo', tipo);
+    if (id) qs.set('id', id); else qs.delete('id');
+
+    fetch('/dashboard/narrativa?' + qs.toString(), { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.texto) {
+          body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Sin narrativa disponible.</span>';
+          return;
+        }
+        body.innerHTML =
+          '<span class="ia-pop-badge"><i class="bi bi-cpu" aria-hidden="true"></i> ' +
+          _esc(data.proveedor) + (data.desde_cache ? ' — caché' : '') + '</span>' +
+          '<div style="white-space:pre-wrap;font-size:13px;line-height:1.65">' + _esc(data.texto) + '</div>';
+      })
+      .catch(function() {
+        body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Error al conectar con la IA.</span>';
+      });
+  }
+
+  window.openIaPopover = function(tipo, id, evt) {
+    evt.stopPropagation();
+    var r = evt.currentTarget.getBoundingClientRect();
+    _showIaPopover(tipo, id, r.left, r.bottom + 8);
+  };
+
+  window.closeIaPopover = function() {
+    var pop = document.getElementById('ia-popover');
+    if (pop) pop.style.display = 'none';
+  };
+
+  document.addEventListener('click', function(e) {
+    var pop = document.getElementById('ia-popover');
+    if (!pop || pop.style.display === 'none') return;
+    if (pop.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('.kpi-ia-btn,.ia-row-btn')) return;
+    pop.style.display = 'none';
+  });
+
+  /* ── Live filter ────────────────────────────────────────────── */
   renderCharts();
 
   var selYear    = document.getElementById('sel-year');
@@ -236,8 +425,8 @@
         var nc = doc.getElementById('dashboard-count');
         if (nc && countEl) countEl.textContent = nc.textContent;
         history.replaceState(null, '', '/dashboard?' + params);
+        closeIaPopover();
         renderCharts();
-        if (window.AT) AT.initNarrativaAsync();
       })
       .catch(function(){});
   }

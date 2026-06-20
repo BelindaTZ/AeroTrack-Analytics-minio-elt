@@ -7,6 +7,9 @@ from email.mime.text import MIMEText
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from app.dashboard.kpis import invalidar_cache_alertas
+from app.utils.ia_narrativa import invalidar_cfg_cache as _invalidar_ia_narrativa
+from app.rutas.ranking_eficiencia import invalidar_cache_umbral_ruta
 from app.shared.clients import pb_client
 from app.shared.deps import render, require_permission
 from app.shared.utils import audit
@@ -80,6 +83,16 @@ async def guardar_grupo(request: Request, grupo: str):
 
     try:
         _save_group(grupo, form_data)
+        if grupo == "alertas":
+            invalidar_cache_alertas()
+            invalidar_cache_umbral_ruta()
+        elif grupo == "ia":
+            _invalidar_ia_narrativa()
+            try:
+                from app.asistente_ia.llm_client import invalidar_config as _invalidar_llm
+                _invalidar_llm()
+            except ImportError:
+                pass
         audit.registrar(
             user["sub"], user["email"], "editar", "configuracion",
             recurso_tipo="grupo", recurso_id=grupo,

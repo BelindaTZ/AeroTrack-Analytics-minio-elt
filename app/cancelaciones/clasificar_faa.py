@@ -52,14 +52,19 @@ def _causas_faa_agg(df_canc: pd.DataFrame, df_kpi: pd.DataFrame) -> dict:
             values.append(cnt)
             descriptions.append(_FAA_CODIGOS.get(code, f"Código {code}"))
 
-    total_cancelados = sum(values)
-    tasa = _safe(total_cancelados / total_vuelos) if total_vuelos > 0 else 0.0
+    # total_cancelados_faa: solo vuelos con código FAA (para el desglose del gráfico)
+    # total_cancelados_all: todos los cancelados desde agg_kpi_global_dia (consistente con Dashboard)
+    total_cancelados_faa = sum(values)
+    total_cancelados_all = (int(df_kpi["total_cancelados"].sum())
+                            if not df_kpi.empty and "total_cancelados" in df_kpi.columns
+                            else total_cancelados_faa)
+    tasa = _safe(total_cancelados_all / total_vuelos) if total_vuelos > 0 else 0.0
 
     return {
         "labels": labels,
         "counts": values,
         "descriptions": descriptions,
-        "total_cancelados": total_cancelados,
+        "total_cancelados": total_cancelados_all,
         "total_vuelos": total_vuelos,
         "tasa": round(tasa, 4),
     }
@@ -164,18 +169,99 @@ def causas(
 
 
 @router.get("/narrativa")
-def narrativa_json(request: Request, year: str = "", month: str = "", airline: str = ""):
+def narrativa_json(
+    request: Request,
+    year: str = "", month: str = "", airline: str = "",
+    tipo: str = "", code: str = "", mes: str = "", ruta: str = "",
+):
     _perm_ver(request)
     try:
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
         data = _compute_page(filtros)
         causas_data = data["causas_data"]
-        ctx = {
-            "Total cancelados": causas_data["total_cancelados"],
-            "Tasa cancelación": f"{causas_data['tasa']:.1%}",
-            "Principal causa": (causas_data["descriptions"][0] if causas_data["descriptions"] else "N/A"),
-            "Total desvíos": len(data["desvios"]),
-        }
-        return JSONResponse(generar_narrativa(ctx, "Cancelaciones FAA"))
+        tendencias  = data["tendencias"]
+        desvios     = data["desvios"]
+
+        tasa_pct   = causas_data["tasa"] * 100
+        umbral_pct = 5.0
+        total_c    = sum(causas_data["counts"]) if causas_data["counts"] else 0
+        ctx: dict = {}
+        focus = ""
+
+        if tipo == "causa_faa" and code:
+            idx = causas_data["labels"].index(code) if code in causas_data.get("labels", []) else -1
+            if idx >= 0 and total_c > 0:
+                count = causas_data["counts"][idx]
+                desc  = causas_data["descriptions"][idx]
+                pct   = count / total_c * 100
+                ctx["Código FAA"]             = code
+                ctx["Descripción"]            = desc
+                ctx["Cancelaciones"]          = f"{count:,}"
+                ctx["Proporción del total"]   = f"{pct:.0f}%"
+                ctx["Tasa cancelación global"] = f"{tasa_pct:.2f}%"
+                ctx["Estado tasa global"]     = "CUMPLE (≤5%)" if tasa_pct <= umbral_pct else "NO CUMPLE (>5%)"
+                otras = [f"{causas_data['labels'][j]} ({causas_data['counts'][j]/total_c*100:.0f}%)"
+                         for j in range(len(causas_data["labels"])) if j != idx]
+                if otras:
+                    ctx["Otras causas"] = ", ".join(otras[:2])
+                focus = f"las cancelaciones por código FAA {code} ({desc})"
+
+        elif tipo == "mes" and mes:
+            meses = tendencias.get("meses", [])
+            cancs = tendencias.get("cancelaciones", [])
+            idx   = meses.index(mes) if mes in meses else -1
+            if idx >= 0 and cancs:
+                count    = cancs[idx]
+                promedio = sum(cancs) / len(cancs)
+                peak_mes = meses[cancs.index(max(cancs))]
+                ctx["Mes"]                      = mes
+                ctx["Cancelaciones en el mes"]  = f"{count:,}"
+                ctx["Promedio mensual"]          = f"{promedio:,.0f}"
+                ctx["Diferencia vs promedio"]   = f"{count - promedio:+,.0f}"
+                ctx["Mes con más cancelaciones"] = peak_mes
+                ctx["Tasa cancelación global"]  = f"{tasa_pct:.2f}%"
+                focus = f"las cancelaciones del mes de {mes} vs el promedio del período"
+
+        elif tipo == "desvio" and ruta:
+            d = next((x for x in desvios if x["ruta"] == ruta), None)
+            if d:
+                ctx["Ruta desviada"]             = ruta
+                ctx["Total desvíos"]             = f"{d['count']:,}"
+                ctx["Aeropuerto alternativo"]    = d["alt_airport"]
+                ctx["Retraso llegada prom."]     = f"{d['div_arr_delay']:.1f} min"
+                ctx["Distancia adicional prom."] = f"{d['div_distance']:.1f} mi"
+                focus = f"el impacto de los desvíos en la ruta {ruta}"
+
+        elif tipo == "tasa":
+            ctx["Tasa de cancelación"] = f"{tasa_pct:.2f}%"
+            ctx["Estado"]              = "CUMPLE (≤5%)" if tasa_pct <= umbral_pct else "NO CUMPLE (>5%)"
+            ctx["Total cancelados"]    = f"{causas_data['total_cancelados']:,}"
+            ctx["Total vuelos"]        = f"{causas_data['total_vuelos']:,}"
+            if causas_data["labels"] and total_c > 0:
+                dom_idx = causas_data["counts"].index(max(causas_data["counts"]))
+                ctx["Causa dominante"] = (
+                    f"{causas_data['descriptions'][dom_idx]} "
+                    f"({causas_data['counts'][dom_idx]/total_c*100:.0f}%)"
+                )
+            focus = "la tasa de cancelación comparada con el umbral operacional del 5%"
+
+        else:
+            ctx["Total vuelos"]            = f"{causas_data['total_vuelos']:,}"
+            ctx["Total cancelados"]        = f"{causas_data['total_cancelados']:,}"
+            ctx["Tasa de cancelación"]     = f"{tasa_pct:.2f}%"
+            ctx["Estado tasa cancelación"] = "CUMPLE (≤5%)" if tasa_pct <= umbral_pct else "NO CUMPLE (>5%)"
+            if causas_data["labels"] and total_c > 0:
+                for i, (label, desc, count) in enumerate(
+                    zip(causas_data["labels"][:3], causas_data["descriptions"][:3], causas_data["counts"][:3])
+                ):
+                    ctx[f"Causa FAA {label}"] = f"{desc}: {count:,} ({count/total_c*100:.0f}%)"
+            if tendencias.get("meses") and tendencias.get("cancelaciones"):
+                peak_idx = tendencias["cancelaciones"].index(max(tendencias["cancelaciones"]))
+                ctx["Mes con más cancelaciones"] = (
+                    f"{tendencias['meses'][peak_idx]} ({tendencias['cancelaciones'][peak_idx]:,})"
+                )
+            focus = "la tasa de cancelación vs umbral 5% y la causa FAA dominante"
+
+        return JSONResponse(generar_narrativa(ctx, "Cancelaciones FAA", focus))
     except Exception:
         return JSONResponse({"texto": "", "proveedor": "", "desde_cache": False})
