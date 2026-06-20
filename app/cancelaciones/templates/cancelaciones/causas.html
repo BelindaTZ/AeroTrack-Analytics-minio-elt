@@ -132,6 +132,14 @@
     </div>
 
 
+    <!-- B4: Sankey de flujo de cancelaciones -->
+    {% if causas_data.counts %}
+    <div class="chart-card" style="margin-bottom:20px">
+      <div class="chart-title"><i class="bi bi-diagram-3-fill" aria-hidden="true"></i> Flujo de cancelaciones por causa FAA</div>
+      <div id="chart-sankey" style="height:280px"></div>
+    </div>
+    {% endif %}
+
     {% if desvios %}
     <div class="at-table-wrapper" style="margin-bottom:0">
       <div class="at-table-header">
@@ -165,12 +173,14 @@
     <!-- Datos Chart.js embebidos -->
     <script id="canc-chart-data" type="application/json">
     {
-      "faa_codes":  {{ causas_data.labels | tojson }},
-      "faa_descs":  {{ causas_data.descriptions | tojson }},
-      "faa_counts": {{ causas_data.counts | tojson }},
-      "tend_meses": {{ tendencias.meses | tojson }},
-      "tend_canc":  {{ tendencias.cancelaciones | tojson }},
-      "tend_causas": {{ tendencias.causas | tojson }}
+      "faa_codes":        {{ causas_data.labels | tojson }},
+      "faa_descs":        {{ causas_data.descriptions | tojson }},
+      "faa_counts":       {{ causas_data.counts | tojson }},
+      "tend_meses":       {{ tendencias.meses | tojson }},
+      "tend_canc":        {{ tendencias.cancelaciones | tojson }},
+      "tend_causas":      {{ tendencias.causas | tojson }},
+      "total_vuelos":     {{ causas_data.total_vuelos }},
+      "total_cancelados": {{ causas_data.total_cancelados }}
     }
     </script>
   </div>
@@ -187,6 +197,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <script>
 (function () {
@@ -199,6 +210,38 @@
     if (_charts[id]) { try { _charts[id].destroy(); } catch(e){} delete _charts[id]; }
     var c = Chart.getChart(id);
     if (c) c.destroy();
+  }
+
+  /* ── B4: Sankey de cancelaciones ──────────────────────────── */
+  function renderSankey(d) {
+    var el = document.getElementById('chart-sankey');
+    if (!el || typeof Plotly === 'undefined') return;
+    var total = d.total_vuelos || 0;
+    var cancelados = d.total_cancelados || 0;
+    var operados = total - cancelados;
+    if (total <= 0 || cancelados <= 0) { el.style.display = 'none'; return; }
+    var counts = d.faa_counts || [];
+    var descs  = d.faa_descs  || ['Carrier','Weather','NAS','Security'];
+    var nodeLabels  = ['Total vuelos', 'Operados', 'Cancelados'].concat(descs);
+    var nodeColors  = ['rgba(99,102,241,.75)', 'rgba(16,185,129,.7)', 'rgba(239,68,68,.7)',
+                       'rgba(59,130,246,.7)', 'rgba(245,158,11,.7)',
+                       'rgba(16,185,129,.65)', 'rgba(239,68,68,.65)'];
+    var linkClrs    = ['rgba(16,185,129,.2)', 'rgba(239,68,68,.2)',
+                       'rgba(59,130,246,.15)', 'rgba(245,158,11,.15)',
+                       'rgba(16,185,129,.15)', 'rgba(239,68,68,.15)'];
+    var src = [0, 0], tgt = [1, 2], val = [operados, cancelados], lc = [linkClrs[0], linkClrs[1]];
+    counts.forEach(function(cnt, i) {
+      if (cnt > 0) { src.push(2); tgt.push(3 + i); val.push(cnt); lc.push(linkClrs[2 + i] || 'rgba(148,163,184,.15)'); }
+    });
+    Plotly.react(el, [{
+      type: 'sankey', orientation: 'h',
+      node: { pad: 14, thickness: 18, line: { color: 'rgba(0,0,0,0)', width: 0 }, label: nodeLabels, color: nodeColors },
+      link: { source: src, target: tgt, value: val, color: lc },
+    }], {
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      font: { family: 'Inter, sans-serif', color: '#94a3b8', size: 11 },
+      margin: { l: 10, r: 10, t: 10, b: 10 }, height: 260,
+    }, { responsive: true, displayModeBar: false });
   }
 
   function renderCharts() {
@@ -251,6 +294,8 @@
         }
       });
     }
+
+    renderSankey(d);
   }
 
   renderCharts();

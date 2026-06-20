@@ -64,10 +64,30 @@
   .ia-row-btn:hover { background:rgba(99,102,241,.32); }
   .top3-row:hover .ia-row-btn { display:inline-flex; }
 
+  /* ── KPI icon blocks ─────────────────────────────────────── */
+  .kpi-icon-bg { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .kpi-icon-bg.blue  { background:rgba(13,110,253,.12); color:var(--at-blue-500); }
+  .kpi-icon-bg.green { background:rgba(25,135,84,.12);  color:var(--at-green-500); }
+  .kpi-icon-bg.amber { background:rgba(245,158,11,.12); color:#f59e0b; }
+  .kpi-icon-bg.red   { background:rgba(220,53,69,.12);  color:var(--at-red-500); }
+  .kpi-card-top { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .kpi-meta { display:flex; flex-direction:column; gap:2px; }
   .chart-ia-hint {
     font-size:10.5px; color:var(--at-muted); margin-left:auto;
     display:flex; align-items:center; gap:4px; font-weight:400;
   }
+  /* ── Sparklines B1 ────────────────────────────────────────── */
+  .kpi-sparkline { margin-top:10px; height:36px; opacity:.75; }
+  .kpi-sparkline svg { display:block; }
+  /* ── Delta YoY B2 ─────────────────────────────────────────── */
+  .kpi-yoy { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:600; padding:2px 6px; border-radius:20px; margin-top:4px; }
+  .kpi-yoy.good { background:rgba(16,185,129,.1); color:#10b981; }
+  .kpi-yoy.bad  { background:rgba(239,68,68,.1);  color:#ef4444; }
+  /* ── Heat strip B3 ────────────────────────────────────────── */
+  .heat-strip { display:flex; gap:4px; flex-wrap:wrap; }
+  .heat-cell { flex:1; min-width:56px; border-radius:6px; padding:7px 3px; text-align:center; cursor:default; }
+  .heat-cell-label { font-size:9px; font-weight:600; color:rgba(255,255,255,.75); text-transform:uppercase; letter-spacing:.3px; }
+  .heat-cell-val   { font-size:13px; font-weight:700; color:#fff; font-family:'JetBrains Mono',monospace; margin-top:1px; }
 
   /* ── Popover IA ───────────────────────────────────────────── */
   #ia-popover {
@@ -159,36 +179,79 @@
     <div class="kpi-grid">
       <div class="kpi-card blue">
         <button class="kpi-ia-btn" onclick="openIaPopover('vuelos','',event)"><i class="bi bi-stars"></i> IA</button>
-        <div class="kpi-label"><i class="bi bi-airplane" aria-hidden="true"></i> Total vuelos</div>
+        <div class="kpi-card-top">
+          <div class="kpi-icon-bg blue"><i class="bi bi-airplane" aria-hidden="true"></i></div>
+          <div class="kpi-meta">
+            <div class="kpi-label">Total vuelos</div>
+            <div class="kpi-sub">Registros analizados</div>
+          </div>
+        </div>
         <div class="kpi-value">{{ "{:,}".format(kpis.total_vuelos) }}</div>
-        <div class="kpi-sub">Registros analizados</div>
+        <div class="kpi-sparkline" data-key="vuelos"></div>
+        <span id="kpi-yoy-vuelos" class="kpi-yoy"></span>
       </div>
       <div class="kpi-card {{ 'green' if kpis.otp_global >= 0.80 else ('amber' if kpis.otp_global >= 0.70 else 'red') }}">
         <button class="kpi-ia-btn" onclick="openIaPopover('otp','',event)"><i class="bi bi-stars"></i> IA</button>
-        <div class="kpi-label"><i class="bi bi-clock-history" aria-hidden="true"></i> OTP Global</div>
+        <div class="kpi-card-top">
+          <div class="kpi-icon-bg {{ 'green' if kpis.otp_global >= 0.80 else ('amber' if kpis.otp_global >= 0.70 else 'red') }}">
+            <i class="bi bi-clock-history" aria-hidden="true"></i>
+          </div>
+          <div class="kpi-meta">
+            <div class="kpi-label">OTP Global</div>
+            <div class="kpi-sub">A tiempo (≤15 min retraso)</div>
+          </div>
+        </div>
         <div class="kpi-value">{{ "%.1f"|format(kpis.otp_global * 100) }}%</div>
-        <div class="kpi-sub">A tiempo (≤15 min retraso)</div>
+        <div class="kpi-sparkline" data-key="otp"></div>
         <span class="kpi-delta {{ 'good' if kpis.otp_global >= 0.80 else 'bad' }}">
           <i class="bi bi-{{ 'arrow-up' if kpis.otp_global >= 0.80 else 'arrow-down' }}" aria-hidden="true"></i>
           Umbral 80%
         </span>
+        <span id="kpi-yoy-otp" class="kpi-yoy"></span>
       </div>
       <div class="kpi-card {{ 'green' if kpis.tasa_cancelacion <= 0.05 else 'red' }}">
         <button class="kpi-ia-btn" onclick="openIaPopover('cancelacion','',event)"><i class="bi bi-stars"></i> IA</button>
-        <div class="kpi-label"><i class="bi bi-x-circle" aria-hidden="true"></i> Tasa Cancelación</div>
+        <div class="kpi-card-top">
+          <div class="kpi-icon-bg {{ 'green' if kpis.tasa_cancelacion <= 0.05 else 'red' }}">
+            <i class="bi bi-x-circle" aria-hidden="true"></i>
+          </div>
+          <div class="kpi-meta">
+            <div class="kpi-label">Tasa Cancelación</div>
+            <div class="kpi-sub">Vuelos cancelados</div>
+          </div>
+        </div>
         <div class="kpi-value">{{ "%.1f"|format(kpis.tasa_cancelacion * 100) }}%</div>
-        <div class="kpi-sub">Vuelos cancelados</div>
+        <div class="kpi-sparkline" data-key="cancelacion"></div>
         <span class="kpi-delta {{ 'good' if kpis.tasa_cancelacion <= 0.05 else 'bad' }}">
           <i class="bi bi-{{ 'check2' if kpis.tasa_cancelacion <= 0.05 else 'exclamation-triangle' }}" aria-hidden="true"></i>
           Umbral 5%
         </span>
+        <span id="kpi-yoy-cancelacion" class="kpi-yoy"></span>
       </div>
       <div class="kpi-card {{ 'green' if kpis.retraso_promedio <= 15 else ('amber' if kpis.retraso_promedio <= 30 else 'red') }}">
         <button class="kpi-ia-btn" onclick="openIaPopover('retraso','',event)"><i class="bi bi-stars"></i> IA</button>
-        <div class="kpi-label"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Retraso Promedio</div>
+        <div class="kpi-card-top">
+          <div class="kpi-icon-bg {{ 'green' if kpis.retraso_promedio <= 15 else ('amber' if kpis.retraso_promedio <= 30 else 'red') }}">
+            <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+          </div>
+          <div class="kpi-meta">
+            <div class="kpi-label">Retraso Promedio</div>
+            <div class="kpi-sub">En vuelos operados</div>
+          </div>
+        </div>
         <div class="kpi-value">{{ "%.1f"|format(kpis.retraso_promedio) }}<span style="font-size:16px;margin-left:4px">min</span></div>
-        <div class="kpi-sub">En vuelos operados</div>
+        <div class="kpi-sparkline" data-key="retraso"></div>
+        <span id="kpi-yoy-retraso" class="kpi-yoy"></span>
       </div>
+    </div>
+
+    <!-- Gauge OTP Global -->
+    <div class="chart-card" style="margin-bottom:20px">
+      <div class="chart-title">
+        <i class="bi bi-speedometer2" aria-hidden="true"></i> OTP Global — Velocímetro
+        <span class="chart-ia-hint"><i class="bi bi-flag" style="font-size:11px"></i> Meta operacional: ≥ 80%</span>
+      </div>
+      <div id="chart-gauge" style="height:200px"></div>
     </div>
 
     <!-- Gráficos -->
@@ -207,6 +270,15 @@
         </div>
         <div id="chart-meses" style="height:280px"></div>
       </div>
+    </div>
+
+    <!-- B3: Heat strip OTP mensual -->
+    <div class="chart-card" id="heat-section" style="margin-bottom:20px">
+      <div class="chart-title">
+        <i class="bi bi-grid-3x3-gap-fill" aria-hidden="true"></i> Tendencia OTP mensual
+        <span class="chart-ia-hint"><i class="bi bi-circle-fill" style="font-size:6px;color:#10b981"></i> ≥80%&nbsp;&nbsp;<i class="bi bi-circle-fill" style="font-size:6px;color:#f59e0b"></i> 70–80%&nbsp;&nbsp;<i class="bi bi-circle-fill" style="font-size:6px;color:#ef4444"></i> &lt;70%</span>
+      </div>
+      <div id="heat-strip" class="heat-strip"></div>
     </div>
 
     <!-- Top 3 aerolíneas -->
@@ -240,7 +312,7 @@
 
     <!-- Datos para gráficos (leídos por JS tras innerHTML swap) -->
     <script id="dash-chart-data" type="application/json">
-    {"otp": {{ grafico_otp | safe }}, "meses": {{ grafico_meses | safe }}}
+    {"otp": {{ grafico_otp | safe }}, "meses": {{ grafico_meses | safe }}, "otp_val": {% if not error %}{{ (kpis.otp_global * 100) | round(1) }}{% else %}0{% endif %}, "sparklines": {% if not error %}{{ sparklines | tojson }}{% else %}{}{% endif %}, "deltas": {% if not error %}{{ deltas | tojson }}{% else %}{}{% endif %}}
     </script>
   </div>
 </div>
@@ -304,19 +376,123 @@
     }
   }
 
+  /* ── B1: Sparklines ──────────────────────────────────────── */
+  function renderSparklines(spark) {
+    if (!spark || !spark.meses || spark.meses.length < 2) return;
+    var keys = ['vuelos', 'otp', 'cancelacion', 'retraso'];
+    keys.forEach(function(key) {
+      var el = document.querySelector('.kpi-sparkline[data-key="' + key + '"]');
+      if (!el) return;
+      var vals = spark[key];
+      if (!vals || vals.length < 2) return;
+      var W = 120, H = 36;
+      var min = Math.min.apply(null, vals);
+      var max = Math.max.apply(null, vals);
+      var range = (max - min) || 1;
+      var n = vals.length;
+      var pts = vals.map(function(v, i) {
+        return ((i / (n - 1)) * W).toFixed(1) + ',' + (H - ((v - min) / range * (H - 8) + 4)).toFixed(1);
+      }).join(' ');
+      var lx = W, ly = (H - ((vals[n-1] - min) / range * (H - 8) + 4)).toFixed(1);
+      el.innerHTML =
+        '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="overflow:visible">' +
+        '<polyline points="' + pts + '" fill="none" stroke="rgba(99,102,241,.5)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+        '<circle cx="' + lx + '" cy="' + ly + '" r="2.5" fill="#818cf8"/>' +
+        '</svg>';
+    });
+  }
+
+  /* ── B2: Delta YoY ───────────────────────────────────────── */
+  function renderDeltaYoy(deltas) {
+    if (!deltas || !deltas.año_prev) return;
+    var items = [
+      {id:'kpi-yoy-vuelos',      val:deltas.vuelos,      unit:'%',   hib:true},
+      {id:'kpi-yoy-otp',         val:deltas.otp,         unit:'pp',  hib:true},
+      {id:'kpi-yoy-cancelacion', val:deltas.cancelacion, unit:'pp',  hib:false},
+      {id:'kpi-yoy-retraso',     val:deltas.retraso,     unit:' min',hib:false},
+    ];
+    items.forEach(function(item) {
+      if (item.val === null || item.val === undefined) return;
+      var el = document.getElementById(item.id);
+      if (!el) return;
+      var good = item.hib ? item.val >= 0 : item.val <= 0;
+      var sign = item.val > 0 ? '+' : '';
+      el.className = 'kpi-yoy ' + (good ? 'good' : 'bad');
+      el.innerHTML = '<i class="bi bi-arrow-' + (item.val >= 0 ? 'up' : 'down') + '-short"></i>' + sign + item.val + item.unit + ' vs ' + deltas.año_prev;
+    });
+  }
+
+  /* ── B3: Heat strip mensual ──────────────────────────────── */
+  function renderHeatStrip(spark) {
+    var el = document.getElementById('heat-strip');
+    var sec = document.getElementById('heat-section');
+    if (!el) return;
+    if (!spark || !spark.otp || !spark.meses || !spark.meses.length) {
+      if (sec) sec.style.display = 'none';
+      return;
+    }
+    if (sec) sec.style.display = '';
+    var ML = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    el.innerHTML = spark.meses.map(function(m, i) {
+      var v = spark.otp[i];
+      var bg = v >= 80 ? 'rgba(16,185,129,.8)' : v >= 70 ? 'rgba(245,158,11,.8)' : 'rgba(239,68,68,.8)';
+      return '<div class="heat-cell" style="background:' + bg + '" title="' + (ML[m] || m) + ': OTP ' + v + '%">' +
+        '<div class="heat-cell-label">' + (ML[m] || m) + '</div>' +
+        '<div class="heat-cell-val">' + v + '%</div>' +
+        '</div>';
+    }).join('');
+  }
+
   function renderCharts() {
     var dataEl = document.getElementById('dash-chart-data');
     if (!dataEl) return;
     try {
       var d = JSON.parse(dataEl.textContent);
+      renderSparklines(d.sparklines);
+      renderDeltaYoy(d.deltas);
+      renderHeatStrip(d.sparklines);
       var plots = [];
       if (d.otp && d.otp.data) {
         Object.assign(d.otp.layout, layoutBase);
         plots.push(Plotly.newPlot('chart-otp', d.otp.data, d.otp.layout, { responsive: true, displayModeBar: false }));
       }
       if (d.meses && d.meses.data) {
+        // A5: Transformar barras → gráfica de área suavizada
+        d.meses.data.forEach(function(trace) {
+          trace.type = 'scatter';
+          trace.mode = 'lines';
+          trace.fill = 'tozeroy';
+          trace.line = Object.assign({ shape: 'spline', color: '#3d8bfd', width: 2.5 }, trace.line || {});
+          trace.fillcolor = 'rgba(13,110,253,0.10)';
+        });
         Object.assign(d.meses.layout, layoutBase);
         plots.push(Plotly.newPlot('chart-meses', d.meses.data, d.meses.layout, { responsive: true, displayModeBar: false }));
+      }
+      // A2: Gauge OTP Global
+      if (d.otp_val > 0) {
+        var otpVal = d.otp_val;
+        var gaugeColor = otpVal >= 80 ? '#10b981' : otpVal >= 70 ? '#f59e0b' : '#ef4444';
+        plots.push(Plotly.newPlot('chart-gauge', [{
+          type: 'indicator',
+          mode: 'gauge+number',
+          value: otpVal,
+          number: { suffix: '%', font: { size: 34, color: '#1e293b', family: 'JetBrains Mono, monospace' } },
+          gauge: {
+            axis: { range: [0, 100], tickcolor: '#94a3b8', tickfont: { color: '#94a3b8', size: 10 }, dtick: 20 },
+            bar: { color: gaugeColor, thickness: 0.22 },
+            bgcolor: 'rgba(0,0,0,0)', bordercolor: 'rgba(0,0,0,0)',
+            steps: [
+              { range: [0,  70], color: 'rgba(239,68,68,.1)'  },
+              { range: [70, 80], color: 'rgba(245,158,11,.1)' },
+              { range: [80,100], color: 'rgba(16,185,129,.1)' },
+            ],
+            threshold: { line: { color: '#64748b', width: 2 }, thickness: 0.75, value: 80 },
+          },
+        }], {
+          paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+          font: { family: 'Inter, sans-serif', color: '#94a3b8' },
+          margin: { l: 30, r: 30, t: 10, b: 10 },
+        }, { responsive: true, displayModeBar: false }));
       }
       Promise.all(plots).then(function() { attachPlotlyClicks(); });
     } catch(e) {}

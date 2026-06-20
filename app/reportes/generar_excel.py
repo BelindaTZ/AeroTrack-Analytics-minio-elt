@@ -307,9 +307,6 @@ def _sheet_causas_retraso(wb, filtros: dict | None) -> None:
     ws.cell(row_start, 1, "Desglose por aerolínea").font = Font(bold=True, size=11, color=_BLUE_DARK)
     row_start += 1
 
-    al_headers = ["Aerolínea"] + [lbl for _, lbl in _CAUSA_COLS if col in df.columns
-                                   for col, lbl_ in _CAUSA_COLS if lbl_ == lbl and col in df.columns]
-    # simpler: use available columns
     avail_cols = [(col, lbl) for col, lbl in _CAUSA_COLS if col in df.columns]
     al_headers = ["Aerolínea"] + [lbl for _, lbl in avail_cols] + ["Total retraso (min)"]
     _hdr(ws, row_start, al_headers)

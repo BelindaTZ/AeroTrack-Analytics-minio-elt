@@ -76,11 +76,10 @@ def _subir_export_minio(data: bytes, nombre: str, content_type: str) -> Optional
         obj_name = f"reportes/{nombre}"
         client.put_object(MINIO_BUCKET_EXPORTS, obj_name, io.BytesIO(data),
                           length=len(data), content_type=content_type)
-        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                            secret_key=MINIO_SECRET_KEY, secure=False)
-        return sign_client.presigned_get_object(
-            MINIO_BUCKET_EXPORTS, obj_name, expires=timedelta(hours=1)
-        )
+        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+        sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(MINIO_BUCKET_EXPORTS, "us-east-1")
+        url = sign_client.presigned_get_object(MINIO_BUCKET_EXPORTS, obj_name, expires=timedelta(hours=1))
+        return url
     except Exception:
         return None
 
@@ -334,16 +333,14 @@ def historial(request: Request):
             reverse=True,
         )[:15]
 
-        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                            secret_key=MINIO_SECRET_KEY, secure=False)
         items = []
         for obj in objects:
             nombre = obj.object_name.split("/", 1)[-1]
             ext = nombre.rsplit(".", 1)[-1] if "." in nombre else "bin"
             try:
-                url = sign_client.presigned_get_object(
-                    MINIO_BUCKET_EXPORTS, obj.object_name, expires=timedelta(hours=1)
-                )
+                sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+                sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(MINIO_BUCKET_EXPORTS, "us-east-1")
+                url = sign_client.presigned_get_object(MINIO_BUCKET_EXPORTS, obj.object_name, expires=timedelta(hours=1))
             except Exception:
                 url = ""
             items.append({

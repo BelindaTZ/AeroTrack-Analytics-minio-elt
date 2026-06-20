@@ -354,7 +354,7 @@ td.at-code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-featu
   padding: 28px;
   flex: 1;
   background-color: var(--at-bg);
-  background-image: radial-gradient(circle, #d1d8e0 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(0,0,0,0.055) 1px, transparent 1px);
   background-size: 22px 22px;
   background-attachment: local;
 }

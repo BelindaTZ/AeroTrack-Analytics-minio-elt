@@ -471,11 +471,10 @@ def subir_pdf_minio(pdf_bytes: bytes, nombre: str) -> Optional[str]:
             MINIO_BUCKET_EXPORTS, obj_name, io.BytesIO(pdf_bytes),
             length=len(pdf_bytes), content_type="application/pdf",
         )
-        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                            secret_key=MINIO_SECRET_KEY, secure=False)
-        return sign_client.presigned_get_object(
-            MINIO_BUCKET_EXPORTS, obj_name, expires=timedelta(hours=1)
-        )
+        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+        sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(MINIO_BUCKET_EXPORTS, "us-east-1")
+        url = sign_client.presigned_get_object(MINIO_BUCKET_EXPORTS, obj_name, expires=timedelta(hours=1))
+        return url
     except Exception as exc:
         log.error("subir_pdf_minio error: %s", exc)
         return None

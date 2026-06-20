@@ -229,6 +229,93 @@ def _grafico_vuelos_por_mes_agg(df_otp: pd.DataFrame) -> str:
     return fig.to_json()
 
 
+def _calcular_sparklines_agg(df: pd.DataFrame) -> dict:
+    """Retorna valores mensuales para sparklines en tarjetas KPI."""
+    if df.empty or "month" not in df.columns:
+        return {}
+    col_total = "total_vuelos_todos" if "total_vuelos_todos" in df.columns else "total_vuelos"
+    agg: dict = {"total": (col_total, "sum"), "op": ("total_vuelos", "sum")}
+    if "vuelos_a_tiempo" in df.columns:
+        agg["at"] = ("vuelos_a_tiempo", "sum")
+    if "total_cancelados" in df.columns:
+        agg["canc"] = ("total_cancelados", "sum")
+    grp = df.groupby("month").agg(**agg).reset_index().sort_values("month")
+    otp_vals = (
+        (grp["at"] / grp["op"].replace(0, float("nan")) * 100).fillna(0.0).round(1).tolist()
+        if "at" in grp.columns else []
+    )
+    canc_vals = (
+        (grp["canc"] / grp["total"].replace(0, float("nan")) * 100).fillna(0.0).round(2).tolist()
+        if "canc" in grp.columns else []
+    )
+    delay_vals: list = []
+    if "delay_avg" in df.columns:
+        tmp = df.copy()
+        tmp["_dw"] = tmp["delay_avg"] * tmp["total_vuelos"]
+        dg = (tmp.groupby("month")
+              .agg(dw=("_dw", "sum"), op=("total_vuelos", "sum"))
+              .reset_index().sort_values("month"))
+        delay_vals = ((dg["dw"] / dg["op"].replace(0, float("nan"))).fillna(0.0).round(1)).tolist()
+    return {
+        "meses": [int(m) for m in grp["month"].tolist()],
+        "vuelos": [int(v) for v in grp["total"].tolist()],
+        "otp": otp_vals,
+        "cancelacion": canc_vals,
+        "retraso": delay_vals,
+    }
+
+
+def _calcular_deltas_yoy(df_otp: pd.DataFrame, filtros: dict) -> dict:
+    """Calcula delta año a año para cada KPI."""
+    col_total = "total_vuelos_todos" if "total_vuelos_todos" in df_otp.columns else "total_vuelos"
+
+    def _kpi(df: pd.DataFrame):
+        if df.empty:
+            return None
+        total = int(df[col_total].sum())
+        op = int(df["total_vuelos"].sum())
+        if not total or not op:
+            return None
+        at = int(df["vuelos_a_tiempo"].sum()) if "vuelos_a_tiempo" in df.columns else 0
+        canc = int(df["total_cancelados"].sum()) if "total_cancelados" in df.columns else 0
+        delay = float((df["delay_avg"] * df["total_vuelos"]).sum()) / op if "delay_avg" in df.columns else 0.0
+        return {"total": total, "otp": at / op, "tasa": canc / total, "delay": _safe(delay)}
+
+    year = filtros.get("year")
+    if year and "year" in df_otp.columns:
+        try:
+            df_prev = load_agg("agg_otp_aerolinea_mes", {**filtros, "year": str(int(year) - 1)})
+        except Exception:
+            return {}
+        curr = _kpi(df_otp)
+        prev = _kpi(df_prev)
+        año_curr, año_prev = int(year), int(year) - 1
+    elif "year" in df_otp.columns:
+        years = sorted(df_otp["year"].unique().astype(int).tolist())
+        if len(years) < 2:
+            return {}
+        año_curr, año_prev = years[-1], years[-2]
+        curr = _kpi(df_otp[df_otp["year"] == año_curr])
+        prev = _kpi(df_otp[df_otp["year"] == año_prev])
+    else:
+        return {}
+
+    if not curr or not prev:
+        return {}
+
+    def _pct(a: float, b: float):
+        return round((a - b) / abs(b) * 100, 1) if b else None
+
+    return {
+        "año_curr": año_curr,
+        "año_prev": año_prev,
+        "vuelos": _pct(curr["total"], prev["total"]),
+        "otp": round((curr["otp"] - prev["otp"]) * 100, 1),
+        "cancelacion": round((curr["tasa"] - prev["tasa"]) * 100, 2),
+        "retraso": round(curr["delay"] - prev["delay"], 1),
+    }
+
+
 def _compute_page(filtros: dict) -> dict:
     """Computa KPIs y gráficos desde agregaciones; resultado cacheado 5 min."""
     key = str(sorted(filtros.items()))
@@ -245,6 +332,8 @@ def _compute_page(filtros: dict) -> dict:
         "alertas": alertas,
         "grafico_otp": _grafico_otp_por_aerolinea_agg(df_otp),
         "grafico_meses": _grafico_vuelos_por_mes_agg(df_otp),
+        "sparklines": _calcular_sparklines_agg(df_otp),
+        "deltas": _calcular_deltas_yoy(df_otp, filtros),
     }
     _page_cache[key] = {"data": data, "expires": time.time() + _PAGE_TTL}
     return data
@@ -261,6 +350,8 @@ def dashboard(
     alertas: list[dict] = []
     grafico_otp = "{}"
     grafico_meses = "{}"
+    sparklines: dict = {}
+    deltas: dict = {}
 
     try:
         filtros = {k: v for k, v in {"year": year, "month": month, "airline": airline}.items() if v}
@@ -269,6 +360,8 @@ def dashboard(
         alertas = data["alertas"]
         grafico_otp = data["grafico_otp"]
         grafico_meses = data["grafico_meses"]
+        sparklines = data.get("sparklines", {})
+        deltas = data.get("deltas", {})
 
     except FileNotFoundError:
         error = "Los datos del modelo dimensional no están disponibles. Ejecute el pipeline ELT primero."
@@ -281,6 +374,8 @@ def dashboard(
         "error": error,
         "grafico_otp": grafico_otp,
         "grafico_meses": grafico_meses,
+        "sparklines": sparklines,
+        "deltas": deltas,
         "aerolinas": get_aerolinas(),
         "years": get_years(),
         "filtros": {"year": year, "month": month, "airline": airline},

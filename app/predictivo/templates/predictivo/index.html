@@ -9,8 +9,7 @@
 
 {% block head_extra %}
 <style>
-  .pred-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
-  @media(max-width:960px){ .pred-grid { grid-template-columns:1fr; } }
+  .pred-grid { display:grid; grid-template-columns:1fr; gap:20px; margin-bottom:24px; }
 
   .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); }
   .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
@@ -25,66 +24,145 @@
   .heatmap-wrap { overflow-x:auto; }
   .heatmap-table { border-collapse:collapse; font-size:11px; min-width:600px; width:100%; }
   .heatmap-table th { color:var(--at-muted); font-weight:600; padding:4px 6px; text-align:center; }
-  .heatmap-table td { width:50px; height:34px; text-align:center; border-radius:4px; cursor:default; font-size:11px; font-weight:600; position:relative; }
+  .heatmap-table td { width:50px; height:34px; text-align:center; border-radius:4px; cursor:default; font-size:11.5px; font-weight:700; position:relative; }
   .hm-row-label { font-size:11px; font-weight:600; color:var(--at-muted); padding:4px 10px 4px 0; white-space:nowrap; }
   .hm-legend { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--at-muted); margin-top:12px; }
   .hm-legend-grad { width:120px; height:10px; border-radius:3px; }
 
   /* Proyección */
   .proy-form { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
-  #proy-chart-wrap { position:relative; height:340px; }
+  #proy-chart-wrap { position:relative; height:380px; }
+  .proy-card { border-top:2px solid var(--at-blue-500) !important; }
   .proy-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; }
   .proy-badge.warn { background:rgba(245,158,11,.12); color:#f59e0b; }
   .proy-loading { display:none; align-items:center; gap:6px; font-size:11px; color:var(--at-muted); margin-left:4px; }
   .proy-spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,.15); border-top-color:var(--at-blue-500); border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin { to{transform:rotate(360deg)} }
 
+  /* Metadata del modelo */
+  .proy-meta { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:12px; padding:10px 14px; background:rgba(255,255,255,.03); border:1px solid var(--at-border); border-radius:8px; }
+  .proy-meta-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--at-muted); }
+  .proy-meta-item i { color:var(--at-blue-500); font-size:11px; }
+  .proy-meta-item strong { color:var(--at-sub); font-weight:600; }
+
   /* Recomendaciones */
   .rec-list { display:flex; flex-direction:column; gap:12px; }
-  .rec-card { background:var(--at-bg); border:1px solid var(--at-border); border-radius:var(--at-r-md); padding:14px 16px; display:flex; gap:12px; align-items:flex-start; transition:opacity .3s; }
+  .rec-card { background:var(--at-bg); border:1px solid var(--at-border); border-left:3px solid transparent; border-radius:var(--at-r-md); padding:14px 16px; display:flex; gap:12px; align-items:flex-start; transition:opacity .3s; }
+  .rec-card.alta  { border-left-color:#ef4444; }
+  .rec-card.media { border-left-color:#f59e0b; }
+  .rec-card.baja  { border-left-color:#10b981; }
   .rec-card.revisado { opacity:.45; }
   .rec-icon { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:15px; }
   .rec-body { flex:1; min-width:0; }
   .rec-titulo { font-size:13px; font-weight:700; color:var(--at-text); margin-bottom:4px; }
   .rec-desc { font-size:12.5px; color:var(--at-sub); line-height:1.6; }
-  .rec-meta { display:flex; align-items:center; gap:8px; margin-top:8px; }
-  .rec-badge { font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:20px; }
-  .rec-badge.alta  { background:rgba(239,68,68,.12); color:#ef4444; }
-  .rec-badge.media { background:rgba(245,158,11,.12); color:#f59e0b; }
+  .rec-impacto { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; margin-top:7px; padding:3px 9px; border-radius:20px; }
+  .rec-impacto.alta  { background:rgba(239,68,68,.1);  color:#ef4444; }
+  .rec-impacto.media { background:rgba(245,158,11,.1); color:#f59e0b; }
+  .rec-impacto.baja  { background:rgba(16,185,129,.1); color:#10b981; }
+  .rec-meta { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .rec-badge { font-size:10.5px; font-weight:700; padding:2px 9px; border-radius:20px; }
+  .rec-badge.alta  { background:#ef4444; color:#fff; }
+  .rec-badge.media { background:rgba(245,158,11,.18); color:#f59e0b; }
   .rec-badge.baja  { background:rgba(16,185,129,.12); color:#10b981; }
   .rec-justif { font-size:11px; color:var(--at-muted); font-style:italic; }
   .btn-revisar { margin-left:auto; padding:4px 10px; font-size:11px; font-weight:600; background:rgba(255,255,255,.05); border:1px solid var(--at-border); border-radius:6px; color:var(--at-muted); cursor:pointer; white-space:nowrap; }
   .btn-revisar:hover { background:rgba(255,255,255,.1); color:var(--at-text); }
+  .btn-ir-modulo { padding:4px 10px; font-size:11px; font-weight:600; background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.25); border-radius:6px; color:var(--at-blue-500); text-decoration:none; white-space:nowrap; transition:background .15s; }
+  .btn-ir-modulo:hover { background:rgba(59,130,246,.2); color:var(--at-blue-500); }
 
-  /* Informe */
-  .btn-informe { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; font-size:13px; font-weight:600; background:rgba(99,102,241,.15); border:1px solid rgba(99,102,241,.3); border-radius:var(--at-r-md); color:#818cf8; cursor:pointer; transition:background .15s; }
-  .btn-informe:hover { background:rgba(99,102,241,.25); }
-  .informe-spinner { display:none; width:14px; height:14px; border:2px solid rgba(255,255,255,.15); border-top-color:#818cf8; border-radius:50%; animation:spin .7s linear infinite; }
+  /* Anomalías */
+  .anomalia-list { display:flex; flex-direction:column; gap:10px; }
+  .anomalia-item { display:flex; align-items:flex-start; gap:12px; padding:12px 14px; background:var(--at-bg); border:1px solid var(--at-border); border-left:3px solid transparent; border-radius:var(--at-r-md); }
+  .anomalia-item.bajo { border-left-color:rgba(239,68,68,.5); }
+  .anomalia-item.alto { border-left-color:rgba(16,185,129,.5); }
+  .anomalia-badge { flex-shrink:0; font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; white-space:nowrap; margin-top:1px; }
+  .anomalia-badge.bajo { background:rgba(239,68,68,.12); color:#ef4444; border:1px solid rgba(239,68,68,.25); }
+  .anomalia-badge.alto { background:rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.25); }
+  .anomalia-body { flex:1; min-width:0; }
+  .anomalia-periodo { font-size:12.5px; font-weight:700; color:var(--at-text); margin-bottom:3px; }
+  .anomalia-detail { font-size:12px; color:var(--at-sub); line-height:1.5; }
+  .anomalia-delta { font-weight:700; }
+  .anomalia-delta.neg { color:#ef4444; }
+  .anomalia-delta.pos { color:#10b981; }
+
+  /* What-If simulator */
+  .whatif-panel { margin-top:16px; border-top:1px solid var(--at-border); padding-top:16px; }
+  .whatif-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .whatif-header span { font-size:12px; font-weight:700; color:var(--at-text); }
+  .whatif-sim-badge { font-size:10px; padding:2px 8px; border-radius:20px; background:rgba(139,92,246,.12); color:#a78bfa; font-weight:600; border:1px solid rgba(139,92,246,.25); }
+  .whatif-sliders { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media(max-width:600px){ .whatif-sliders { grid-template-columns:1fr; } }
+  .whatif-slider-label { font-size:11px; color:var(--at-muted); display:flex; justify-content:space-between; }
+  .whatif-result { margin-top:12px; padding:10px 14px; background:rgba(139,92,246,.06); border:1px solid rgba(139,92,246,.2); border-radius:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .whatif-result i { color:#8b5cf6; font-size:16px; flex-shrink:0; }
+  .whatif-delta { font-size:15px; font-weight:800; color:#8b5cf6; }
+
+  /* Risk index table */
+  .risk-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .risk-table th { color:var(--at-muted); font-size:10.5px; font-weight:600; padding:6px 10px; text-align:left; border-bottom:1px solid var(--at-border); white-space:nowrap; }
+  .risk-table td { padding:9px 10px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle; }
+  .risk-table tbody tr:hover td { background:rgba(255,255,255,.03); cursor:pointer; }
+  .risk-badge { font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+  .risk-badge.estable { background:rgba(16,185,129,.12); color:#10b981; border:1px solid rgba(16,185,129,.25); }
+  .risk-badge.riesgo  { background:rgba(245,158,11,.12); color:#f59e0b; border:1px solid rgba(245,158,11,.25); }
+  .risk-badge.critico { background:rgba(239,68,68,.12);  color:#ef4444; border:1px solid rgba(239,68,68,.25); }
+  .risk-bar-wrap { width:64px; height:5px; background:rgba(255,255,255,.08); border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-left:6px; }
+  .risk-bar { height:100%; border-radius:3px; }
+
+  /* Informe CTA banner */
+  .informe-cta { background:linear-gradient(135deg,rgba(99,102,241,.07),rgba(129,140,248,.04)); border:1px solid rgba(99,102,241,.22); border-radius:var(--at-r-lg); padding:18px 22px; margin-bottom:20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .informe-cta-icon { width:50px; height:50px; border-radius:12px; background:rgba(99,102,241,.15); display:flex; align-items:center; justify-content:center; color:#818cf8; font-size:23px; flex-shrink:0; }
+  .informe-cta-body { flex:1; min-width:180px; }
+  .informe-cta-title { font-size:14.5px; font-weight:700; color:var(--at-text); margin-bottom:3px; }
+  .informe-cta-desc { font-size:12.5px; color:var(--at-muted); line-height:1.5; }
+  .informe-spinner { display:none; width:14px; height:14px; border:2px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+
+  /* Briefing modal */
+  .briefing-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  @media(max-width:480px){ .briefing-grid { grid-template-columns:1fr; } }
+  .briefing-card { background:var(--at-bg); border:1px solid var(--at-border); border-radius:12px; padding:16px; opacity:0; transform:translateY(16px); transition:opacity .4s ease, transform .4s ease; }
+  .briefing-card.show { opacity:1; transform:translateY(0); }
+  .briefing-card-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--at-muted); margin-bottom:6px; display:flex; align-items:center; gap:5px; }
+  .briefing-card-label i { font-size:11px; }
+  .briefing-card-value { font-size:22px; font-weight:800; color:var(--at-text); line-height:1.1; }
+  .briefing-card-sub { font-size:11px; color:var(--at-muted); margin-top:4px; line-height:1.4; }
+  .briefing-card.good .briefing-card-value { color:#10b981; }
+  .briefing-card.warn .briefing-card-value { color:#f59e0b; }
+  .briefing-card.bad  .briefing-card-value { color:#ef4444; }
+  .briefing-card.blue .briefing-card-value { color:var(--at-blue-500); }
 </style>
 {% endblock %}
 
 {% block content %}
 
 <div class="page-heading">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-    <div>
-      <h1>
-        <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
-        Predictivo IA
-      </h1>
-      <p>Proyecciones de riesgo operacional, estacionalidad y recomendaciones priorizadas.</p>
-    </div>
-    <form id="informe-form" action="/predictivo/informe" method="post" style="display:inline">
-      <input type="hidden" name="airline" value="{{ airline }}">
-      <input type="hidden" name="year"    value="{{ year }}">
-      <input type="hidden" name="horizonte" value="{{ horizonte }}">
-      <button type="submit" class="btn-informe" id="btn-informe">
-        <i class="bi bi-file-earmark-pdf-fill" aria-hidden="true"></i>
-        Generar informe ejecutivo
-        <span class="informe-spinner" id="informe-spinner" aria-hidden="true"></span>
-      </button>
-    </form>
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
+    Predictivo IA
+  </h1>
+  <p>Proyecciones de riesgo operacional, estacionalidad y recomendaciones priorizadas.</p>
+</div>
+
+<!-- CTA Informe Ejecutivo -->
+<div class="informe-cta">
+  <div class="informe-cta-icon">
+    <i class="bi bi-file-earmark-pdf-fill" aria-hidden="true"></i>
   </div>
+  <div class="informe-cta-body">
+    <div class="informe-cta-title">Informe Ejecutivo IA</div>
+    <div class="informe-cta-desc">Genera un PDF con análisis predictivo, estacionalidad, proyecciones y recomendaciones priorizadas por inteligencia artificial</div>
+  </div>
+  <form id="informe-form" action="/predictivo/informe" method="post">
+    <input type="hidden" name="airline" value="{{ airline }}">
+    <input type="hidden" name="year"    value="{{ year }}">
+    <input type="hidden" name="horizonte" value="{{ horizonte }}">
+    <button type="submit" class="btn-at-hero" id="btn-informe" style="white-space:nowrap">
+      <i class="bi bi-file-earmark-pdf-fill" aria-hidden="true"></i>
+      Generar informe
+      <span class="informe-spinner" id="informe-spinner" aria-hidden="true"></span>
+    </button>
+  </form>
 </div>
 
 <!-- Filtros globales -->
@@ -151,20 +229,20 @@
               title="{{ heatmap.metric }}: {{ val }}"
               style="
                 {% if heatmap.metric == 'otp' %}
-                  {% if val >= 88 %}background:rgba(16,185,129,.55);color:#d1fae5
-                  {% elif val >= 80 %}background:rgba(16,185,129,.28);color:#a7f3d0
-                  {% elif val >= 70 %}background:rgba(245,158,11,.35);color:#fde68a
-                  {% else %}background:rgba(239,68,68,.45);color:#fecaca
+                  {% if val >= 88 %}background:rgba(16,185,129,.60);color:#fff
+                  {% elif val >= 80 %}background:rgba(16,185,129,.38);color:#fff
+                  {% elif val >= 70 %}background:rgba(245,158,11,.50);color:#fff
+                  {% else %}background:rgba(239,68,68,.55);color:#fff
                   {% endif %}
                 {% elif heatmap.metric == 'cancelacion' %}
-                  {% if val <= 2 %}background:rgba(16,185,129,.45);color:#d1fae5
-                  {% elif val <= 5 %}background:rgba(245,158,11,.35);color:#fde68a
-                  {% else %}background:rgba(239,68,68,.45);color:#fecaca
+                  {% if val <= 2 %}background:rgba(16,185,129,.55);color:#fff
+                  {% elif val <= 5 %}background:rgba(245,158,11,.50);color:#fff
+                  {% else %}background:rgba(239,68,68,.55);color:#fff
                   {% endif %}
                 {% else %}
-                  {% if val <= 5 %}background:rgba(16,185,129,.45);color:#d1fae5
-                  {% elif val <= 15 %}background:rgba(245,158,11,.35);color:#fde68a
-                  {% else %}background:rgba(239,68,68,.45);color:#fecaca
+                  {% if val <= 5 %}background:rgba(16,185,129,.55);color:#fff
+                  {% elif val <= 15 %}background:rgba(245,158,11,.50);color:#fff
+                  {% else %}background:rgba(239,68,68,.55);color:#fff
                   {% endif %}
                 {% endif %}
               "
@@ -186,7 +264,7 @@
   </div>
 
   <!-- Proyección OTP -->
-  <div class="chart-card">
+  <div class="chart-card proy-card">
     <div class="chart-title">
       <i class="bi bi-activity" aria-hidden="true"></i>
       Proyección de riesgo OTP
@@ -217,12 +295,73 @@
       <canvas id="proy-chart"></canvas>
     </div>
     <div id="proy-msg" style="display:none;text-align:center;padding:40px 0;color:var(--at-muted);font-size:13px"></div>
+
+    <!-- Metadata del modelo -->
+    <div class="proy-meta" id="proy-meta">
+      <div class="proy-meta-item">
+        <i class="bi bi-cpu-fill"></i>
+        <strong id="meta-metodo">{{ proyeccion.get('metodo', 'Holt-Winters') }}</strong>
+      </div>
+      <div class="proy-meta-item">
+        <i class="bi bi-clock-history"></i>
+        <strong id="meta-periodos">{{ proyeccion.get('n_meses', '—') }}</strong>
+        <span>períodos</span>
+      </div>
+      <div class="proy-meta-item">
+        <i class="bi bi-shield-check"></i>
+        <span>IC 95%</span>
+      </div>
+      {% if proyeccion.get('precision_estimada') is not none %}
+      <div class="proy-meta-item">
+        <i class="bi bi-bullseye"></i>
+        <span>Precisión estimada: <strong id="meta-precision">{{ proyeccion.get('precision_estimada') }}%</strong></span>
+      </div>
+      {% endif %}
+      <div class="proy-meta-item">
+        <i class="bi bi-graph-up"></i>
+        <span>Proyección <strong id="meta-horizonte">{{ horizonte }}</strong> mes{% if horizonte > 1 %}es{% endif %}</span>
+      </div>
+    </div>
+
+    <!-- Simulador What-If -->
+    <div class="whatif-panel" id="whatif-panel">
+      <div class="whatif-header">
+        <span><i class="bi bi-sliders" aria-hidden="true"></i> Simulador What-If</span>
+        <span class="whatif-sim-badge">SIMULACIÓN</span>
+        <span style="font-size:11px;color:var(--at-muted);margin-left:2px">— ajusta variables y ve el impacto en la proyección</span>
+      </div>
+      <div class="whatif-sliders">
+        <div>
+          <div class="whatif-slider-label">
+            <span><i class="bi bi-clock" aria-hidden="true"></i> Buffer de conexión</span>
+            <strong id="lbl-buffer" style="color:#8b5cf6">+0 min</strong>
+          </div>
+          <input type="range" id="sl-buffer" min="0" max="30" step="5" value="0"
+                 style="width:100%;margin-top:6px;accent-color:#8b5cf6" aria-label="Buffer de conexión en minutos">
+        </div>
+        <div>
+          <div class="whatif-slider-label">
+            <span><i class="bi bi-airplane" aria-hidden="true"></i> Reducción de carga</span>
+            <strong id="lbl-vol" style="color:#8b5cf6">0%</strong>
+          </div>
+          <input type="range" id="sl-vol" min="0" max="30" step="5" value="0"
+                 style="width:100%;margin-top:6px;accent-color:#8b5cf6" aria-label="Reducción porcentual de carga de vuelos">
+        </div>
+      </div>
+      <div class="whatif-result" id="whatif-result" style="display:none">
+        <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
+        <span style="font-size:12px;color:var(--at-sub)">Escenario simulado:</span>
+        <span class="whatif-delta" id="whatif-delta"></span>
+        <span style="font-size:11px;color:var(--at-muted)">vs proyección base</span>
+        <button id="btn-reset-whatif" style="margin-left:auto;font-size:10px;padding:2px 8px;background:rgba(255,255,255,.05);border:1px solid var(--at-border);border-radius:5px;color:var(--at-muted);cursor:pointer">Resetear</button>
+      </div>
+    </div>
   </div>
 
 </div>
 
 <!-- Recomendaciones priorizadas -->
-<div class="chart-card">
+<div class="chart-card" style="margin-bottom:24px">
   <div class="chart-title">
     <i class="bi bi-lightning-charge-fill" aria-hidden="true"></i>
     Recomendaciones automáticas priorizadas
@@ -232,17 +371,27 @@
   {% if recomendaciones %}
   <div class="rec-list" id="rec-list">
     {% for rec in recomendaciones %}
-    <div class="rec-card" id="rec-{{ loop.index0 }}" data-revisado="false">
+    <div class="rec-card {{ rec.prioridad }}" id="rec-{{ loop.index0 }}" data-revisado="false">
       <div class="rec-icon" style="background:rgba({{ '239,68,68' if rec.prioridad=='alta' else '245,158,11' if rec.prioridad=='media' else '16,185,129' }},.12)">
         <i class="bi {{ rec.icono }}" style="color:{{ rec.color }}"></i>
       </div>
       <div class="rec-body">
         <div class="rec-titulo">{{ rec.titulo }}</div>
         <div class="rec-desc">{{ rec.descripcion }}</div>
+        {% if rec.impacto_estimado %}
+        <div class="rec-impacto {{ rec.prioridad }}">
+          <i class="bi bi-lightning-charge-fill" style="font-size:10px"></i>
+          {{ rec.impacto_estimado }}
+        </div>
+        {% endif %}
         <div class="rec-meta">
           <span class="rec-badge {{ rec.prioridad }}">{{ rec.prioridad | upper }}</span>
           <span style="font-size:11px;color:var(--at-muted)">{{ rec.modulo }}</span>
           <span class="rec-justif">· {{ rec.justificacion }}</span>
+          {% set mod_url = {'Puntualidad': '/puntualidad', 'Cancelaciones': '/cancelaciones', 'Rutas': '/rutas', 'Dashboard': '/dashboard', 'Predictivo': '/predictivo'} %}
+          <a href="{{ mod_url.get(rec.modulo, '/dashboard') }}" class="btn-ir-modulo">
+            <i class="bi bi-arrow-right-circle" style="font-size:10px"></i> Ir a {{ rec.modulo }}
+          </a>
           <button class="btn-revisar" onclick="verDetalle({{ loop.index0 }})">
             <i class="bi bi-search" style="font-size:10px"></i> Ver detalle
           </button>
@@ -255,6 +404,132 @@
   <div class="at-empty">
     <i class="bi bi-check-circle-fill"></i>
     <p>No hay suficientes datos para generar recomendaciones. Ejecuta el pipeline ELT primero.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Panel de anomalías detectadas por IA -->
+<div class="chart-card" style="margin-bottom:24px">
+  <div class="chart-title">
+    <i class="bi bi-radar" aria-hidden="true"></i>
+    Anomalías detectadas por IA
+    {% if anomalias %}
+    <span style="font-size:11px;font-weight:400;color:var(--at-muted);margin-left:6px">({{ anomalias|length }} evento{% if anomalias|length != 1 %}s{% endif %} atípico{% if anomalias|length != 1 %}s{% endif %})</span>
+    {% endif %}
+  </div>
+  <p style="font-size:12px;color:var(--at-muted);margin:-4px 0 14px 0;line-height:1.6">
+    Períodos cuyo OTP se desvió significativamente del promedio histórico para ese mes (umbral: ±1.5σ).
+    Se muestran los eventos más negativos <span style="color:#ef4444;font-weight:600">▼ BAJO</span> (riesgo operacional)
+    y los más positivos <span style="color:#10b981;font-weight:600">▲ EXCEPCIONAL</span> (meses sorprendentemente buenos).
+    El mini-gráfico muestra ese mes a través de los años disponibles.
+  </p>
+
+  {% if anomalias %}
+  <div class="anomalia-list">
+    {% for an in anomalias %}
+    <div class="anomalia-item {{ an.tipo }}">
+      <span class="anomalia-badge {{ an.tipo }}">
+        {% if an.tipo == 'bajo' %}▼ BAJO{% else %}▲ EXCEPCIONAL{% endif %}
+      </span>
+      <div class="anomalia-body">
+        <div class="anomalia-periodo">{{ an.periodo }}</div>
+        <div class="anomalia-detail">
+          OTP registrado: <strong style="color:var(--at-text)">{{ an.otp }}%</strong>
+          &nbsp;·&nbsp;
+          Prom. histórico mes: <strong style="color:var(--at-text)">{{ an.promedio_mes }}%</strong>
+          &nbsp;·&nbsp;
+          <span class="anomalia-delta {{ 'neg' if an.delta < 0 else 'pos' }}">
+            {{ '+' if an.delta > 0 else '' }}{{ an.delta }}pp
+          </span>
+          <span style="font-size:10.5px;color:var(--at-muted);margin-left:4px">(z={{ an.z }})</span>
+        </div>
+        {% if an.tipo == 'alto' %}
+        <div style="font-size:11px;color:#10b981;margin-top:4px;font-style:italic">
+          <i class="bi bi-star-fill" style="font-size:9px"></i> Mes de rendimiento excepcionalmente alto vs su historial
+        </div>
+        {% endif %}
+      </div>
+      {% if an.sparkline %}
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0">
+        {{ an.sparkline | safe }}
+        <span style="font-size:9px;color:var(--at-muted);white-space:nowrap">ese mes / años</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="at-empty">
+    <i class="bi bi-check-circle-fill"></i>
+    <p>No se detectaron eventos atípicos en el período analizado. La operación se mantiene dentro de rangos históricos normales.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Índice de Riesgo por Aerolínea -->
+<div class="chart-card" style="margin-bottom:24px">
+  <div class="chart-title">
+    <i class="bi bi-bar-chart-steps" aria-hidden="true"></i>
+    Índice de Riesgo por Aerolínea
+    <span style="font-size:11px;font-weight:400;color:var(--at-muted);margin-left:6px">Score compuesto: OTP (60%) + Estabilidad (40%)</span>
+  </div>
+  <p style="font-size:12px;color:var(--at-muted);margin:-4px 0 14px 0;line-height:1.6">
+    Ranking predictivo de riesgo operacional por aerolínea. Un score mayor indica menor riesgo.
+    Haz clic en una fila para filtrar el análisis a esa aerolínea.
+  </p>
+
+  {% if ranking_riesgo %}
+  <div style="overflow-x:auto">
+    <table class="risk-table" aria-label="Índice de riesgo por aerolínea">
+      <thead>
+        <tr>
+          <th style="width:32px">#</th>
+          <th>Aerolínea</th>
+          <th>Nivel</th>
+          <th>OTP prom.</th>
+          <th>Variab. σ</th>
+          <th>Score</th>
+          <th>Períodos</th>
+          <th title="Promedio OTP de los últimos 2 meses vs los 2 anteriores">Tendencia reciente ⓘ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ranking_riesgo %}
+        <tr onclick="filtrarAerolinea('{{ r.airline }}')" title="Filtrar a aerolínea {{ r.airline }}">
+          <td style="color:var(--at-muted);font-size:11px;font-weight:600">{{ loop.index }}</td>
+          <td style="font-weight:700;color:var(--at-text)">{{ r.airline }}</td>
+          <td><span class="risk-badge {{ r.nivel }}">{{ r.nivel | upper }}</span></td>
+          <td style="color:var(--at-text)">{{ r.otp }}%</td>
+          <td style="color:var(--at-muted)">±{{ r.std }}pp</td>
+          <td>
+            <span style="font-weight:800;color:{{ '#10b981' if r.score >= 70 else '#f59e0b' if r.score >= 50 else '#ef4444' }}">{{ r.score }}</span>
+            <span class="risk-bar-wrap">
+              <span class="risk-bar" style="width:{{ r.score }}%;background:{{ '#10b981' if r.score >= 70 else '#f59e0b' if r.score >= 50 else '#ef4444' }}"></span>
+            </span>
+          </td>
+          <td style="color:var(--at-muted);font-size:11px">{{ r.n_meses }} meses</td>
+          <td style="font-size:12px;font-weight:700;text-align:center;white-space:nowrap">
+            {% if r.tendencia == 'up' %}
+              <span style="color:#10b981" title="OTP mejorando (últimos 2 meses vs 2 anteriores)">↑ +{{ r.tendencia_delta | abs | round(1) }}pp</span>
+            {% elif r.tendencia == 'down' %}
+              {% if r.nivel == 'estable' %}
+                <span style="color:#f59e0b" title="Leve tendencia a la baja — vigilar">↓ -{{ r.tendencia_delta | abs | round(1) }}pp</span>
+              {% else %}
+                <span style="color:#ef4444" title="OTP deteriorando — requiere atención">↓ -{{ r.tendencia_delta | abs | round(1) }}pp</span>
+              {% endif %}
+            {% else %}
+              <span style="color:var(--at-muted)" title="Sin variación significativa">→ estable</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="at-empty">
+    <i class="bi bi-bar-chart-steps"></i>
+    <p>Sin datos de aerolíneas disponibles. Ejecuta el pipeline ELT primero.</p>
   </div>
   {% endif %}
 </div>
@@ -283,7 +558,15 @@
 
         <!-- Descripción -->
         <p id="rec-d-desc"
-           style="font-size:13.5px;color:var(--at-text);line-height:1.75;margin-bottom:16px"></p>
+           style="font-size:13.5px;color:var(--at-text);line-height:1.75;margin-bottom:12px"></p>
+
+        <!-- Impacto estimado -->
+        <div id="rec-d-impacto-wrap" style="margin-bottom:16px">
+          <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600">
+            <i class="bi bi-lightning-charge-fill"></i>
+            <span id="rec-d-impacto"></span>
+          </div>
+        </div>
 
         <!-- Base de análisis -->
         <div style="background:var(--at-bg);border:1px solid var(--at-border);border-radius:10px;padding:14px 16px;margin-bottom:16px">
@@ -312,6 +595,58 @@
   </div>
 </div>
 
+<!-- Modal Briefing Ejecutivo -->
+<div class="modal fade" id="briefing-modal" tabindex="-1" aria-labelledby="briefing-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:560px">
+    <div class="modal-content" style="border:1px solid rgba(99,102,241,.3);background:var(--at-surface);border-radius:16px">
+      <div class="modal-header" style="border-bottom:1px solid var(--at-border);padding:18px 24px">
+        <h5 class="modal-title" id="briefing-title"
+            style="font-size:14.5px;font-weight:700;color:var(--at-text);display:flex;align-items:center;gap:8px">
+          <i class="bi bi-stars" style="color:#818cf8"></i>
+          Resumen ejecutivo IA
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" style="padding:20px 24px">
+        <p style="font-size:12px;color:var(--at-muted);margin-bottom:16px">Análisis generado automáticamente por el motor predictivo de AeroTrack.</p>
+        <div class="briefing-grid" id="briefing-grid">
+          <div class="briefing-card" id="bc-0">
+            <div class="briefing-card-label"><i class="bi bi-speedometer2"></i> OTP promedio histórico</div>
+            <div class="briefing-card-value" id="bc-0-val">—</div>
+            <div class="briefing-card-sub" id="bc-0-sub"></div>
+          </div>
+          <div class="briefing-card" id="bc-1">
+            <div class="briefing-card-label"><i class="bi bi-trend-up"></i> Tendencia reciente</div>
+            <div class="briefing-card-value" id="bc-1-val">—</div>
+            <div class="briefing-card-sub" id="bc-1-sub"></div>
+          </div>
+          <div class="briefing-card" id="bc-2">
+            <div class="briefing-card-label"><i class="bi bi-calendar-x"></i> Mes más crítico</div>
+            <div class="briefing-card-value" id="bc-2-val">—</div>
+            <div class="briefing-card-sub" id="bc-2-sub"></div>
+          </div>
+          <div class="briefing-card" id="bc-3">
+            <div class="briefing-card-label"><i class="bi bi-graph-up-arrow"></i> Proyección próximo mes</div>
+            <div class="briefing-card-value" id="bc-3-val">—</div>
+            <div class="briefing-card-sub" id="bc-3-sub"></div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--at-muted);text-align:center;margin-bottom:0">
+          <i class="bi bi-info-circle"></i> El PDF incluye este análisis con gráficos completos y recomendaciones detalladas.
+        </p>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--at-border);padding:14px 24px;gap:8px">
+        <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn-at-hero" id="btn-download-pdf" style="white-space:nowrap">
+          <i class="bi bi-file-earmark-pdf-fill"></i>
+          Descargar PDF
+          <span class="informe-spinner" id="brief-spinner" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -326,22 +661,31 @@
   var HIST_LABELS= {{ proyeccion.get('meses_hist', []) | tojson }};
   var PROY_LABELS= {{ proyeccion.get('meses_proy', []) | tojson }};
   var PROY_ERR   = {{ proyeccion.get('error', '') | tojson }};
+  var METODO     = {{ proyeccion.get('metodo', 'Holt-Winters') | tojson }};
+  var N_MESES    = {{ proyeccion.get('n_meses', 0) | tojson }};
+  var AJUSTADO   = {{ proyeccion.get('ajustado', []) | tojson }};
+  var PRECISION  = {{ proyeccion.get('precision_estimada') | tojson }};
 
   // ── Gráfico de proyección ──────────────────────────────────────────────────
   var chartInst = null;
 
-  function buildChartData(hLabels, hVals, pLabels, pVals, icSup, icInf) {
+  function buildChartData(hLabels, hVals, pLabels, pVals, icSup, icInf, ajust) {
     var allLabels = hLabels.concat(pLabels);
-    // Histórico: solo hasta el punto de unión
-    var histData = hVals.concat(new Array(pLabels.length).fill(null));
-    // Proyección: null hasta el último punto histórico, luego los valores
-    var proyData = new Array(hLabels.length - 1).fill(null).concat([hVals[hVals.length - 1] || null]).concat(pVals);
-    var supData  = new Array(hLabels.length - 1).fill(null).concat([null]).concat(icSup);
-    var infData  = new Array(hLabels.length - 1).fill(null).concat([null]).concat(icInf);
-    return { allLabels, histData, proyData, supData, infData };
+    var histData  = hVals.concat(new Array(pLabels.length).fill(null));
+    var proyData  = new Array(hLabels.length - 1).fill(null).concat([hVals[hVals.length - 1] || null]).concat(pVals);
+    var supData   = new Array(hLabels.length - 1).fill(null).concat([null]).concat(icSup);
+    var infData   = new Array(hLabels.length - 1).fill(null).concat([null]).concat(icInf);
+    // Fitted values: solo sobre la sección histórica, rellenados con null en proyección
+    var ajustData = [];
+    if (ajust && ajust.length === hVals.length) {
+      ajustData = ajust.concat(new Array(pLabels.length).fill(null));
+    } else {
+      ajustData = new Array(allLabels.length).fill(null);
+    }
+    return { allLabels, histData, proyData, supData, infData, ajustData };
   }
 
-  function renderChart(hLabels, hVals, pLabels, pVals, icSup, icInf) {
+  function renderChart(hLabels, hVals, pLabels, pVals, icSup, icInf, ajust) {
     var canvas = document.getElementById('proy-chart');
     var wrap   = document.getElementById('proy-chart-wrap');
     var msg    = document.getElementById('proy-msg');
@@ -356,7 +700,7 @@
     wrap.style.display = 'block';
     msg.style.display  = 'none';
 
-    var d = buildChartData(hLabels, hVals, pLabels, pVals, icSup, icInf);
+    var d = buildChartData(hLabels, hVals, pLabels, pVals, icSup, icInf, ajust || []);
     if (chartInst) { chartInst.destroy(); chartInst = null; }
 
     chartInst = new Chart(canvas, {
@@ -380,7 +724,7 @@
             data: d.proyData,
             borderColor: '#f59e0b',
             backgroundColor: 'rgba(245,158,11,.08)',
-            borderWidth: 2,
+            borderWidth: 2.5,
             borderDash: [6, 4],
             pointRadius: 4,
             pointBackgroundColor: '#f59e0b',
@@ -388,11 +732,11 @@
             spanGaps: false,
           },
           {
-            label: 'IC Superior',
+            label: 'Banda de confianza 95%',
             data: d.supData,
-            borderColor: 'rgba(245,158,11,.25)',
-            backgroundColor: 'rgba(245,158,11,.06)',
-            borderWidth: 1,
+            borderColor: 'rgba(245,158,11,.5)',
+            backgroundColor: 'rgba(245,158,11,.15)',
+            borderWidth: 1.5,
             borderDash: [3, 3],
             pointRadius: 0,
             fill: '+1',
@@ -401,10 +745,21 @@
           {
             label: 'IC Inferior',
             data: d.infData,
-            borderColor: 'rgba(245,158,11,.25)',
-            backgroundColor: 'rgba(245,158,11,.06)',
-            borderWidth: 1,
+            borderColor: 'rgba(245,158,11,.5)',
+            backgroundColor: 'rgba(245,158,11,.15)',
+            borderWidth: 1.5,
             borderDash: [3, 3],
+            pointRadius: 0,
+            fill: false,
+            spanGaps: false,
+          },
+          {
+            label: 'Ajuste del modelo',
+            data: d.ajustData,
+            borderColor: 'rgba(148,163,184,.45)',
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderDash: [2, 3],
             pointRadius: 0,
             fill: false,
             spanGaps: false,
@@ -416,7 +771,7 @@
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         scales: {
-          x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+          x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', font: { size: 9 }, maxTicksLimit: 12, maxRotation: 0, minRotation: 0 } },
           y: {
             min: 50, max: 100,
             grid: { color: 'rgba(255,255,255,.05)' },
@@ -424,13 +779,36 @@
           },
         },
         plugins: {
-          legend: { labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 14, padding: 12 } },
+          legend: {
+            labels: {
+              color: '#94a3b8', font: { size: 11 }, boxWidth: 14, padding: 12,
+              filter: function(item) { return item.text !== 'IC Inferior'; },
+              generateLabels: function(chart) {
+                var orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                return orig.filter(function(l) { return l.text !== 'IC Inferior'; });
+              },
+            },
+          },
           tooltip: {
             backgroundColor: '#1e2130',
             borderColor: 'rgba(255,255,255,.1)',
             borderWidth: 1,
             callbacks: {
-              label: function(ctx) { return ctx.dataset.label + ': ' + (ctx.raw !== null ? ctx.raw + '%' : '—'); },
+              label: function(ctx) {
+                if (ctx.dataset.label === 'IC Inferior') return null;
+                if (ctx.dataset.label === 'Banda de confianza 95%') {
+                  var inf = ctx.chart.data.datasets[3].data[ctx.dataIndex];
+                  if (ctx.raw !== null && inf !== null) {
+                    return 'Rango 95%: ' + inf + '% — ' + ctx.raw + '%';
+                  }
+                  return null;
+                }
+                if (ctx.dataset.label === 'Ajuste del modelo' && ctx.raw !== null) {
+                  return 'Predicho: ' + ctx.raw + '%';
+                }
+                if (ctx.raw === null) return null;
+                return ctx.dataset.label + ': ' + ctx.raw + '%';
+              },
             },
           },
         },
@@ -438,13 +816,24 @@
     });
   }
 
+  // Actualizar metadata del modelo
+  function updateMeta(metodo, nMeses, precision) {
+    var elMetodo    = document.getElementById('meta-metodo');
+    var elPeriodos  = document.getElementById('meta-periodos');
+    var elPrecision = document.getElementById('meta-precision');
+    if (elMetodo   && metodo)    elMetodo.textContent   = metodo;
+    if (elPeriodos && nMeses)    elPeriodos.textContent = nMeses;
+    if (elPrecision && precision != null) elPrecision.textContent = precision + '%';
+  }
+
   // Renderizado inicial
   if (PROY_ERR) {
-    var msg = document.getElementById('proy-msg');
+    var msg  = document.getElementById('proy-msg');
     var wrap = document.getElementById('proy-chart-wrap');
     if (msg && wrap) { wrap.style.display='none'; msg.style.display='block'; msg.textContent = PROY_ERR; }
   } else {
-    renderChart(HIST_LABELS, HIST_VALS, PROY_LABELS, PROY_VALS, IC_SUP, IC_INF);
+    renderChart(HIST_LABELS, HIST_VALS, PROY_LABELS, PROY_VALS, IC_SUP, IC_INF, AJUSTADO);
+    updateMeta(METODO, N_MESES, PRECISION);
   }
 
   // ── Proyección AJAX ────────────────────────────────────────────────────────
@@ -466,11 +855,12 @@
     .then(function(data) {
       if (loading) loading.style.display = 'none';
       if (data.error) {
-        var msg = document.getElementById('proy-msg');
+        var msg  = document.getElementById('proy-msg');
         var wrap = document.getElementById('proy-chart-wrap');
         wrap.style.display='none'; msg.style.display='block'; msg.textContent=data.error;
       } else {
-        renderChart(data.meses_hist, data.historico, data.meses_proy, data.proyeccion, data.ic_sup, data.ic_inf);
+        renderChart(data.meses_hist, data.historico, data.meses_proy, data.proyeccion, data.ic_sup, data.ic_inf, data.ajustado || []);
+        updateMeta(data.metodo, data.n_meses, data.precision_estimada || null);
         var badge = document.querySelector('.proy-badge.warn');
         if (badge) badge.style.display = data.advertencia ? 'inline-flex' : 'none';
       }
@@ -496,23 +886,29 @@
     if (el) el.addEventListener('change', applyFilters);
   });
 
-  // ── Informe ejecutivo ──────────────────────────────────────────────────────
-  document.getElementById('informe-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    var spinner = document.getElementById('informe-spinner');
-    var btn     = document.getElementById('btn-informe');
-    spinner.style.display = 'inline-block';
-    btn.disabled = true;
+  // ── Cambio de horizonte → recalcular proyección ───────────────────────────
+  var horEl = document.getElementById('sel-horizonte');
+  if (horEl) horEl.addEventListener('change', fetchProyeccion);
 
+  // ── Informe ejecutivo: lógica de descarga PDF ──────────────────────────────
+  function ejecutarDescargaPDF() {
+    var spinner = document.getElementById('brief-spinner');
+    var btn     = document.getElementById('btn-download-pdf');
+    if (spinner) spinner.style.display = 'inline-block';
+    if (btn) btn.disabled = true;
+
+    var form = document.getElementById('informe-form');
     fetch('/predictivo/informe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(new FormData(this)).toString(),
+      body: new URLSearchParams(new FormData(form)).toString(),
     })
     .then(function(r){ return r.json(); })
     .then(function(data) {
-      spinner.style.display = 'none';
-      btn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+      if (btn) btn.disabled = false;
+      var briefingModal = bootstrap.Modal.getInstance(document.getElementById('briefing-modal'));
+      if (briefingModal) briefingModal.hide();
       if (data.url) {
         window.open(data.url, '_blank');
         if (window.AT && AT.toast) AT.toast('Informe generado. Descargando...', 'success');
@@ -521,14 +917,124 @@
       }
     })
     .catch(function() {
-      spinner.style.display='none'; btn.disabled=false;
+      if (spinner) spinner.style.display = 'none';
+      if (btn) btn.disabled = false;
       if (window.AT && AT.toast) AT.toast('Error al generar el informe', 'error');
     });
+  }
+
+  // ── Briefing ejecutivo animado ─────────────────────────────────────────────
+  function calcularInsights() {
+    var otp_avg = 0;
+    if (HIST_VALS.length) {
+      otp_avg = HIST_VALS.reduce(function(a,b){ return a+b; }, 0) / HIST_VALS.length;
+    }
+
+    // Tendencia: comparar primer tercio vs último tercio
+    var tendencia = '—', tendClass = 'blue';
+    if (HIST_VALS.length >= 3) {
+      var n = HIST_VALS.length;
+      var t = Math.max(1, Math.floor(n / 3));
+      var primerTercio = HIST_VALS.slice(0, t).reduce(function(a,b){ return a+b;},0) / t;
+      var ultTercio    = HIST_VALS.slice(n - t).reduce(function(a,b){ return a+b;},0) / t;
+      var diff = ultTercio - primerTercio;
+      if (diff > 1.5)       { tendencia = '↑ Mejorando'; tendClass = 'good'; }
+      else if (diff < -1.5) { tendencia = '↓ Deterioro'; tendClass = 'bad'; }
+      else                  { tendencia = '→ Estable';   tendClass = 'blue'; }
+    }
+
+    // Próxima proyección
+    var proxProy = PROY_VALS.length ? PROY_VALS[0] : null;
+    var proxLabel = PROY_LABELS.length ? PROY_LABELS[0] : 'próximo mes';
+
+    // OTP card color
+    var otpClass = otp_avg >= 82 ? 'good' : otp_avg >= 75 ? 'warn' : 'bad';
+
+    return {
+      otp_avg: otp_avg,
+      otpClass: otpClass,
+      tendencia: tendencia,
+      tendClass: tendClass,
+      proxProy: proxProy,
+      proxLabel: proxLabel,
+    };
+  }
+
+  function mostrarBriefing() {
+    var ins = calcularInsights();
+
+    // Resetear tarjetas
+    [0,1,2,3].forEach(function(i) {
+      var c = document.getElementById('bc-' + i);
+      if (c) { c.classList.remove('show','good','warn','bad','blue'); }
+    });
+
+    // Tarjeta 0: OTP promedio
+    var bc0 = document.getElementById('bc-0');
+    var bc0v = document.getElementById('bc-0-val');
+    var bc0s = document.getElementById('bc-0-sub');
+    if (bc0) { bc0.classList.add(ins.otpClass); }
+    if (bc0v) bc0v.textContent = ins.otp_avg ? ins.otp_avg.toFixed(1) + '%' : '—';
+    if (bc0s) bc0s.textContent = ins.otp_avg >= 82 ? 'Sobre benchmark (82%)' : ins.otp_avg >= 75 ? 'Bajo benchmark — monitoreo activo' : 'Crítico — acción inmediata';
+
+    // Tarjeta 1: Tendencia
+    var bc1 = document.getElementById('bc-1');
+    var bc1v = document.getElementById('bc-1-val');
+    var bc1s = document.getElementById('bc-1-sub');
+    if (bc1) { bc1.classList.add(ins.tendClass); }
+    if (bc1v) bc1v.textContent = ins.tendencia;
+    if (bc1s) bc1s.textContent = 'Comparando primer y último tercio del período analizado';
+
+    // Tarjeta 2: Mes más crítico (desde recomendaciones Jinja — se pasa desde variable global)
+    var bc2 = document.getElementById('bc-2');
+    var bc2v = document.getElementById('bc-2-val');
+    var bc2s = document.getElementById('bc-2-sub');
+    if (bc2) { bc2.classList.add('warn'); }
+    if (bc2v) bc2v.textContent = window._BRIEF_MES_CRITICO || 'Ver mapa';
+    if (bc2s) bc2s.textContent = 'Mes de menor OTP promedio histórico';
+
+    // Tarjeta 3: Proyección próximo mes
+    var bc3 = document.getElementById('bc-3');
+    var bc3v = document.getElementById('bc-3-val');
+    var bc3s = document.getElementById('bc-3-sub');
+    var pClass = ins.proxProy !== null ? (ins.proxProy >= 82 ? 'good' : ins.proxProy >= 75 ? 'warn' : 'bad') : 'blue';
+    if (bc3) { bc3.classList.add(pClass); }
+    if (bc3v) bc3v.textContent = ins.proxProy !== null ? ins.proxProy.toFixed(1) + '%' : '—';
+    if (bc3s) bc3s.textContent = ins.proxProy !== null ? ('OTP proyectado para ' + ins.proxLabel) : 'Sin datos de proyección';
+
+    var modal = new bootstrap.Modal(document.getElementById('briefing-modal'));
+    modal.show();
+
+    // Animar tarjetas en secuencia
+    [0,1,2,3].forEach(function(i) {
+      setTimeout(function() {
+        var c = document.getElementById('bc-' + i);
+        if (c) c.classList.add('show');
+      }, 150 + i * 220);
+    });
+  }
+
+  // Extraer mes más crítico de las recomendaciones para el briefing
+  (function() {
+    var RECS_RAW = {{ recomendaciones | tojson }};
+    var recMeses = RECS_RAW.find(function(r) { return r.icono === 'bi-calendar-x-fill'; });
+    if (recMeses) {
+      var match = recMeses.titulo.match(/en (.+)$/);
+      window._BRIEF_MES_CRITICO = match ? match[1] : '—';
+    } else {
+      window._BRIEF_MES_CRITICO = '—';
+    }
+  })();
+
+  // Interceptar submit del formulario de informe
+  document.getElementById('informe-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    mostrarBriefing();
   });
 
-  // ── Cambio de horizonte → recalcular proyección ───────────────────────────
-  var horEl = document.getElementById('sel-horizonte');
-  if (horEl) horEl.addEventListener('change', fetchProyeccion);
+  // Botón descarga PDF dentro del modal briefing
+  var btnDownload = document.getElementById('btn-download-pdf');
+  if (btnDownload) btnDownload.addEventListener('click', ejecutarDescargaPDF);
 
   // ── Modal de detalle de recomendación ─────────────────────────────────────
   var RECS = {{ recomendaciones | tojson }};
@@ -539,12 +1045,90 @@
     'Dashboard': '/dashboard',
     'Predictivo': '/predictivo',
   };
-  var ACCIONES = {
-    alta:  'Revisar inmediatamente los procesos operativos, coordinar con operaciones y establecer un plan de contingencia a corto plazo.',
-    media: 'Programar una revisión en los próximos 30 días, monitorear la evolución del indicador y preparar medidas preventivas.',
-    baja:  'Mantener el seguimiento periódico y documentar las buenas prácticas para replicar el desempeño positivo.',
+
+  // ── Simulador What-If ──────────────────────────────────────────────────────
+  var BUFFER_FACTOR = 0.7;  // pp de mejora por cada 5 min de buffer adicional
+  var VOL_FACTOR    = 0.3;  // pp de mejora por cada 10% de reducción de carga
+
+  function updateWhatIf() {
+    var buffer = parseInt(document.getElementById('sl-buffer').value, 10) || 0;
+    var vol    = parseInt(document.getElementById('sl-vol').value, 10)    || 0;
+
+    document.getElementById('lbl-buffer').textContent = '+' + buffer + ' min';
+    document.getElementById('lbl-vol').textContent    = vol + '%';
+
+    var delta = (buffer / 5) * BUFFER_FACTOR + (vol / 10) * VOL_FACTOR;
+    var resultEl = document.getElementById('whatif-result');
+
+    if (!chartInst || !PROY_VALS.length) return;
+
+    if (delta <= 0) {
+      // Eliminar dataset What-If si existe
+      if (chartInst.data.datasets.length > 5) {
+        chartInst.data.datasets.splice(5, 1);
+        chartInst.update('none');
+      }
+      if (resultEl) resultEl.style.display = 'none';
+      return;
+    }
+
+    var altProy = PROY_VALS.map(function(v) { return Math.min(100, Math.round((v + delta) * 10) / 10); });
+    var nHist   = HIST_LABELS.length;
+    var nProy   = PROY_LABELS.length;
+    var altData = new Array(nHist - 1).fill(null)
+      .concat([HIST_VALS[HIST_VALS.length - 1] || null])
+      .concat(altProy);
+
+    var label = 'Escenario +' + delta.toFixed(1) + 'pp';
+    var ds = {
+      label: label,
+      data: altData,
+      borderColor: '#8b5cf6',
+      backgroundColor: 'rgba(139,92,246,.06)',
+      borderWidth: 2,
+      borderDash: [5, 3],
+      pointRadius: 3,
+      pointBackgroundColor: '#8b5cf6',
+      tension: 0.3,
+      fill: false,
+      spanGaps: false,
+    };
+
+    if (chartInst.data.datasets.length > 5) {
+      chartInst.data.datasets[5] = ds;
+    } else {
+      chartInst.data.datasets.push(ds);
+    }
+    chartInst.update('none');
+
+    var deltaEl = document.getElementById('whatif-delta');
+    if (deltaEl) deltaEl.textContent = '+' + delta.toFixed(1) + 'pp OTP proyectado';
+    if (resultEl) resultEl.style.display = 'flex';
+  }
+
+  window.resetWhatIf = function() {
+    document.getElementById('sl-buffer').value = 0;
+    document.getElementById('sl-vol').value    = 0;
+    updateWhatIf();
   };
-  var PRIO_LABELS = { alta: 'ALTA', media: 'MEDIA', baja: 'BAJA' };
+
+  var slBuffer = document.getElementById('sl-buffer');
+  var slVol    = document.getElementById('sl-vol');
+  var btnReset = document.getElementById('btn-reset-whatif');
+  if (slBuffer) slBuffer.addEventListener('input', updateWhatIf);
+  if (slVol)    slVol.addEventListener('input', updateWhatIf);
+  if (btnReset) btnReset.addEventListener('click', window.resetWhatIf);
+
+  // ── Filtrar por aerolínea desde tabla de riesgo ───────────────────────────
+  window.filtrarAerolinea = function(airline) {
+    var metric  = document.getElementById('sel-metric')  ? document.getElementById('sel-metric').value  : 'otp';
+    var hor     = document.getElementById('sel-horizonte')? document.getElementById('sel-horizonte').value: '6';
+    var year    = document.getElementById('sel-year')    ? document.getElementById('sel-year').value    : '';
+    window.location.href = '/predictivo?airline=' + encodeURIComponent(airline)
+      + '&year='    + encodeURIComponent(year)
+      + '&metric='  + encodeURIComponent(metric)
+      + '&horizonte=' + encodeURIComponent(hor);
+  };
 
   window.verDetalle = function(idx) {
     var rec = RECS[idx];
@@ -557,11 +1141,32 @@
     document.getElementById('rec-d-titulo').textContent = rec.titulo;
     document.getElementById('rec-d-desc').textContent   = rec.descripcion;
     document.getElementById('rec-d-justif').textContent = rec.justificacion;
-    document.getElementById('rec-d-accion').textContent = ACCIONES[rec.prioridad] || '';
+
+    // Acción directa (usa campo del backend si existe, sino genérico)
+    var accion = rec.accion_directa || (
+      rec.prioridad === 'alta'  ? 'Revisar inmediatamente los procesos operativos y establecer un plan de contingencia.' :
+      rec.prioridad === 'media' ? 'Programar una revisión en los próximos 30 días y preparar medidas preventivas.' :
+                                  'Mantener el seguimiento periódico y documentar las buenas prácticas.'
+    );
+    document.getElementById('rec-d-accion').textContent = accion;
+
+    // Impacto estimado
+    var impactoWrap = document.getElementById('rec-d-impacto-wrap');
+    var impactoEl   = document.getElementById('rec-d-impacto');
+    if (rec.impacto_estimado) {
+      impactoEl.textContent = rec.impacto_estimado;
+      var colorBg = rec.prioridad === 'alta' ? 'rgba(239,68,68,.1)' : rec.prioridad === 'media' ? 'rgba(245,158,11,.1)' : 'rgba(16,185,129,.1)';
+      var colorTxt = rec.prioridad === 'alta' ? '#ef4444' : rec.prioridad === 'media' ? '#f59e0b' : '#10b981';
+      impactoWrap.firstElementChild.style.background = colorBg;
+      impactoWrap.firstElementChild.style.color = colorTxt;
+      impactoWrap.style.display = 'block';
+    } else {
+      impactoWrap.style.display = 'none';
+    }
 
     var badge = document.getElementById('rec-d-badge');
-    badge.textContent  = PRIO_LABELS[rec.prioridad] || rec.prioridad;
-    badge.className    = 'rec-badge ' + rec.prioridad;
+    badge.textContent = rec.prioridad.toUpperCase();
+    badge.className   = 'rec-badge ' + rec.prioridad;
 
     document.getElementById('rec-d-modulo').textContent = rec.modulo;
 

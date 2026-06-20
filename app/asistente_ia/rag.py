@@ -841,7 +841,14 @@ def build_messages(history: list[dict], context: str, question: str) -> list[dic
         "5. Cuando afirmes algo, cita el valor exacto del contexto.\n"
         "6. Los rankings del contexto están pre-calculados — úsalos directamente.\n"
         "7. Puedes combinar y sintetizar datos de diferentes secciones del contexto para dar "
-        "una respuesta más completa, siempre citando solo valores literales presentes."
+        "una respuesta más completa, siempre citando solo valores literales presentes.\n"
+        "8. FORMATO DE RESPUESTA: Para rankings, comparativas o tablas de datos usa SIEMPRE tablas "
+        "markdown con este formato exacto:\n"
+        "| Columna A | Columna B |\n"
+        "|-----------|----------|\n"
+        "| valor     | valor    |\n"
+        "Máximo 15 filas por tabla. Para listas cortas (≤4 items) usa viñetas (- item). "
+        "Para análisis narrativo usa párrafos cortos. Combina tabla + párrafo de conclusión cuando sea útil."
     )
     user_with_ctx = (
         f"=== DATOS DEL SISTEMA ===\n{context}\n=== FIN DE DATOS ===\n\n"

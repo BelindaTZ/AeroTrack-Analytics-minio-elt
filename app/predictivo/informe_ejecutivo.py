@@ -305,13 +305,15 @@ async def generar_informe(request: Request):
             content_type="application/pdf",
         )
 
-        # Usar endpoint público para que la URL sea accesible desde el navegador
+        # Generar URL pública firmada: usar cliente con endpoint público pero precargar
+        # la región del caché interno para evitar el lookup HTTP desde dentro de Docker
         sign_client = _Minio(
             MINIO_PUBLIC_ENDPOINT,
             access_key=MINIO_ACCESS_KEY,
             secret_key=MINIO_SECRET_KEY,
             secure=False,
         )
+        sign_client._region_map[bucket] = client._region_map.get(bucket, "us-east-1")
         url = sign_client.presigned_get_object(bucket, obj_name, expires=timedelta(hours=1))
 
         audit.registrar(

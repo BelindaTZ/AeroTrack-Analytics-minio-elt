@@ -99,10 +99,17 @@ def _proyectar_otp(df: pd.DataFrame, horizonte: int) -> dict:
         forecast   = list(mdl.forecast(horizonte))
         resid_std  = float(mdl.resid.std()) if hasattr(mdl, "resid") else 2.0
         ic_width   = 1.96 * max(resid_std, 0.5)
+        metodo     = "Holt-Winters (Suavizamiento Exponencial)"
+        fitted     = [round(min(100.0, max(0.0, _safe(v))), 1) for v in mdl.fittedvalues]
+        mae_val    = float(pd.Series([abs(r - f) for r, f in zip(otp_vals, fitted)]).mean())
+        precision_estimada = round(100.0 - mae_val, 1) if mae_val < 100 else None
     except Exception:
         media    = sum(otp_vals[-min(6, n_hist):]) / min(6, n_hist)
         forecast = [round(media, 1)] * horizonte
         ic_width = 5.0
+        metodo   = "Media móvil (6 meses)"
+        fitted   = []
+        precision_estimada = None
 
     fc = [min(100.0, max(0.0, _safe(v))) for v in forecast]
     ic_sup = [round(min(100.0, v + ic_width), 1) for v in fc]
@@ -116,14 +123,17 @@ def _proyectar_otp(df: pd.DataFrame, horizonte: int) -> dict:
         labels_proy.append(f"{_MESES[m-1]} {y}")
 
     return {
-        "historico":   [round(_safe(v), 1) for v in otp_vals],
-        "proyeccion":  [round(v, 1) for v in fc],
-        "ic_sup":      ic_sup,
-        "ic_inf":      ic_inf,
-        "meses_hist":  labels_hist,
-        "meses_proy":  labels_proy,
-        "advertencia": n_hist < 12,
-        "n_meses":     n_hist,
+        "historico":          [round(_safe(v), 1) for v in otp_vals],
+        "proyeccion":         [round(v, 1) for v in fc],
+        "ic_sup":             ic_sup,
+        "ic_inf":             ic_inf,
+        "meses_hist":         labels_hist,
+        "meses_proy":         labels_proy,
+        "advertencia":        n_hist < 12,
+        "n_meses":            n_hist,
+        "metodo":             metodo,
+        "ajustado":           fitted,
+        "precision_estimada": precision_estimada,
     }
 
 
@@ -185,6 +195,8 @@ def _generar_recomendaciones(df_otp: pd.DataFrame, airline: str = "") -> list[di
             ),
             "modulo": "Puntualidad", "revisado": False,
             "justificacion": f"OTP promedio de {len(df_otp)} meses: {otp_global:.1f}%.",
+            "impacto_estimado": f"+{82 - otp_global:.1f}pp para alcanzar benchmark del 82%",
+            "accion_directa": "Auditar causas de retraso por tipo (carrier/weather/NAS) e implementar plan de recuperación de turnarounds.",
         })
     elif otp_global < 82:
         recs.append({
@@ -196,6 +208,8 @@ def _generar_recomendaciones(df_otp: pd.DataFrame, airline: str = "") -> list[di
             ),
             "modulo": "Puntualidad", "revisado": False,
             "justificacion": f"Análisis de {len(df_otp)} períodos mensuales.",
+            "impacto_estimado": f"+{82 - otp_global:.1f}pp para alcanzar benchmark del 82%",
+            "accion_directa": "Revisar causas de retraso por tipo (carrier/weather/NAS) y programar auditoría en los próximos 30 días.",
         })
     else:
         recs.append({
@@ -207,16 +221,19 @@ def _generar_recomendaciones(df_otp: pd.DataFrame, airline: str = "") -> list[di
             ),
             "modulo": "Puntualidad", "revisado": False,
             "justificacion": f"OTP positivo en {len(df_otp)} meses de histórico.",
+            "impacto_estimado": f"OTP {otp_global:.1f}% — {otp_global - 82:.1f}pp sobre benchmark",
+            "accion_directa": "Documentar buenas prácticas actuales y evaluar optimización de gates y rotaciones de flota.",
         })
 
     # Recomendación 2: meses más débiles (agrupados por mes para evitar duplicados)
     if "month" in df_otp.columns and len(df_otp) >= 3:
-        peores_mes = (df_otp.groupby("month")["otp"].mean()
-                      .nsmallest(min(2, df_otp["month"].nunique()))
-                      .reset_index())
+        por_mes    = df_otp.groupby("month")["otp"].mean()
+        peores_mes = por_mes.nsmallest(min(2, df_otp["month"].nunique())).reset_index()
         m_nombres  = [_MESES[int(m) - 1] for m in peores_mes["month"]]
         m_valores  = [f"{v:.1f}%" for v in peores_mes["otp"]]
         desc_meses = ", ".join(f"{n} ({v})" for n, v in zip(m_nombres, m_valores))
+        n_meses_riesgo = len(peores_mes)
+        pct_riesgo = round(n_meses_riesgo / max(por_mes.count(), 1) * 100)
         recs.append({
             "prioridad": "media", "icono": "bi-calendar-x-fill", "color": "#f59e0b",
             "titulo": f"Mayor riesgo estacional en {' y '.join(m_nombres)}",
@@ -226,6 +243,8 @@ def _generar_recomendaciones(df_otp: pd.DataFrame, airline: str = "") -> list[di
             ),
             "modulo": "Predictivo", "revisado": False,
             "justificacion": "Análisis del percentil inferior del histórico mensual.",
+            "impacto_estimado": f"Meses de riesgo representan ~{pct_riesgo}% del historial analizado",
+            "accion_directa": f"Planificar refuerzos operativos en {' y '.join(m_nombres)}: ampliar buffers de conexión y revisar asignación de gates.",
         })
 
     # Recomendación 3: variabilidad
@@ -241,6 +260,8 @@ def _generar_recomendaciones(df_otp: pd.DataFrame, airline: str = "") -> list[di
                 ),
                 "modulo": "Predictivo", "revisado": False,
                 "justificacion": f"σ(OTP) = {std_otp:.1f}%p en el período analizado.",
+                "impacto_estimado": f"Dispersión ±{std_otp:.1f}pp — objetivo: reducir a <8pp",
+                "accion_directa": "Implementar buffers de conexión en rutas críticas y protocolos de recuperación para reducir variabilidad operativa.",
             })
         else:
             recs.append({
@@ -252,9 +273,182 @@ def _generar_recomendaciones(df_otp: pd.DataFrame, airline: str = "") -> list[di
                 ),
                 "modulo": "Predictivo", "revisado": False,
                 "justificacion": "Baja dispersión en el histórico mensual de OTP.",
+                "impacto_estimado": f"Dispersión ±{std_otp:.1f}pp — operación consistente",
+                "accion_directa": "Aprovechar la estabilidad para optimizar rotaciones de flota y asignación de gates en horarios de alta demanda.",
             })
 
     return sorted(recs, key=lambda r: {"alta": 0, "media": 1, "baja": 2}[r["prioridad"]])
+
+
+# ── Detección de anomalías ────────────────────────────────────────────────────
+
+def _sparkline_svg(vals: list[float], pos: int, tipo: str) -> str:
+    """Genera SVG inline de sparkline con punto resaltado en la posición del período anómalo."""
+    if len(vals) < 2:
+        return ""
+    w, h = 96, 32
+    vmin, vmax = min(vals), max(vals)
+    vrange = max(vmax - vmin, 1.0)
+    pad = 4
+
+    def cx(i: int) -> float:
+        return round(pad + i / (len(vals) - 1) * (w - 2 * pad), 1)
+
+    def cy(v: float) -> float:
+        return round(h - pad - (v - vmin) / vrange * (h - 2 * pad), 1)
+
+    points = " ".join(f"{cx(i)},{cy(v)}" for i, v in enumerate(vals))
+    dx, dy = cx(pos), cy(vals[pos])
+    color  = "#ef4444" if tipo == "bajo" else "#10b981"
+    return (
+        f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
+        f'xmlns="http://www.w3.org/2000/svg" style="display:block;flex-shrink:0">'
+        f'<polyline points="{points}" stroke="rgba(148,163,184,.45)" stroke-width="1.5" '
+        f'fill="none" stroke-linejoin="round" stroke-linecap="round"/>'
+        f'<circle cx="{dx}" cy="{dy}" r="3.5" fill="{color}" stroke="rgba(0,0,0,.25)" stroke-width="1"/>'
+        f'</svg>'
+    )
+
+
+def _detectar_anomalias(df: pd.DataFrame, airline: str = "") -> list[dict]:
+    """Detecta períodos atípicos comparando cada mes con su promedio histórico para ese mes."""
+    if df.empty or "otp" not in df.columns or len(df) < 6:
+        return []
+
+    if "month" not in df.columns:
+        return []
+
+    # Estadísticas por posición de mes (media y std de todos los años para ese mes)
+    stats = df.groupby("month")["otp"].agg(["mean", "std"]).reset_index()
+    stats.columns = ["month", "mean_m", "std_m"]
+    df_m = df.merge(stats, on="month", how="left")
+
+    anomalias = []
+    for _, row in df_m.iterrows():
+        std_m = row["std_m"]
+        if pd.isna(std_m) or std_m < 0.1:
+            continue
+        z = (row["otp"] - row["mean_m"]) / std_m
+        if abs(z) < 1.5:
+            continue
+
+        mes_label = _MESES[int(row["month"]) - 1]
+        if "year" in row and not pd.isna(row["year"]):
+            periodo = f"{mes_label} {int(row['year'])}"
+            yr = int(row["year"])
+        else:
+            periodo = mes_label
+            yr = -1
+
+        # Sparkline: OTP de ese mes a través de todos los años disponibles
+        mes_rows = df_m[df_m["month"] == int(row["month"])].sort_values("year") if "year" in df_m.columns else df_m[df_m["month"] == int(row["month"])]
+        spark_vals = [round(float(v), 1) for v in mes_rows["otp"].tolist()]
+        spark_pos  = 0
+        if "year" in mes_rows.columns:
+            for i, yr_val in enumerate(mes_rows["year"].tolist()):
+                if int(yr_val) == yr:
+                    spark_pos = i
+                    break
+
+        delta = round(row["otp"] - row["mean_m"], 1)
+        tipo  = "bajo" if z < 0 else "alto"
+        anomalias.append({
+            "periodo":      periodo,
+            "otp":          round(row["otp"], 1),
+            "promedio_mes": round(row["mean_m"], 1),
+            "delta":        delta,
+            "z":            round(float(z), 2),
+            "tipo":         tipo,
+            "sparkline":    _sparkline_svg(spark_vals, spark_pos, tipo),
+        })
+
+    # Mostrar las 3 más negativas + 2 más positivas (eventos malos y sorprendentemente buenos)
+    negativas = sorted([a for a in anomalias if a["z"] < 0], key=lambda a: a["z"])
+    positivas = sorted([a for a in anomalias if a["z"] > 0], key=lambda a: a["z"], reverse=True)
+    seleccion = negativas[:3] + positivas[:2]
+    seleccion.sort(key=lambda a: a["z"])  # negativos primero, luego positivos
+    return seleccion
+
+
+# ── Índice de riesgo compuesto por aerolínea ─────────────────────────────────
+
+def _calcular_ranking_riesgo(year: str = "") -> list[dict]:
+    """Score compuesto 0-100 por aerolínea: OTP (60%) + estabilidad (40%)."""
+    filtros: dict = {"year": year} if year else {}
+    try:
+        df = load_agg("agg_otp_aerolinea_mes", filtros if filtros else None)
+    except Exception:
+        return []
+    if df.empty:
+        return []
+
+    carrier_col = next((c for c in ["carrier", "Reporting_Airline"] if c in df.columns), None)
+    if not carrier_col:
+        return []
+
+    df = df.copy()
+    df["otp_row"] = (
+        df["vuelos_a_tiempo"] / df["total_vuelos"].replace(0, float("nan")) * 100
+    ).fillna(0.0)
+
+    agg = (
+        df.groupby(carrier_col)
+        .agg(total=("total_vuelos", "sum"), a_tiempo=("vuelos_a_tiempo", "sum"),
+             n_meses=(carrier_col, "count"))
+        .reset_index()
+    )
+    agg["otp_mean"] = (
+        agg["a_tiempo"] / agg["total"].replace(0, float("nan")) * 100
+    ).fillna(0.0)
+
+    std_df = df.groupby(carrier_col)["otp_row"].std().reset_index()
+    std_df.columns = [carrier_col, "otp_std"]
+    agg = agg.merge(std_df, on=carrier_col, how="left")
+    agg["otp_std"] = agg["otp_std"].fillna(0.0)
+
+    # Tendencia: promedio últimos 2 períodos vs 2 anteriores
+    tendencia_map:       dict = {}
+    tendencia_delta_map: dict = {}
+    if "year" in df.columns and "month" in df.columns:
+        df_s = df.sort_values(["year", "month"])
+        for airline, grp in df_s.groupby(carrier_col):
+            vals = grp["otp_row"].tolist()
+            if len(vals) >= 4:
+                diff = sum(vals[-2:]) / 2 - sum(vals[-4:-2]) / 2
+                tendencia_map[airline]       = "up" if diff > 1.5 else ("down" if diff < -1.5 else "stable")
+                tendencia_delta_map[airline] = round(diff, 1)
+            else:
+                tendencia_map[airline]       = "stable"
+                tendencia_delta_map[airline] = 0.0
+
+    otp_min, otp_max = float(agg["otp_mean"].min()), float(agg["otp_mean"].max())
+    std_min, std_max = float(agg["otp_std"].min()), float(agg["otp_std"].max())
+
+    def _norm(val: float, lo: float, hi: float, invert: bool = False) -> float:
+        if hi == lo:
+            return 50.0
+        n = (val - lo) / (hi - lo) * 100.0
+        return round(100.0 - n if invert else n, 1)
+
+    result = []
+    for _, row in agg.iterrows():
+        airline   = str(row[carrier_col])
+        otp_score = _norm(float(row["otp_mean"]), otp_min, otp_max)
+        std_score = _norm(float(row["otp_std"]), std_min, std_max, invert=True)
+        score     = round(0.6 * otp_score + 0.4 * std_score, 1)
+        nivel     = "estable" if score >= 70 else ("riesgo" if score >= 50 else "critico")
+        result.append({
+            "airline":          airline,
+            "otp":              round(float(row["otp_mean"]), 1),
+            "std":              round(float(row["otp_std"]), 1),
+            "score":            score,
+            "nivel":            nivel,
+            "tendencia":        tendencia_map.get(airline, "stable"),
+            "tendencia_delta":  tendencia_delta_map.get(airline, 0.0),
+            "n_meses":          int(row["n_meses"]),
+        })
+
+    return sorted(result, key=lambda r: r["score"], reverse=True)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -278,19 +472,23 @@ def predictivo_index(
     proyeccion: dict = {}
     if not df_otp.empty and len(df_otp) >= 3:
         proyeccion = _proyectar_otp(df_otp, horizonte)
-    recs = _generar_recomendaciones(df_otp, airline=airline)
+    recs           = _generar_recomendaciones(df_otp, airline=airline)
+    anomalias      = _detectar_anomalias(df_otp, airline=airline)
+    ranking_riesgo = _calcular_ranking_riesgo(year=year)
 
     return render(request, "predictivo/index.html", {
-        "aerolinas":     aerolinas,
-        "years":         years,
-        "airline":       airline,
-        "year":          year,
-        "metric":        metric,
-        "horizonte":     horizonte,
-        "horizonte_max": horizonte_max,
-        "heatmap":       heatmap,
-        "proyeccion":    proyeccion,
+        "aerolinas":       aerolinas,
+        "years":           years,
+        "airline":         airline,
+        "year":            year,
+        "metric":          metric,
+        "horizonte":       horizonte,
+        "horizonte_max":   horizonte_max,
+        "heatmap":         heatmap,
+        "proyeccion":      proyeccion,
         "recomendaciones": recs,
+        "anomalias":       anomalias,
+        "ranking_riesgo":  ranking_riesgo,
     })
 
 
@@ -321,3 +519,16 @@ def recomendaciones(request: Request, airline: str = "", year: str = ""):
     _perm_ver(request)
     df_otp = _load_otp_series(airline=airline, year=year)
     return JSONResponse(_generar_recomendaciones(df_otp, airline=airline))
+
+
+@router.get("/anomalias")
+def anomalias_endpoint(request: Request, airline: str = "", year: str = ""):
+    _perm_ver(request)
+    df_otp = _load_otp_series(airline=airline, year=year)
+    return JSONResponse(_detectar_anomalias(df_otp, airline=airline))
+
+
+@router.get("/ranking_riesgo")
+def ranking_riesgo_endpoint(request: Request, year: str = ""):
+    _perm_ver(request)
+    return JSONResponse(_calcular_ranking_riesgo(year=year))

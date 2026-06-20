@@ -207,13 +207,7 @@
     var btn  = document.getElementById('btn-toggle-mapa');
     if (!card || !btn) return;
 
-    // Restaurar estado guardado
-    if (localStorage.getItem(_STORAGE_KEY) === '1') {
-      card.classList.add('is-collapsed');
-      btn.setAttribute('aria-expanded', 'false');
-      btn.querySelector('.toggle-label').textContent = 'Mostrar mapa';
-    }
-
+    // Mapa siempre visible por defecto; localStorage sólo persiste colapso durante la sesión
     btn.addEventListener('click', function () {
       var collapsed = card.classList.toggle('is-collapsed');
       btn.setAttribute('aria-expanded', String(!collapsed));
