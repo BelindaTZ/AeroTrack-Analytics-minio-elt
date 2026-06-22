@@ -100,8 +100,16 @@ def _desvios_agg(df_dev: pd.DataFrame) -> list[dict]:
     """Top 20 desvíos desde agg_desvios_ruta."""
     if df_dev.empty or "origin" not in df_dev.columns:
         return []
+    grp_cols = [c for c in ["origin", "dest", "alt_airport"] if c in df_dev.columns]
+    if not grp_cols:
+        return []
+    grp = df_dev.groupby(grp_cols).agg(
+        total_desvios=("total_desvios", "sum"),
+        divarrdelay_avg=("divarrdelay_avg", "mean"),
+        divdistance_avg=("divdistance_avg", "mean"),
+    ).reset_index().sort_values("total_desvios", ascending=False).head(20)
     rows = []
-    for _, r in df_dev.head(20).iterrows():
+    for _, r in grp.iterrows():
         rows.append({
             "ruta":          f"{r.get('origin','?')}-{r.get('dest','?')}",
             "alt_airport":   r.get("alt_airport", "N/A"),
@@ -119,11 +127,14 @@ def _compute_page(filtros: dict) -> dict:
     if entry and time.time() < entry["expires"]:
         return entry["data"]
 
-    # airline filter sólo aplica a agg_cancelaciones_causa si tuviera carrier;
-    # como no lo tiene, se ignora silenciosamente (filtros year/month sí se aplican)
-    df_canc = load_agg("agg_cancelaciones_causa", filtros)
+    has_airline = "airline" in filtros and filtros["airline"]
+    if has_airline:
+        df_canc = load_agg("agg_cancelaciones_causa_aerolinea", filtros)
+    else:
+        df_canc = load_agg("agg_cancelaciones_causa", filtros)
     df_kpi  = load_agg("agg_kpi_global_dia", {k: v for k, v in filtros.items() if k != "airline"})
-    df_dev  = load_agg("agg_desvios_ruta")
+    filtros_dev = {k: v for k, v in filtros.items() if k != "airline"}
+    df_dev  = load_agg("agg_desvios_ruta", filtros_dev if any(k in filtros_dev for k in ["year", "month"]) else None)
 
     data = {
         "causas_data": _causas_faa_agg(df_canc, df_kpi),

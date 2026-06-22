@@ -141,6 +141,12 @@
     {% endif %}
 
     {% if desvios %}
+    <div class="chart-card" style="margin-bottom:16px">
+      <div class="chart-title"><i class="bi bi-bar-chart-fill"></i> Desvíos — Top rutas</div>
+      <canvas id="chart-desvios" style="max-height:260px"></canvas>
+      <span class="chart-ia-hint"><i class="bi bi-stars" style="font-size:10px"></i> Clic en barra → narrativa IA</span>
+    </div>
+
     <div class="at-table-wrapper" style="margin-bottom:0">
       <div class="at-table-header">
         <span class="at-table-title"><i class="bi bi-signpost-split me-2" aria-hidden="true"></i>Desvíos — Impacto por ruta</span>
@@ -180,7 +186,10 @@
       "tend_canc":        {{ tendencias.cancelaciones | tojson }},
       "tend_causas":      {{ tendencias.causas | tojson }},
       "total_vuelos":     {{ causas_data.total_vuelos }},
-      "total_cancelados": {{ causas_data.total_cancelados }}
+      "total_cancelados": {{ causas_data.total_cancelados }},
+      "dev_labels":       {{ desvios | map(attribute='ruta') | list | tojson }},
+      "dev_counts":       {{ desvios | map(attribute='count') | list | tojson }},
+      "dev_delays":       {{ desvios | map(attribute='div_arr_delay') | list | tojson }}
     }
     </script>
   </div>
@@ -289,6 +298,39 @@
           onClick: function(ev, els, chart) {
             if (!els.length) return;
             openNarrativaAt(ev.native, '/cancelaciones/narrativa', {tipo:'mes', mes: chart.data.labels[els[0].index]});
+          },
+          onHover: onHov
+        }
+      });
+    }
+
+    // Desvíos (horizontal bar)
+    var ctxDev = document.getElementById('chart-desvios');
+    if (ctxDev && d.dev_labels && d.dev_labels.length) {
+      destroyChart('chart-desvios');
+      _charts['chart-desvios'] = new Chart(ctxDev, {
+        type: 'bar',
+        data: {
+          labels: d.dev_labels,
+          datasets: [
+            { label: 'Desvíos', data: d.dev_counts, backgroundColor: '#8b5cf6', order: 1 },
+            { label: 'Retraso prom. (min)', data: d.dev_delays, backgroundColor: '#f59e0b', order: 2, yAxisID: 'y2' },
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: labelColor, font: fontCfg, boxWidth: 14, padding: 10 } },
+          },
+          scales: {
+            x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid },
+            y: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid },
+            y2: { position: 'top', ticks: { color: '#f59e0b', font: fontCfg }, grid: { display: false } },
+          },
+          onClick: function(ev, els, chart) {
+            if (!els.length) return;
+            openNarrativaAt(ev.native, '/cancelaciones/narrativa', {tipo:'desvio', ruta: chart.data.labels[els[0].index]});
           },
           onHover: onHov
         }

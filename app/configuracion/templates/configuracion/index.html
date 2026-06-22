@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Configuración — AeroTrack Analytics{% endblock %}
+{% block title %}ConfiguraciÃ³n âEUR” AeroTrack Analytics{% endblock %}
 
 {% block breadcrumb %}
-<span class="bc-item">Administración</span>
-<span class="bc-sep">›</span>
-<span class="bc-current">Configuración</span>
+<span class="bc-item">AdministraciÃ³n</span>
+<span class="bc-sep">âEURº</span>
+<span class="bc-current">ConfiguraciÃ³n</span>
 {% endblock %}
 
 {% block head_extra %}
@@ -49,15 +49,15 @@
 <div class="page-heading">
   <h1>
     <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-sliders"></i></span>
-    Configuración
+    ConfiguraciÃ³n
   </h1>
-  <p>Parámetros del sistema por módulo. Los cambios aplican sin reiniciar servicios.</p>
+  <p>ParÃ¡metros del sistema por mÃ³dulo. Los cambios aplican sin reiniciar servicios.</p>
 </div>
 
 <div class="config-layout">
 
   <!-- Nav -->
-  <nav class="config-nav" aria-label="Grupos de configuración">
+  <nav class="config-nav" aria-label="Grupos de configuraciÃ³n">
     {% for grupo in grupos_orden %}
     {% set meta = grupo_meta[grupo] %}
     <button class="config-nav-item {% if _active == grupo %}active{% endif %}"
@@ -101,7 +101,7 @@
             <div class="config-input-wrap">
               {% if item.tipo == 'bool' %}
               <select name="{{ item.clave }}" class="form-control-at" {% if not item.editable %}disabled{% endif %}>
-                <option value="true" {% if item.valor_real == 'true' %}selected{% endif %}>Sí (activado)</option>
+                <option value="true" {% if item.valor_real == 'true' %}selected{% endif %}>SÃ­ (activado)</option>
                 <option value="false" {% if item.valor_real != 'true' %}selected{% endif %}>No (desactivado)</option>
               </select>
               {% elif item.tipo == 'password' %}
@@ -109,7 +109,7 @@
                      value="{{ item.valor }}"
                      class="form-control-at" autocomplete="new-password"
                      {% if not item.editable %}disabled{% endif %}
-                     placeholder="••••••••">
+                     placeholder="âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢">
               {% elif item.tipo in ('int', 'float') %}
               <input type="number" name="{{ item.clave }}"
                      value="{{ item.valor_real }}"
@@ -121,6 +121,30 @@
                      value="{{ item.valor_real }}"
                      class="form-control-at"
                      {% if not item.editable %}disabled{% endif %}>
+              {% elif item.clave == 'pipeline_schedule' %}
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <select id="schedule-select" class="form-control-at"
+                        style="width:auto;min-width:140px"
+                        onchange="onScheduleChange(this)"
+                        {% if not item.editable %}disabled{% endif %}>
+                  <option value="manual" {% if item.valor_real == 'manual' %}selected{% endif %}>Manual</option>
+                  <option value="@daily" {% if item.valor_real == '@daily' %}selected{% endif %}>Diario</option>
+                  <option value="@hourly" {% if item.valor_real == '@hourly' %}selected{% endif %}>Cada hora</option>
+                  <option value="@weekly" {% if item.valor_real == '@weekly' %}selected{% endif %}>Semanal</option>
+                  <option value="@monthly" {% if item.valor_real == '@monthly' %}selected{% endif %}>Mensual</option>
+                  <option value="cron" {% if item.valor_real not in ('manual','@daily','@hourly','@weekly','@monthly') %}selected{% endif %}>Personalizado (cron)</option>
+                </select>
+                <input type="text" id="schedule-cron" class="form-control-at"
+                       value="{% if item.valor_real not in ('manual','@daily','@hourly','@weekly','@monthly') %}{{ item.valor_real }}{% endif %}"
+                       placeholder="*/5 * * * *"
+                       style="width:130px;{% if item.valor_real in ('manual','@daily','@hourly','@weekly','@monthly') %}display:none{% endif %}"
+                       {% if not item.editable %}disabled{% endif %}>
+                <input type="hidden" name="pipeline_schedule" id="schedule-value" value="{{ item.valor_real }}">
+                <span style="font-size:11px;color:var(--at-muted);cursor:help" title="El cambio puede tardar hasta 300s (ciclo de refresco del scheduler de Airflow).">
+                  <i class="bi bi-info-circle"></i>
+                </span>
+                <script>onScheduleChange(document.getElementById('schedule-select'));</script>
+              </div>
               {% else %}
               <input type="text" name="{{ item.clave }}"
                      value="{{ item.valor_real }}"
@@ -187,7 +211,7 @@ function testSmtp() {
   if (!result) return;
   result.style.display = 'block';
   result.className = 'smtp-test-result';
-  result.textContent = 'Probando conexión SMTP…';
+  result.textContent = 'Probando conexiÃ³n SMTPâEUR¦';
   fetch('/configuracion/email/test', { method: 'POST', credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -201,6 +225,27 @@ function testSmtp() {
 }
 
 var btnTest = document.getElementById('btn-test-smtp');
+
+function onScheduleChange(sel) {
+  var cron = document.getElementById('schedule-cron');
+  var hidden = document.getElementById('schedule-value');
+  if (sel.value === 'cron') {
+    cron.style.display = '';
+    hidden.value = cron.value || cron.placeholder;
+  } else {
+    cron.style.display = 'none';
+    hidden.value = sel.value;
+  }
+}
+
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'schedule-cron') {
+    var sel = document.getElementById('schedule-select');
+    if (sel && sel.value === 'cron') {
+      document.getElementById('schedule-value').value = e.target.value;
+    }
+  }
+});
 if (btnTest) {
   btnTest.addEventListener('click', testSmtp);
 }

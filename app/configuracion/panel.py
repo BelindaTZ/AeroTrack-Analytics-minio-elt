@@ -1,4 +1,4 @@
-"""Panel de configuración dinámica del sistema (CU-29, CU-30, CU-31, CU-32)."""
+"""Panel de configuracion dinamica del sistema (CU-29, CU-30, CU-31, CU-32)."""
 
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -13,6 +13,7 @@ from app.rutas.ranking_eficiencia import invalidar_cache_umbral_ruta
 from app.shared.clients import pb_client
 from app.shared.deps import render, require_permission
 from app.shared.utils import audit
+from croniter import croniter
 
 router = APIRouter()
 _perm_ver = require_permission("configuracion", "ver")
@@ -27,6 +28,20 @@ _GRUPO_META = {
     "ia":       {"label": "Inteligencia Artificial","icon": "bi-cpu-fill",        "color": "#10b981"},
     "sistema":  {"label": "Sistema General",        "icon": "bi-sliders",         "color": "#94a3b8"},
 }
+
+_PRESETS_SCHEDULE = {"manual", "@daily", "@hourly", "@weekly", "@monthly", "@yearly"}
+
+
+def _validar_schedule(valor: str) -> str | None:
+    """Valida un valor de schedule. Retorna None si es valido, o un msg de error."""
+    v = valor.strip()
+    if not v or v == "manual":
+        return None
+    if v in _PRESETS_SCHEDULE:
+        return None
+    if croniter.is_valid(v):
+        return None
+    return f"'{v}' no es un preset valido ni una expresion cron valida."
 
 
 def _get_all_config() -> dict[str, list[dict]]:
@@ -76,13 +91,30 @@ def panel(request: Request):
 async def guardar_grupo(request: Request, grupo: str):
     user = _perm_edit(request)
     if grupo not in _GRUPOS:
-        return RedirectResponse("/configuracion?error=Grupo inválido", status_code=303)
+        return RedirectResponse("/configuracion?error=Grupo invalido", status_code=303)
 
     form = await request.form()
     form_data = dict(form)
 
     try:
+        if grupo == "pipeline" and "pipeline_schedule" in form_data:
+            err = _validar_schedule(form_data["pipeline_schedule"])
+            if err:
+                return RedirectResponse(f"/configuracion?error={err}&active=pipeline", status_code=303)
+
         _save_group(grupo, form_data)
+
+        if grupo == "pipeline" and "pipeline_schedule" in form_data:
+            from app.pipeline_elt.clients import airflow_client as af
+            nuevo_valor = form_data["pipeline_schedule"].strip()
+            try:
+                await af.set_variable("pipeline_schedule", nuevo_valor)
+            except Exception as exc:
+                return RedirectResponse(
+                    f"/configuracion?error=PocketBase actualizado, pero Airflow no: {exc}&active=pipeline",
+                    status_code=303,
+                )
+
         if grupo == "alertas":
             invalidar_cache_alertas()
             invalidar_cache_umbral_ruta()
@@ -100,21 +132,20 @@ async def guardar_grupo(request: Request, grupo: str):
     except Exception as exc:
         return RedirectResponse(f"/configuracion?error={exc}", status_code=303)
 
-    # Auto-test SMTP al guardar grupo email
     if grupo == "email":
         return RedirectResponse(
-            f"/configuracion?msg=Configuración de {grupo} guardada.&active={grupo}&test_smtp=1",
+            f"/configuracion?msg=Configuracion de {grupo} guardada.&active={grupo}&test_smtp=1",
             status_code=303
         )
     return RedirectResponse(
-        f"/configuracion?msg=Configuración de {grupo} guardada.&active={grupo}",
+        f"/configuracion?msg=Configuracion de {grupo} guardada.&active={grupo}",
         status_code=303
     )
 
 
 @router.post("/email/test")
 async def test_smtp(request: Request):
-    """Prueba la conexión SMTP (CU-30). Responde JSON para respuesta inline."""
+    """Prueba la conexion SMTP (CU-30). Responde JSON para respuesta inline."""
     _perm_ver(request)
     try:
         rows = pb_client.list_records("configuracion_sistema", filter='modulo="email"')
@@ -128,13 +159,13 @@ async def test_smtp(request: Request):
         usar_tls = cfg.get("email_usar_tls", "true").lower() == "true"
 
         if not host or not remitente:
-            return JSONResponse({"ok": False, "mensaje": "Configuración SMTP incompleta."})
+            return JSONResponse({"ok": False, "mensaje": "Configuracion SMTP incompleta."})
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "AeroTrack Analytics — Prueba SMTP"
+        msg["Subject"] = "AeroTrack Analytics -- Prueba SMTP"
         msg["From"] = remitente
         msg["To"] = destinatario or remitente
-        msg.attach(MIMEText("<p>Prueba de conexión SMTP exitosa desde AeroTrack Analytics.</p>", "html"))
+        msg.attach(MIMEText("<p>Prueba de conexion SMTP exitosa desde AeroTrack Analytics.</p>", "html"))
 
         smtp = smtplib.SMTP(host, port, timeout=10)
         if usar_tls:

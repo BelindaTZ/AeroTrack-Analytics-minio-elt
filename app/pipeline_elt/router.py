@@ -1,15 +1,31 @@
-"""Panel de control del pipeline ELT (CU-10, CU-11, CU-12, CU-13)."""
+"""Panel de control del pipeline ELT (CU-10, CU-11, CU-12, CU-13, CU-T06, CU-O08)."""
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.pipeline_elt.clients import airflow_client as af
+from app.shared.clients import pb_client
 from app.shared.utils import audit
 from app.shared.deps import render, require_permission
 
 router = APIRouter()
 _perm_ver = require_permission("pipeline_elt", "ver")
 _perm_exec = require_permission("pipeline_elt", "ejecutar")
+
+_SCHEDULE_LABELS = {
+    "manual": "Manual",
+    "@daily": "Cada dia",
+    "@hourly": "Cada hora",
+    "@weekly": "Semanal",
+    "@monthly": "Mensual",
+    "@yearly": "Anual",
+}
+
+
+def _get_schedule_label(valor: str) -> str:
+    if not valor or valor == "manual":
+        return "Manual"
+    return _SCHEDULE_LABELS.get(valor, valor)
 
 
 @router.get("", response_class=HTMLResponse)
@@ -21,10 +37,19 @@ async def panel(request: Request):
     except Exception as exc:
         estado = {"state": "error", "error": str(exc)}
         historial = []
+    schedule_val = "manual"
+    try:
+        rows = pb_client.list_records("configuracion_sistema", filter='clave="pipeline_schedule"')
+        if rows:
+            schedule_val = rows[0].get("valor", "manual")
+    except Exception:
+        pass
     return render(request, "pipeline/panel.html", {
         "estado": estado,
         "historial": historial,
         "dag_id": af.DAG_ID,
+        "schedule_val": schedule_val,
+        "schedule_label": _get_schedule_label(schedule_val),
     })
 
 
@@ -43,7 +68,6 @@ async def trigger(request: Request):
 
 @router.get("/estado")
 async def estado_json(request: Request):
-    """Endpoint AJAX para auto-refresh del estado (cada 10s desde el template)."""
     _perm_ver(request)
     try:
         estado = await af.get_dag_status()
@@ -54,7 +78,6 @@ async def estado_json(request: Request):
 
 @router.get("/estado-full")
 async def estado_full(request: Request):
-    """Endpoint AJAX para polling sin recarga de página (estado + historial)."""
     _perm_ver(request)
     try:
         estado = await af.get_dag_status()
@@ -87,3 +110,15 @@ async def logs(request: Request, run_id: str, task_id: str, attempt: int = 1):
         "run_id": run_id, "task_id": task_id,
         "log_text": log_text, "tasks": tasks,
     })
+
+
+@router.post("/logs/{run_id}/{task_id}/reintentar")
+async def reintentar_tarea(request: Request, run_id: str, task_id: str):
+    user = _perm_exec(request)
+    try:
+        await af.clear_task_instance(af.DAG_ID, run_id, task_id)
+        audit.registrar(user["sub"], user["email"], "reintentar", "pipeline_elt",
+                        recurso_tipo="task_instance", recurso_id=f"{run_id}/{task_id}")
+    except Exception as exc:
+        return RedirectResponse(f"/pipeline/logs/{run_id}/{task_id}?error={exc}", status_code=303)
+    return RedirectResponse(f"/pipeline/logs/{run_id}/{task_id}?msg=Tarea+reintentada.", status_code=303)

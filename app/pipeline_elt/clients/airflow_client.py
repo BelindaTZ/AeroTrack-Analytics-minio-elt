@@ -43,7 +43,7 @@ async def get_task_log(dag_run_id: str, task_id: str, attempt: int = 1) -> str:
 
 
 async def get_dag_status() -> dict:
-    """Retorna el estado del último dag_run o un dict vacío si no hay ejecuciones."""
+    """Retorna el estado del Ultimo dag_run o un dict vacio si no hay ejecuciones."""
     runs = await get_dag_runs(limit=1)
     if not runs:
         return {"state": "no_runs", "dag_run_id": None}
@@ -54,3 +54,34 @@ async def get_dag_status() -> dict:
     except Exception:
         pass
     return {**latest, "task_instances": tasks}
+
+
+async def get_variable(key: str) -> str | None:
+    """Obtiene el valor de una Airflow Variable por su clave."""
+    url = f"{AIRFLOW_URL}/api/v1/variables/{key}"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.get(url, auth=_AUTH)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json().get("value")
+
+
+async def set_variable(key: str, value: str) -> dict:
+    """Crea o actualiza una Airflow Variable. Retorna la respuesta JSON."""
+    url = f"{AIRFLOW_URL}/api/v1/variables/{key}"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.patch(url, json={"key": key, "value": value}, auth=_AUTH)
+        if resp.status_code == 404:
+            resp = await client.post(f"{AIRFLOW_URL}/api/v1/variables", json={"key": key, "value": value}, auth=_AUTH)
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def clear_task_instance(dag_id: str, dag_run_id: str, task_id: str) -> dict:
+    """Limpia una task instance especifica para que Airflow la reintente."""
+    url = f"{AIRFLOW_URL}/api/v1/dags/{dag_id}/dagRuns/{dag_run_id}/clearTaskInstances"
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.post(url, json={"dry_run": False, "task_ids": [task_id]}, auth=_AUTH)
+        resp.raise_for_status()
+        return resp.json()

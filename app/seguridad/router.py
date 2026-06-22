@@ -1,4 +1,4 @@
-"""Rutas de autenticación: login, logout, perfil (CU-01, CU-02, CU-03)."""
+"""Rutas de autenticacion: login, logout, perfil (CU-01, CU-02, CU-03)."""
 
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -8,11 +8,12 @@ from app.shared.clients import pb_client
 from app.shared.utils import audit
 from app.shared.deps import get_current_user, render, require_user
 from app.utils.login_stats import get_login_stats
+from email_validator import validate_email, EmailNotValidError
 
 router = APIRouter()
 
 
-# ── Login ─────────────────────────────────────────────────────────────────────
+# -- Login ---------------------------------------------------------------------
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):
@@ -34,10 +35,10 @@ async def login_post(
     except ValueError:
         audit.registrar("", email, "login_fallido", "seguridad",
                         ip_address=ip, resultado="fallido",
-                        detalle="Credenciales inválidas")
+                        detalle="Credenciales invalidas")
         stats = await get_login_stats()
         return render(request, "login.html",
-                      {"error": "Credenciales incorrectas. Verifique su email y contraseña.",
+                      {"error": "Credenciales incorrectas. Verifique su email y contrasena.",
                        "current_user": None, "user_permissions": {}, "stats": stats})
 
     if not record.get("activo", True):
@@ -65,7 +66,7 @@ async def login_post(
     return response
 
 
-# ── Logout ────────────────────────────────────────────────────────────────────
+# -- Logout --------------------------------------------------------------------
 
 @router.post("/logout")
 async def logout(request: Request):
@@ -77,7 +78,7 @@ async def logout(request: Request):
     return response
 
 
-# ── Perfil ────────────────────────────────────────────────────────────────────
+# -- Perfil --------------------------------------------------------------------
 
 @router.get("/perfil", response_class=HTMLResponse)
 async def perfil(request: Request):
@@ -85,6 +86,40 @@ async def perfil(request: Request):
     record = pb_client.get_record("app_users", user["sub"], expand="rol_id")
     rol = record.get("expand", {}).get("rol_id", {}) if record else {}
     return render(request, "perfil.html", {"record": record, "rol": rol, "msg": None, "error": None})
+
+
+@router.post("/perfil/datos", response_class=HTMLResponse)
+async def editar_datos_perfil(
+    request: Request,
+    nombre: str = Form(...),
+    email: str = Form(...),
+):
+    user = require_user(request)
+    record = pb_client.get_record("app_users", user["sub"], expand="rol_id")
+    rol = record.get("expand", {}).get("rol_id", {}) if record else {}
+
+    try:
+        validate_email(email)
+    except EmailNotValidError:
+        return render(request, "perfil.html",
+                      {"record": record, "rol": rol,
+                       "error": "El formato del email no es valido.", "msg": None})
+
+    existentes = pb_client.list_records("app_users", filter=f'email="{email}"')
+    if existentes and existentes[0]["id"] != user["sub"]:
+        return render(request, "perfil.html",
+                      {"record": record, "rol": rol,
+                       "error": "Ese email ya esta en uso por otro usuario.", "msg": None})
+
+    pb_client.update_record("app_users", user["sub"], {"nombre": nombre, "email": email})
+    audit.registrar(user["sub"], user["email"], "editar", "seguridad",
+                    recurso_tipo="perfil", recurso_id=user["sub"],
+                    detalle=f"nombre={nombre}, email={email}")
+
+    record_actualizado = pb_client.get_record("app_users", user["sub"], expand="rol_id")
+    return render(request, "perfil.html",
+                  {"record": record_actualizado, "rol": rol,
+                   "msg": "Datos actualizados correctamente.", "error": None})
 
 
 @router.post("/perfil/password", response_class=HTMLResponse)
@@ -101,19 +136,18 @@ async def cambiar_password(
     if password_nuevo != password_confirm:
         return render(request, "perfil.html",
                       {"record": record, "rol": rol,
-                       "error": "Las contraseñas no coinciden.", "msg": None})
+                       "error": "Las contrasenas no coinciden.", "msg": None})
 
-    # Verificar contraseña actual intentando autenticar
     try:
         pb_client.auth_user(user["email"], password_actual)
     except ValueError:
         return render(request, "perfil.html",
                       {"record": record, "rol": rol,
-                       "error": "Contraseña actual incorrecta.", "msg": None})
+                       "error": "Contrasena actual incorrecta.", "msg": None})
 
     pb_client.change_user_password(user["sub"], password_nuevo)
     audit.registrar(user["sub"], user["email"], "editar", "seguridad",
                     recurso_tipo="password", recurso_id=user["sub"])
     return render(request, "perfil.html",
                   {"record": record, "rol": rol,
-                   "msg": "Contraseña actualizada correctamente.", "error": None})
+                   "msg": "Contrasena actualizada correctamente.", "error": None})

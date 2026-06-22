@@ -331,7 +331,7 @@ def historial(request: Request):
             client.list_objects(MINIO_BUCKET_EXPORTS, prefix="reportes/", recursive=True),
             key=lambda o: o.last_modified,
             reverse=True,
-        )[:15]
+        )[:50]
 
         items = []
         for obj in objects:

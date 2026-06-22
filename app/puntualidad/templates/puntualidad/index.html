@@ -101,7 +101,14 @@
         {% endif %}
       </div>
       <div class="chart-card">
-        <div class="chart-title"><i class="bi bi-graph-up"></i> OTP mensual{% if filtros.airline %} — {{ filtros.airline }}{% endif %}</div>
+        <div class="chart-title"><i class="bi bi-graph-up"></i> OTP mensual{% if filtros.airline %} — {{ filtros.airline }}{% endif %}
+        {% if tendencias.tendencia is defined and tendencias.tendencia != 0 %}
+        <span style="display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:{{ 'rgba(16,185,129,.12)' if tendencias.tendencia > 0 else 'rgba(239,68,68,.12)' }};color:{{ '#10b981' if tendencias.tendencia > 0 else '#ef4444' }}">
+          <i class="bi {{ 'bi-arrow-up' if tendencias.tendencia > 0 else 'bi-arrow-down' }}"></i>
+          {{ "%.2f"|format(tendencias.tendencia) }} pp/mes
+        </span>
+        {% endif %}
+      </div>
         {% if tendencias.meses %}
         <canvas id="chart-tendencias" style="max-height:240px"></canvas>
         <span class="chart-ia-hint"><i class="bi bi-stars" style="font-size:10px"></i> Clic en punto → narrativa IA</span>
@@ -127,10 +134,14 @@
     {
       "otp_labels": {{ datos_otp | map(attribute='aerolinea') | list | tojson }},
       "otp_values": {{ datos_otp | map(attribute='otp') | list | tojson }},
+      "otp_retrasos": {{ datos_otp | map(attribute='retraso_prom') | list | tojson }},
       "causas_labels": {{ causas.labels | tojson }},
       "causas_counts": {{ causas.counts | tojson }},
       "tend_meses": {{ tendencias.meses | tojson }},
       "tend_otp":   {{ tendencias.otp | tojson }},
+      "tend_yoy":   {{ tendencias.yoy_otp | tojson }},
+      "tend_varpp": {{ tendencias.variacion_pp | tojson }},
+      "tend_slope": {{ tendencias.tendencia | tojson }},
       "dia_dias": {{ tendencias_dia.dias | tojson }},
       "dia_otp":  {{ tendencias_dia.otp | tojson }}
     }
@@ -178,10 +189,31 @@
       var colors = d.otp_values.map(function(v){ return v >= 80 ? '#3b82f6' : (v >= 70 ? '#f59e0b' : '#ef4444'); });
       _charts['chart-otp-al'] = new Chart(ctxAl, {
         type: 'bar',
-        data: { labels: d.otp_labels, datasets: [{ label: 'OTP %', data: d.otp_values, backgroundColor: colors }] },
+        data: {
+          labels: d.otp_labels,
+          datasets: [{
+            label: 'OTP %',
+            data: d.otp_values,
+            backgroundColor: colors,
+            retrasoData: d.otp_retrasos || []
+          }]
+        },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                afterLabel: function(ctx) {
+                  var r = ctx.dataset.retrasoData;
+                  if (r && r[ctx.dataIndex] !== undefined) {
+                    return 'Retraso prom: ' + r[ctx.dataIndex] + ' min';
+                  }
+                  return '';
+                }
+              }
+            }
+          },
           scales: {
             x: { ticks: { color: labelColor, font: fontCfg, maxRotation: 45 }, grid: darkGrid },
             y: { ticks: { color: labelColor, font: fontCfg, callback: function(v){ return v + '%'; } }, grid: darkGrid, min: 0, max: 105 }
@@ -214,16 +246,35 @@
       });
     }
 
-    // Tendencia mensual (line)
+    // Tendencia mensual (line) con YoY, variación pp y tendencia
     var ctxTend = document.getElementById('chart-tendencias');
     if (ctxTend && d.tend_meses && d.tend_meses.length) {
       destroyChart('chart-tendencias');
+      var ds = [
+        { label: 'OTP %', data: d.tend_otp, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.12)', fill: true, tension: 0.3, pointRadius: 4, varpp: d.tend_varpp || [] }
+      ];
+      if (d.tend_yoy && d.tend_yoy.length) {
+        ds.push({ label: 'Año anterior', data: d.tend_yoy, borderColor: '#94a3b8', backgroundColor: 'transparent', borderDash: [5,3], fill: false, tension: 0.3, pointRadius: 3, pointStyle: 'triangle' });
+      }
       _charts['chart-tendencias'] = new Chart(ctxTend, {
         type: 'line',
-        data: { labels: d.tend_meses, datasets: [{ label: 'OTP %', data: d.tend_otp, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,.12)', fill: true, tension: 0.3, pointRadius: 4 }] },
+        data: { labels: d.tend_meses, datasets: ds },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { labels: { color: labelColor, font: fontCfg, boxWidth: 14, padding: 10 } },
+            tooltip: {
+              callbacks: {
+                afterLabel: function(ctx) {
+                  var vp = ctx.dataset.varpp;
+                  if (vp && vp[ctx.dataIndex] !== undefined && ctx.datasetIndex === 0) {
+                    return 'Var. vs mes ant: ' + (vp[ctx.dataIndex] >= 0 ? '+' : '') + vp[ctx.dataIndex] + ' pp';
+                  }
+                  return '';
+                }
+              }
+            }
+          },
           scales: { x: { ticks: { color: labelColor, font: fontCfg }, grid: darkGrid }, y: { ticks: { color: labelColor, font: fontCfg, callback: function(v){ return v + '%'; } }, grid: darkGrid, min: 0, max: 105 } },
           onClick: function(ev, els, chart) {
             if (!els.length) return;

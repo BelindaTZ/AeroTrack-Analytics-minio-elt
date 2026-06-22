@@ -12,6 +12,25 @@
   .chart-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:20px 24px; box-shadow:var(--at-shadow-sm); margin-bottom:24px; }
   .chart-title { font-size:13.5px; font-weight:700; color:var(--at-text); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
   .chart-title i { width:28px; height:28px; background:var(--at-running-bg); border-radius:7px; display:inline-flex; align-items:center; justify-content:center; color:var(--at-blue-500); font-size:13px; }
+  .rank-badge { display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:700; }
+  .rank-1  { background:#fbbf24;color:#1e1e2e; }
+  .rank-2  { background:#94a3b8;color:#1e1e2e; }
+  .rank-3  { background:#cd7f32;color:#1e1e2e; }
+  .rank-oth{ background:rgba(255,255,255,.06);color:var(--at-muted); }
+  .brecha-neg { color:#ef4444; }
+  .brecha-ok  { color:#10b981; }
+  .btn-ia-row { display:none;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(99,102,241,.15);color:#818cf8;border:none;cursor:pointer;font-size:10px;padding:0;transition:background .15s; }
+  .btn-ia-row:hover { background:rgba(99,102,241,.3); }
+  tr:hover .btn-ia-row { display:inline-flex; }
+  #ia-popover { position:absolute;z-index:9999;width:340px;max-width:calc(100vw - 24px);background:var(--at-surface);border:1px solid rgba(99,102,241,.4);border-radius:var(--at-r-lg);box-shadow:0 16px 48px rgba(0,0,0,.6);padding:16px 18px;display:none; }
+  .ia-pop-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:10px; }
+  .ia-pop-title  { font-size:12.5px;font-weight:700;color:var(--at-text);display:flex;align-items:center;gap:6px; }
+  .ia-pop-close  { background:none;border:none;color:var(--at-muted);font-size:18px;cursor:pointer;padding:0;line-height:1; }
+  .ia-pop-close:hover { color:var(--at-text); }
+  .ia-pop-badge  { display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(99,102,241,.12);color:#818cf8;margin-bottom:8px; }
+  .ia-pop-body   { font-size:13px;line-height:1.65;color:var(--at-text); }
+  @keyframes ia-skel-pulse { from{opacity:.4} to{opacity:.9} }
+  .ia-skel { height:10px;border-radius:4px;background:rgba(255,255,255,.1);margin-bottom:7px;animation:ia-skel-pulse 1.2s ease infinite alternate; }
 </style>
 {% endblock %}
 
@@ -73,15 +92,18 @@
       <div class="at-table-scroll">
         <table class="at-table" aria-label="Comparativa de aerolíneas en ruta {{ ruta }}">
           <thead>
-            <tr><th>Aerolínea</th><th>Vuelos</th><th>OTP %</th><th>Retraso prom. (min)</th></tr>
+            <tr><th>#</th><th>Aerolínea</th><th>Vuelos</th><th>OTP %</th><th>Brecha vs líder (pp)</th><th>Retraso prom. (min)</th><th></th></tr>
           </thead>
           <tbody>
             {% for d in datos %}
             <tr>
+              <td><span class="rank-badge rank-{{ d.ranking if d.ranking <= 3 else 'oth' }}">{{ d.ranking }}</span></td>
               <td style="font-weight:600">{{ d.aerolinea }}</td>
               <td class="at-mono">{{ "{:,}".format(d.total) }}</td>
               <td style="color:{{ '#10b981' if d.otp >= 80 else '#f59e0b' }};font-weight:600">{{ "%.1f"|format(d.otp) }}%</td>
+              <td class="at-mono {{ 'brecha-ok' if d.brecha == 0 else 'brecha-neg' }}">{{ "%.1f"|format(d.brecha) }}</td>
               <td class="at-mono">{{ "%.1f"|format(d.retraso) }}</td>
+              <td><button class="btn-ia-row" onclick="window.openNarrativaBtn(this,'/puntualidad/narrativa',{tipo:'ruta_aerolinea',ruta_tpl:rutaSel(),aerolinea_tpl:'{{ d.aerolinea }}'})" title="Narrativa IA para esta aerolínea" aria-label="Narrativa IA {{ d.aerolinea }}"><i class="bi bi-stars"></i></button></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -94,7 +116,9 @@
     {
       "labels":   {{ datos | map(attribute='aerolinea') | list | tojson }},
       "otp":      {{ datos | map(attribute='otp') | list | tojson }},
-      "retraso":  {{ datos | map(attribute='retraso') | list | tojson }}
+      "retraso":  {{ datos | map(attribute='retraso') | list | tojson }},
+      "ranking":  {{ datos | map(attribute='ranking') | list | tojson }},
+      "brecha":   {{ datos | map(attribute='brecha') | list | tojson }}
     }
     </script>
     {% else %}
@@ -178,5 +202,83 @@
   if (selRuta) selRuta.addEventListener('change', apply);
   if (selYear) selYear.addEventListener('change', apply);
 })();
+
+function rutaSel() {
+  var el = document.getElementById('sel-ruta');
+  return el ? el.value : '';
+}
+</script>
+
+<div id="ia-popover" role="dialog" aria-modal="true" aria-label="Narrativa IA">
+  <div class="ia-pop-header">
+    <span class="ia-pop-title"><i class="bi bi-stars"></i> Narrativa IA — Comparativa por ruta</span>
+    <button class="ia-pop-close" onclick="document.getElementById('ia-popover').style.display='none'" aria-label="Cerrar">×</button>
+  </div>
+  <div id="ia-pop-body" class="ia-pop-body"></div>
+</div>
+
+<script>
+function _iaFetch(url) {
+  var pop  = document.getElementById('ia-popover');
+  var body = document.getElementById('ia-pop-body');
+  if (!pop || !body) return;
+  body.innerHTML =
+    '<div class="ia-skel" style="width:80%"></div>' +
+    '<div class="ia-skel" style="width:96%"></div>' +
+    '<div class="ia-skel" style="width:65%"></div>' +
+    '<div class="ia-skel" style="width:88%"></div>';
+  pop.style.display = 'block';
+  fetch(url, {credentials:'same-origin'})
+    .then(function(rs){ return rs.json(); })
+    .then(function(data) {
+      if (!data || !data.texto) {
+        body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Sin narrativa disponible.</span>';
+        return;
+      }
+      body.innerHTML =
+        '<div class="ia-pop-badge"><i class="bi bi-cpu"></i> ' +
+        String(data.proveedor || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+        (data.desde_cache ? ' — caché' : '') + '</div>' +
+        '<div style="white-space:pre-wrap">' +
+        String(data.texto).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+    })
+    .catch(function(){
+      body.innerHTML = '<span style="color:var(--at-muted);font-size:12px">Error al conectar con la IA.</span>';
+    });
+}
+function _iaPos(cx, cy) {
+  var pop = document.getElementById('ia-popover');
+  if (!pop) return;
+  var pw = 340, ph = 220;
+  var mw = document.getElementById('main-wrapper');
+  var mwRect  = mw ? mw.getBoundingClientRect() : {left:0, top:0};
+  var mwScroll = mw ? mw.scrollTop : 0;
+  var l = cx - mwRect.left;
+  var t = cy - mwRect.top + mwScroll + 12;
+  if (cx + pw + 12 > window.innerWidth) l = cx - mwRect.left - pw;
+  if (l < 8) l = 8;
+  if (cy + ph + 20 > window.innerHeight) t = cy - mwRect.top + mwScroll - ph - 8;
+  if (t < 4) t = 4;
+  pop.style.left = l + 'px';
+  pop.style.top  = t + 'px';
+}
+function _iaQs(extra) {
+  var params = new URLSearchParams(window.location.search);
+  if (extra) Object.keys(extra).forEach(function(k){ params.set(k, extra[k]); });
+  var s = params.toString();
+  return s ? '?' + s : '';
+}
+window.openNarrativaBtn = function(btn, url, extra) {
+  var r = btn.getBoundingClientRect();
+  _iaPos(r.left, r.bottom + 8);
+  _iaFetch(url + _iaQs(extra));
+};
+document.addEventListener('click', function(e) {
+  var pop = document.getElementById('ia-popover');
+  if (!pop || pop.style.display === 'none') return;
+  if (pop.contains(e.target)) return;
+  if (e.target.closest && e.target.closest('.btn-ia-inline, .btn-ia-row')) return;
+  pop.style.display = 'none';
+});
 </script>
 {% endblock %}

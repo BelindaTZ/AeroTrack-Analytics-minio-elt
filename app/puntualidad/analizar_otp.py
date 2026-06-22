@@ -43,10 +43,13 @@ def _otp_por_aerolinea_agg(df_otp: pd.DataFrame) -> list[dict]:
     grp = df_otp.groupby("carrier").agg(
         total=("total_vuelos", "sum"),
         vuelos_at=("vuelos_a_tiempo", "sum"),
+        suma_retraso=("delay_avg", "sum"),
+        conteo=("delay_avg", "count"),
     ).reset_index()
     grp["otp"] = (grp["vuelos_at"] / grp["total"].replace(0, float("nan")) * 100).fillna(0.0).round(2)
+    grp["retraso_prom"] = (grp["suma_retraso"] / grp["conteo"].replace(0, float("nan"))).fillna(0.0).round(1)
     grp = grp[grp["total"] >= 50].sort_values("total", ascending=False).head(25)
-    return grp[["carrier", "total", "otp"]].rename(columns={"carrier": "aerolinea"}).to_dict("records")
+    return grp[["carrier", "total", "otp", "retraso_prom"]].rename(columns={"carrier": "aerolinea"}).to_dict("records")
 
 
 def _causas_retraso_agg(df_causas: pd.DataFrame) -> dict:
@@ -63,7 +66,7 @@ def _causas_retraso_agg(df_causas: pd.DataFrame) -> dict:
     return result
 
 
-def _tendencias_otp_mensual_agg(df_otp: pd.DataFrame, airline: str = "") -> dict:
+def _tendencias_otp_mensual_agg(df_otp: pd.DataFrame, airline: str = "", year: str = "") -> dict:
     """Tendencia OTP mensual desde agg_otp_aerolinea_mes."""
     if "month" not in df_otp.columns or df_otp.empty:
         return {"meses": [], "otp": [], "airline": airline}
@@ -73,7 +76,46 @@ def _tendencias_otp_mensual_agg(df_otp: pd.DataFrame, airline: str = "") -> dict
     ).reset_index().sort_values("month")
     grp["otp"] = (grp["vuelos_at"] / grp["total"].replace(0, float("nan")) * 100).fillna(0.0).round(1)
     meses = [_MESES[int(m) - 1] if 1 <= int(m) <= 12 else str(m) for m in grp["month"].tolist()]
-    return {"meses": meses, "otp": grp["otp"].tolist(), "airline": airline}
+    otp = grp["otp"].tolist()
+
+    # Variación mes a mes (pp)
+    variacion_pp = [0.0]
+    for i in range(1, len(otp)):
+        variacion_pp.append(round(otp[i] - otp[i-1], 1))
+
+    # Tendencia estadística (regresión lineal simple)
+    n = len(otp)
+    tendencia = 0.0
+    if n >= 2:
+        x_vals = list(range(n))
+        x_mean = (n - 1) / 2
+        y_mean = sum(otp) / n
+        num = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_vals, otp))
+        den = sum((x - x_mean) ** 2 for x in x_vals)
+        tendencia = round(num / den, 2) if den != 0 else 0.0
+
+    # YoY: cargar año anterior si hay año específico
+    yoy_otp = []
+    if year:
+        filtros_yoy = {"year": str(int(year) - 1)}
+        if airline:
+            filtros_yoy["airline"] = airline
+        df_prev = load_agg("agg_otp_aerolinea_mes", filtros_yoy)
+        if "month" in df_prev.columns and not df_prev.empty:
+            grp_prev = df_prev.groupby("month").agg(
+                total=("total_vuelos", "sum"),
+                vuelos_at=("vuelos_a_tiempo", "sum"),
+            ).reset_index().sort_values("month")
+            grp_prev["otp"] = (grp_prev["vuelos_at"] / grp_prev["total"].replace(0, float("nan")) * 100).fillna(0.0).round(1)
+            yoy_map = dict(zip(grp_prev["month"], grp_prev["otp"]))
+            yoy_otp = [round(yoy_map.get(m, float("nan")), 1) for m in grp["month"]]
+
+    return {
+        "meses": meses, "otp": otp, "airline": airline,
+        "variacion_pp": variacion_pp,
+        "tendencia": tendencia,
+        "yoy_otp": yoy_otp,
+    }
 
 
 def _tendencias_dia_semana_agg(df_dia: pd.DataFrame) -> dict:
@@ -100,7 +142,7 @@ def _compute_page(filtros: dict) -> dict:
     data = {
         "datos_otp":     _otp_por_aerolinea_agg(df_otp),
         "causas":        _causas_retraso_agg(df_causas),
-        "tendencias":    _tendencias_otp_mensual_agg(df_otp, filtros.get("airline", "")),
+        "tendencias":    _tendencias_otp_mensual_agg(df_otp, filtros.get("airline", ""), filtros.get("year", "")),
         "tendencias_dia":_tendencias_dia_semana_agg(df_dia),
     }
     _page_cache[key] = {"data": data, "expires": time.time() + _PAGE_TTL}
@@ -146,6 +188,7 @@ def narrativa_json(
     request: Request,
     year: str = "", month: str = "", airline: str = "",
     tipo: str = "", airline_val: str = "", causa: str = "", mes: str = "", dia: str = "",
+    ruta_tpl: str = "", aerolinea_tpl: str = "",
 ):
     _perm_ver(request)
     try:
@@ -209,6 +252,27 @@ def narrativa_json(
                 ctx["Peor mes del período"]  = peor_m
                 focus = f"el OTP del mes de {mes} en contexto anual"
 
+        elif tipo == "ruta_aerolinea" and ruta_tpl and aerolinea_tpl:
+            from app.shared.airline_names import airline_name
+            partes = ruta_tpl.split("-", 1)
+            if len(partes) == 2:
+                origen, dest = partes[0], partes[1]
+                df_rt = load_agg("agg_rutas_eficiencia")
+                if "origin" in df_rt.columns and "dest" in df_rt.columns:
+                    sub = df_rt[(df_rt["origin"] == origen) & (df_rt["dest"] == dest)]
+                    sub = sub[sub["carrier"] == aerolinea_tpl]
+                    if len(sub) > 0:
+                        r = sub.iloc[0]
+                        ctx["Ruta"]                = ruta_tpl
+                        ctx["Aerolínea"]           = airline_name(aerolinea_tpl)
+                        ctx["Vuelos"]              = f"{int(r['total_vuelos']):,}"
+                        ctx["OTP"]                 = f"{r['otp_pct']:.1f}%"
+                        ctx["Retraso prom."]       = f"{r['retraso_prom']:.1f} min"
+                        ctx["Tiempo real prom."]   = f"{r['tiempo_real_avg']:.1f} min"
+                        ctx["Tiempo programado"]   = f"{r['tiempo_prog_avg']:.1f} min"
+                        ctx["Índice eficiencia"]   = f"{r['indice_eficiencia']:+.2f}%"
+                    focus = f"el desempeño de {airline_name(aerolinea_tpl)} en la ruta {ruta_tpl}"
+
         elif tipo == "dia" and dia:
             dias = tendencias_dia.get("dias", [])
             otps = tendencias_dia.get("otp", [])
@@ -270,9 +334,13 @@ def comparar(request: Request, ruta: str = "", year: str = ""):
                             "otp_pct":      "otp",
                             "retraso_prom": "retraso",
                         })
-                        .sort_values("total", ascending=False)
+                        .sort_values("otp", ascending=False)
                         .to_dict("records")
                     )
+                    lider_otp = datos[0]["otp"] if datos else 0
+                    for i, d in enumerate(datos):
+                        d["ranking"]  = i + 1
+                        d["brecha"]   = round(lider_otp - d["otp"], 1)
     except Exception as exc:
         error = str(exc)
 

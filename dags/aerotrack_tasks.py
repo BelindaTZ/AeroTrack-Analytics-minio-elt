@@ -547,24 +547,25 @@ def transform_pipeline() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════
-# AGREGACIONES: fact_vuelo + dims → 7 tablas pre-calculadas
+# AGREGACIONES: fact_vuelo + dims → 8 tablas pre-calculadas
 # ═══════════════════════════════════════════════════════════════
 
 def agregaciones_pipeline() -> None:
-    """Lee fact_vuelo + dimensiones desde aerotrack-dims, genera 7 tablas
+    """Lee fact_vuelo + dimensiones desde aerotrack-dims, genera 8 tablas
     de agregación pre-calculadas y las sube al mismo bucket.
 
     Tablas generadas (requeridas):
-      agg_otp_aerolinea_mes   — OTP por aerolínea / año / mes
-      agg_cancelaciones_causa — Cancelaciones por código FAA / año / mes
-      agg_kpi_global_dia      — KPIs globales por día
-      agg_rutas_eficiencia    — Eficiencia por ruta / aerolínea
+      agg_otp_aerolinea_mes           — OTP por aerolínea / año / mes
+      agg_cancelaciones_causa         — Cancelaciones por código FAA / año / mes
+      agg_cancelaciones_causa_aerolinea — Cancelaciones por código FAA / aerolínea / año / mes
+      agg_kpi_global_dia              — KPIs globales por día
+      agg_rutas_eficiencia            — Eficiencia por ruta / aerolínea
 
     Tablas adicionales (eliminan el full-fact en las páginas secundarias):
-      agg_causas_retraso_mes  — Minutos de retraso por causa / aerolínea / mes
-      agg_otp_dia_semana      — OTP por día de la semana
-      agg_desvios_ruta        — Desvíos agregados por ruta / aeropuerto alternativo
-      agg_cancelaciones_ruta  — Tasa de cancelación y retraso por ruta (para asistente IA)
+      agg_causas_retraso_mes          — Minutos de retraso por causa / aerolínea / mes
+      agg_otp_dia_semana              — OTP por día de la semana
+      agg_desvios_ruta                — Desvíos agregados por ruta / aeropuerto alternativo
+      agg_cancelaciones_ruta          — Tasa de cancelación y retraso por ruta (para asistente IA)
     """
     import gc
     import io
@@ -717,6 +718,17 @@ def agregaciones_pipeline() -> None:
         subir(a2, "agg_cancelaciones_causa")
 
     # ════════════════════════════════════════════════════════════
+    # 2b. agg_cancelaciones_causa_aerolinea
+    # GROUP BY cancellation_code / carrier / year / month
+    # ════════════════════════════════════════════════════════════
+    print("\n[AGG] 2b/8 — agg_cancelaciones_causa_aerolinea")
+    if len(canc2) > 0 and "CancellationCode" in canc2.columns and "Reporting_Airline" in canc2.columns:
+        a2b = canc2.groupby(["CancellationCode", "Reporting_Airline", "Year", "Month"]).size().reset_index(name="total_cancelados")
+        a2b.rename(columns={"CancellationCode": "cancellation_code", "Reporting_Airline": "carrier", "Year": "year", "Month": "month"}, inplace=True)
+        a2b[["year", "month"]] = a2b[["year", "month"]].astype(int)
+        subir(a2b, "agg_cancelaciones_causa_aerolinea")
+
+    # ════════════════════════════════════════════════════════════
     # 3. agg_kpi_global_dia
     # GROUP BY year / month / day_of_month
     # ════════════════════════════════════════════════════════════
@@ -820,7 +832,7 @@ def agregaciones_pipeline() -> None:
     # ════════════════════════════════════════════════════════════
     print("\n[AGG] 7/7 — agg_desvios_ruta")
     dev7 = f[f["Diverted"] == 1].copy()
-    G7 = [c for c in ["OriginCode", "DestCode", "Div1Airport"] if c in dev7.columns]
+    G7 = [c for c in ["OriginCode", "DestCode", "Div1Airport", "Year", "Month"] if c in dev7.columns]
     if G7 and len(dev7) > 0:
         a7_spec: dict = {"total_desvios": ("pk_vuelo", "count")}
         for cd in ["DivArrDelay", "DivDistance"]:
@@ -832,10 +844,15 @@ def agregaciones_pipeline() -> None:
         if "OriginCode"  in a7.columns: ren7["OriginCode"]  = "origin"
         if "DestCode"    in a7.columns: ren7["DestCode"]    = "dest"
         if "Div1Airport" in a7.columns: ren7["Div1Airport"] = "alt_airport"
+        if "Year"        in a7.columns: ren7["Year"]        = "year"
+        if "Month"       in a7.columns: ren7["Month"]       = "month"
         a7.rename(columns=ren7, inplace=True)
         for ca in ["divarrdelay_avg", "divdistance_avg"]:
             if ca in a7.columns:
                 a7[ca] = a7[ca].fillna(0.0).round(1)
+        for c7 in ["year", "month"]:
+            if c7 in a7.columns:
+                a7[c7] = a7[c7].astype(int)
         a7 = a7.sort_values("total_desvios", ascending=False)
         subir(a7, "agg_desvios_ruta")
 

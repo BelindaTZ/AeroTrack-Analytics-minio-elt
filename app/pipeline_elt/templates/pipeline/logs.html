@@ -1,11 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Logs {{ task_id }} — AeroTrack Analytics{% endblock %}
+{% block title %}Logs {{ task_id }} -- AeroTrack Analytics{% endblock %}
 {% block breadcrumb %}<a href="/pipeline" style="color:var(--at-muted);text-decoration:none">Pipeline ELT</a> › <a href="/pipeline/historial" style="color:var(--at-muted);text-decoration:none">Historial</a> › Logs{% endblock %}
 {% block content %}
 <div class="page-heading">
-  <h1><i class="bi bi-file-code" style="color:var(--at-coral);margin-right:8px"></i>Log — {{ task_id }}</h1>
+  <h1><i class="bi bi-file-code" style="color:var(--at-coral);margin-right:8px"></i>Log -- {{ task_id }}</h1>
   <p style="font-size:12px;font-family:monospace;color:var(--at-muted)">{{ run_id }}</p>
 </div>
+
+{% if msg %}<div class="flash-bar"><div class="flash-success"><i class="bi bi-check-circle-fill"></i> {{ msg }}</div></div>{% endif %}
+{% if error %}<div class="flash-bar"><div class="flash-error"><i class="bi bi-exclamation-triangle-fill"></i> {{ error }}</div></div>{% endif %}
 
 <div class="d-flex gap-2 mb-3">
   {% for task in tasks %}
@@ -16,11 +19,14 @@
     {{ task.task_id }}
   </a>
   {% endfor %}
-  <form action="/pipeline/trigger" method="post" style="margin-left:auto">
+  {% set current_task = tasks | selectattr('task_id', 'equalto', task_id) | first %}
+  {% if current_task and current_task.state in ('failed', 'up_for_retry') %}
+  <form action="/pipeline/logs/{{ run_id }}/{{ task_id }}/reintentar" method="post" style="margin-left:auto">
     <button type="submit" class="btn-at-coral" style="font-size:12px">
-      <i class="bi bi-arrow-repeat"></i> Reintentar pipeline
+      <i class="bi bi-arrow-repeat"></i> Reintentar
     </button>
   </form>
+  {% endif %}
 </div>
 
 <div class="at-card" style="padding:0">
