@@ -1,5 +1,7 @@
 """Panel de control del pipeline ELT (CU-10, CU-11, CU-12, CU-13, CU-T06, CU-O08)."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
@@ -7,6 +9,7 @@ from app.pipeline_elt.clients import airflow_client as af
 from app.shared.clients import pb_client
 from app.shared.utils import audit
 from app.shared.deps import render, require_permission
+from app.socios_api.webhook_dispatcher import dispatch_event
 
 router = APIRouter()
 _perm_ver = require_permission("pipeline_elt", "ver")
@@ -61,6 +64,12 @@ async def trigger(request: Request):
         audit.registrar(user["sub"], user["email"], "ejecutar", "pipeline_elt",
                         recurso_tipo="dag", recurso_id=af.DAG_ID,
                         detalle=f"dag_run_id={result.get('dag_run_id', '')}")
+        dispatch_event("pipeline_completado", {
+            "dag_id": af.DAG_ID,
+            "dag_run_id": result.get("dag_run_id", ""),
+            "estado": "iniciado",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
     except Exception as exc:
         return RedirectResponse(f"/pipeline?error={exc}", status_code=303)
     return RedirectResponse("/pipeline?msg=Pipeline iniciado.", status_code=303)

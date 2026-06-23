@@ -82,6 +82,24 @@
       {% endif %}
     {% endfor %}
 
+    <!-- ── Entrega 4 — activa ── -->
+    <div class="nav-label" style="margin-top:6px">Entrega 4</div>
+    {% for mod in modulos_sidebar if mod.entrega == 4 %}
+      {% if mod.clave in user_permissions %}
+      <a href="{{ mod.url }}"
+         class="nav-item-link {% if request.url.path.startswith(mod.url) %}active{% endif %}"
+         aria-current="{% if request.url.path.startswith(mod.url) %}page{% endif %}">
+        <i class="bi {{ mod.icon }}" aria-hidden="true"></i>
+        {{ mod.label }}
+      </a>
+      {% else %}
+      <span class="nav-item-link disabled-soon" title="Sin permiso" aria-disabled="true">
+        <i class="bi {{ mod.icon }}" aria-hidden="true"></i>
+        {{ mod.label }}
+      </span>
+      {% endif %}
+    {% endfor %}
+
     <!-- ── Admin ── -->
     {% if modulos_admin %}
     <hr class="nav-section-divider" />

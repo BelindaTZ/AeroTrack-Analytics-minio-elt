@@ -23,7 +23,8 @@ from app.shared.deps import require_permission
 from app.shared.utils import audit
 
 router = APIRouter()
-_perm_ver = require_permission("predictivo", "ver")
+_perm_ver    = require_permission("predictivo", "ver")
+_perm_export = require_permission("predictivo", "exportar")
 
 _TZ = timezone(timedelta(hours=-5))  # América/Guayaquil
 
@@ -271,7 +272,7 @@ def _html_informe(
 
 @router.post("/informe")
 async def generar_informe(request: Request):
-    user = _perm_ver(request)
+    user = _perm_export(request)
     form = await request.form()
     airline  = str(form.get("airline", ""))
     year     = str(form.get("year", ""))

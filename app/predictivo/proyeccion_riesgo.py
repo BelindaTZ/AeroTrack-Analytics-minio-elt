@@ -451,6 +451,35 @@ def _calcular_ranking_riesgo(year: str = "") -> list[dict]:
     return sorted(result, key=lambda r: r["score"], reverse=True)
 
 
+def _simular_whatif(
+    df_otp: pd.DataFrame,
+    horizonte: int,
+    buffer_minutos: int,
+    reduccion_carga: int,
+) -> dict:
+    """Proyecta OTP ajustando por escenario what-if (buffer/reducción de carga).
+    Computa la proyección base y aplica el delta a los valores proyectados."""
+    base = _proyectar_otp(df_otp, horizonte)
+    if "error" in base:
+        return base
+
+    BUFFER_FACTOR = 0.7   # pp por cada 5 min de buffer
+    VOL_FACTOR    = 0.3   # pp por cada 10% de reducción de carga
+    delta = (buffer_minutos / 5) * BUFFER_FACTOR + (reduccion_carga / 10) * VOL_FACTOR
+
+    if delta > 0:
+        for key in ("proyeccion", "ic_sup", "ic_inf"):
+            if key in base and isinstance(base[key], list):
+                base[key] = [min(100.0, round(v + delta, 1)) for v in base[key]]
+
+    base["whatif"] = {
+        "delta": round(delta, 2),
+        "buffer_minutos": buffer_minutos,
+        "reduccion_carga": reduccion_carga,
+    }
+    return base
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
@@ -506,6 +535,24 @@ async def generar_proyeccion(request: Request):
         return JSONResponse({"error": "Datos insuficientes. Se necesitan al menos 3 meses de historial."})
 
     return JSONResponse(_proyectar_otp(df_otp, horizonte))
+
+
+@router.post("/whatif")
+async def whatif(request: Request):
+    _perm_ver(request)
+    body       = await request.json()
+    airline    = str(body.get("aerolinea", ""))
+    year       = str(body.get("anio", ""))
+    horizonte  = int(body.get("horizonte", 6))
+    buffer_min = max(0, min(30, int(body.get("buffer_minutos", 0))))
+    reduccion  = max(0, min(30, int(body.get("reduccion_carga", 0))))
+    horizonte  = max(1, min(horizonte, _get_horizonte_max()))
+
+    df_otp = _load_otp_series(airline=airline, year=year)
+    if df_otp.empty or len(df_otp) < 3:
+        return JSONResponse({"error": "Datos insuficientes."}, status_code=400)
+
+    return JSONResponse(_simular_whatif(df_otp, horizonte, buffer_min, reduccion))
 
 
 @router.get("/estacionalidad")

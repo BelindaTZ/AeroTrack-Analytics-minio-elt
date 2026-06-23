@@ -557,7 +557,7 @@ def agregaciones_pipeline() -> None:
     Tablas generadas (requeridas):
       agg_otp_aerolinea_mes           — OTP por aerolínea / año / mes
       agg_cancelaciones_causa         — Cancelaciones por código FAA / año / mes
-      agg_cancelaciones_causa_aerolinea — Cancelaciones por código FAA / aerolínea / año / mes
+      agg_cancelaciones_aerolinea_causa — Cancelaciones por aerolínea / código FAA / año / mes (con pct_del_carrier)
       agg_kpi_global_dia              — KPIs globales por día
       agg_rutas_eficiencia            — Eficiencia por ruta / aerolínea
 
@@ -716,17 +716,6 @@ def agregaciones_pipeline() -> None:
         a2.rename(columns={"CancellationCode": "cancellation_code", "Year": "year", "Month": "month"}, inplace=True)
         a2[["year", "month"]] = a2[["year", "month"]].astype(int)
         subir(a2, "agg_cancelaciones_causa")
-
-    # ════════════════════════════════════════════════════════════
-    # 2b. agg_cancelaciones_causa_aerolinea
-    # GROUP BY cancellation_code / carrier / year / month
-    # ════════════════════════════════════════════════════════════
-    print("\n[AGG] 2b/8 — agg_cancelaciones_causa_aerolinea")
-    if len(canc2) > 0 and "CancellationCode" in canc2.columns and "Reporting_Airline" in canc2.columns:
-        a2b = canc2.groupby(["CancellationCode", "Reporting_Airline", "Year", "Month"]).size().reset_index(name="total_cancelados")
-        a2b.rename(columns={"CancellationCode": "cancellation_code", "Reporting_Airline": "carrier", "Year": "year", "Month": "month"}, inplace=True)
-        a2b[["year", "month"]] = a2b[["year", "month"]].astype(int)
-        subir(a2b, "agg_cancelaciones_causa_aerolinea")
 
     # ════════════════════════════════════════════════════════════
     # 3. agg_kpi_global_dia

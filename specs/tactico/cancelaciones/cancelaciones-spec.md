@@ -3,7 +3,7 @@
 **Módulo:** Cancelaciones
 **Prefijo:** CAN
 **Código fuente:** `app/cancelaciones/clasificar_faa.py`
-**Casos de uso cubiertos:** CU-E08 (Analizar cancelaciones por causa FAA), CU-E09 (Analizar impacto operacional de desvíos), CU-E10 (Tendencia de cancelaciones)
+**Casos de uso cubiertos:** CU-E08 (Analizar cancelaciones por causa FAA), CU-E09 (Analizar impacto operacional de desvíos), CU-E10 (Tendencia de cancelaciones), CU-O14 (Consultar narrativa IA de un gráfico o KPI)
 **Actor:** Analista de Datos
 
 ---
@@ -156,6 +156,7 @@ Analizar las cancelaciones clasificadas por código oficial FAA (A/B/C/D) y el i
 - CU-E08 (Analizar cancelaciones por causa FAA)
 - CU-E09 (Analizar impacto operacional de desvíos)
 - CU-E10 (Tendencia de cancelaciones)
+- CU-O14 (Consultar narrativa IA de un gráfico o KPI — endpoint `GET /cancelaciones/narrativa`)
 
 ---
 

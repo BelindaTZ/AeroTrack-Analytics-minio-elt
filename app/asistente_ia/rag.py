@@ -26,12 +26,17 @@ Fuentes de datos:
   Para aerolínea + filtros adicionales: _seccion_dinamica_aerolinea desde fact enriquecido.
 """
 
+import logging
 import re
+import time
 from typing import Optional
 
 import pandas as pd
 
 from app.shared.analytics import load_agg, load_enriched_fact, get_aerolinas
+from app.shared.clients import pb_client as pb
+
+log = logging.getLogger(__name__)
 
 
 _MESES_ES: dict[str, int] = {
@@ -43,6 +48,36 @@ _MESES_ES: dict[str, int] = {
 _MESES_LABEL = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
                 "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 _DIAS_LABEL  = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+# Cache de fuentes activas desde PocketBase (TTL 60s)
+_SOURCE_CACHE: dict = {"data": None, "expires": 0.0}
+_SOURCE_TTL = 60
+
+_ALL_SOURCES: set[str] = {
+    "otp_global", "cancelaciones", "cancelaciones_aerolinea", "cancelaciones_ruta",
+    "causas_retraso", "rutas_eficiencia", "desvios", "otp_dia_semana",
+    "otp_aerolinea_dia", "detalle_vuelos",
+}
+
+
+def _get_activas() -> set[str]:
+    """Retorna claves de fuentes activas desde asistente_fuentes.
+    Cachea 60s. Fallback: todas las fuentes."""
+    now = time.time()
+    if _SOURCE_CACHE["data"] is not None and now < _SOURCE_CACHE["expires"]:
+        return _SOURCE_CACHE["data"]
+    try:
+        records = pb.list_records_all("asistente_fuentes", filter="activa=True")
+        activas = {r["clave"] for r in records if r.get("clave")}
+        if not activas:
+            activas = _ALL_SOURCES
+        _SOURCE_CACHE["data"] = activas
+        _SOURCE_CACHE["expires"] = now + _SOURCE_TTL
+        return activas
+    except Exception:
+        log.warning("No se pudieron cargar fuentes desde PocketBase", exc_info=True)
+        return _ALL_SOURCES
+
 
 _AIRLINE_CODES: Optional[list[str]] = None
 
@@ -670,12 +705,13 @@ def build_context(filtros: dict, question: str = "") -> str:
     tipos = _detect_question_type(question)
     airline = filtros.get("airline")
     dow     = filtros.get("dow")
+    activas = _get_activas()
 
     f_otp    = {k: v for k, v in filtros.items() if k in ("airline", "year", "month")}
     f_mes    = {k: v for k, v in filtros.items() if k in ("year", "month")}
     f_global: dict = {}
 
-    # Cuando la pregunta es genérica (sin tipo detectado) se carga todo
+    # Cuando la pregunta es genérica (sin tipo detectado) se carga todo lo activo
     carga_todo = not tipos
 
     secciones: list[str] = []
@@ -683,38 +719,35 @@ def build_context(filtros: dict, question: str = "") -> str:
         secciones.append(f"[Filtros activos: {_describe_filtros(filtros)}]")
 
     # ── 1. KPIs globales + ranking aerolíneas + tendencia mensual ─────────
-    # El ranking siempre se carga. Si el filtro de año/aerolínea deja el df vacío,
-    # se carga sin ese filtro para garantizar que siempre haya datos de referencia.
-    try:
-        df_otp = load_agg("agg_otp_aerolinea_mes", f_otp)
+    if "otp_global" in activas:
+        try:
+            df_otp = load_agg("agg_otp_aerolinea_mes", f_otp)
 
-        # Fallback: si el filtro temporal/aerolinea generó vacío, cargar sin filtros
-        if df_otp.empty and f_otp:
-            df_otp_full = load_agg("agg_otp_aerolinea_mes", {})
-            if not df_otp_full.empty:
-                year_avail = sorted(df_otp_full["year"].unique().astype(int).tolist()) if "year" in df_otp_full.columns else []
-                años_str = ", ".join(str(y) for y in year_avail)
-                secciones.append(
-                    f"[Nota: no hay datos para los filtros {_describe_filtros(f_otp)}. "
-                    f"Se muestran datos globales disponibles (años en el sistema: {años_str}).]"
-                )
-                df_otp = df_otp_full
+            if df_otp.empty and f_otp:
+                df_otp_full = load_agg("agg_otp_aerolinea_mes", {})
+                if not df_otp_full.empty:
+                    year_avail = sorted(df_otp_full["year"].unique().astype(int).tolist()) if "year" in df_otp_full.columns else []
+                    años_str = ", ".join(str(y) for y in year_avail)
+                    secciones.append(
+                        f"[Nota: no hay datos para los filtros {_describe_filtros(f_otp)}. "
+                        f"Se muestran datos globales disponibles (años en el sistema: {años_str}).]"
+                    )
+                    df_otp = df_otp_full
 
-        if not df_otp.empty:
-            secciones.append(_seccion_kpis_globales(df_otp))
-            if carga_todo or "tendencia" in tipos or "ranking_otp" in tipos:
-                secciones.append(_seccion_tendencia_mensual(df_otp))
+            if not df_otp.empty:
+                secciones.append(_seccion_kpis_globales(df_otp))
+                if carga_todo or "tendencia" in tipos or "ranking_otp" in tipos:
+                    secciones.append(_seccion_tendencia_mensual(df_otp))
 
-        # Ranking sin filtro de aerolínea para mostrar comparativa completa
-        df_universe = load_agg("agg_otp_aerolinea_mes", f_mes) if airline else df_otp
-        if df_universe.empty and f_mes:
-            df_universe = load_agg("agg_otp_aerolinea_mes", {})
-        secciones.append(_seccion_ranking_aerolineas(df_universe))
-    except Exception:
-        pass
+            df_universe = load_agg("agg_otp_aerolinea_mes", f_mes) if airline else df_otp
+            if df_universe.empty and f_mes:
+                df_universe = load_agg("agg_otp_aerolinea_mes", {})
+            secciones.append(_seccion_ranking_aerolineas(df_universe))
+        except Exception:
+            pass
 
     # ── 2. Cancelaciones por código FAA + desglose por aerolínea ──────────
-    if carga_todo or "cancelacion" in tipos:
+    if (carga_todo or "cancelacion" in tipos) and "cancelaciones" in activas:
         try:
             df_causa = load_agg("agg_cancelaciones_causa", f_mes)
             sec = _seccion_cancelaciones_causa(df_causa)
@@ -722,8 +755,7 @@ def build_context(filtros: dict, question: str = "") -> str:
                 secciones.append(sec)
         except Exception:
             pass
-        # Nueva tabla: cancelaciones aerolínea × causa — solo cuando se pregunta por cancelaciones
-        if "cancelacion" in tipos or airline:
+        if ("cancelacion" in tipos or airline) and "cancelaciones_aerolinea" in activas:
             try:
                 df_canc_al = load_agg("agg_cancelaciones_aerolinea_causa", f_mes)
                 sec = _seccion_cancelaciones_aerolinea_causa(df_canc_al, airline)
@@ -733,7 +765,7 @@ def build_context(filtros: dict, question: str = "") -> str:
                 pass
 
     # ── 3. Rutas con mayor tasa de cancelación ────────────────────────────
-    if carga_todo or "cancelacion" in tipos or "ruta" in tipos:
+    if (carga_todo or "cancelacion" in tipos or "ruta" in tipos) and "cancelaciones_ruta" in activas:
         try:
             df_canc_ruta = load_agg("agg_cancelaciones_ruta", f_global)
             sec = _seccion_cancelaciones_ruta(df_canc_ruta)
@@ -743,13 +775,12 @@ def build_context(filtros: dict, question: str = "") -> str:
             pass
 
     # ── 4. Causas de retraso (con desglose por aerolínea si se pide) ─────
-    if carga_todo or "delay_cause" in tipos:
+    if (carga_todo or "delay_cause" in tipos) and "causas_retraso" in activas:
         try:
             df_causas_ret = load_agg("agg_causas_retraso_mes", f_mes)
             sec = _seccion_causas_retraso(df_causas_ret, airline)
             if sec:
                 secciones.append(sec)
-            # Desglose por aerolínea solo cuando la pregunta es sobre causas de retraso
             if "delay_cause" in tipos and not airline:
                 sec2 = _seccion_causas_retraso_por_aerolinea(df_causas_ret)
                 if sec2:
@@ -758,7 +789,7 @@ def build_context(filtros: dict, question: str = "") -> str:
             pass
 
     # ── 5. Rutas — eficiencia y retraso ───────────────────────────────────
-    if carga_todo or "eficiencia" in tipos or "ruta" in tipos:
+    if (carga_todo or "eficiencia" in tipos or "ruta" in tipos) and "rutas_eficiencia" in activas:
         try:
             df_rutas = load_agg("agg_rutas_eficiencia", f_mes)
             sec = _seccion_rutas_eficiencia(df_rutas)
@@ -768,7 +799,7 @@ def build_context(filtros: dict, question: str = "") -> str:
             pass
 
     # ── 6. Desvíos por ruta ───────────────────────────────────────────────
-    if carga_todo or "desvio" in tipos:
+    if (carga_todo or "desvio" in tipos) and "desvios" in activas:
         try:
             df_dev = load_agg("agg_desvios_ruta", f_global)
             sec = _seccion_desvios_ruta(df_dev)
@@ -778,7 +809,7 @@ def build_context(filtros: dict, question: str = "") -> str:
             pass
 
     # ── 7. OTP por día de la semana + desglose por aerolínea ──────────────
-    if carga_todo or "dia_semana" in tipos or dow:
+    if (carga_todo or "dia_semana" in tipos or dow) and "otp_dia_semana" in activas:
         try:
             df_dow = load_agg("agg_otp_dia_semana", f_global)
             sec = _seccion_otp_dia_semana(df_dow)
@@ -786,8 +817,7 @@ def build_context(filtros: dict, question: str = "") -> str:
                 secciones.append(sec)
         except Exception:
             pass
-        # Nueva tabla: OTP aerolínea × día — solo cuando se pregunta por días o aerolínea específica
-        if "dia_semana" in tipos or dow or airline:
+        if ("dia_semana" in tipos or dow or airline) and "otp_aerolinea_dia" in activas:
             try:
                 df_al_dow = load_agg("agg_otp_aerolinea_dia_semana", f_global)
                 sec = _seccion_otp_aerolinea_dia_semana(df_al_dow, airline, dow)
@@ -797,26 +827,27 @@ def build_context(filtros: dict, question: str = "") -> str:
                 pass
 
     # ── 8. Detalle dinámico: aerolínea específica + filtros adicionales ────
-    if airline:
-        extra_tipos = tipos - {"tendencia"}  # tendencia ya cubierta por sección mensual
+    if airline and "detalle_vuelos" in activas:
+        extra_tipos = tipos - {"tendencia"}
         sec = _seccion_dinamica_aerolinea(filtros, extra_tipos)
         if sec:
             secciones.append(sec)
 
     # ── 9. Detalle de ruta específica (si se detectó una ruta) ───────────
-    if filtros.get("ruta"):
+    if filtros.get("ruta") and "detalle_vuelos" in activas:
         secciones.append(_seccion_ruta_especifica(filtros["ruta"]))
 
     # ── 10. Detalle de aeropuerto específico ──────────────────────────────
     if filtros.get("aeropuerto") and not filtros.get("ruta"):
-        try:
-            df_rutas_ap = load_agg("agg_rutas_eficiencia", f_mes)
-            df_canc_ap  = load_agg("agg_cancelaciones_ruta", f_global)
-        except Exception:
-            df_rutas_ap = df_canc_ap = pd.DataFrame()
-        sec = _seccion_aeropuerto(filtros["aeropuerto"], df_rutas_ap, df_canc_ap)
-        if sec:
-            secciones.append(sec)
+        if "rutas_eficiencia" in activas or "cancelaciones_ruta" in activas:
+            try:
+                df_rutas_ap = load_agg("agg_rutas_eficiencia", f_mes) if "rutas_eficiencia" in activas else pd.DataFrame()
+                df_canc_ap  = load_agg("agg_cancelaciones_ruta", f_global) if "cancelaciones_ruta" in activas else pd.DataFrame()
+            except Exception:
+                df_rutas_ap = df_canc_ap = pd.DataFrame()
+            sec = _seccion_aeropuerto(filtros["aeropuerto"], df_rutas_ap, df_canc_ap)
+            if sec:
+                secciones.append(sec)
 
     result = "\n\n".join(s for s in secciones if s and s.strip())
     return result if result else (

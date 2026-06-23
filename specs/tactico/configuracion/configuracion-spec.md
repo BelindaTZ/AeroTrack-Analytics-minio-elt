@@ -3,7 +3,7 @@
 **Módulo:** Configuración
 **Prefijo:** CFG
 **Código fuente:** `app/configuracion/`
-**Casos de uso cubiertos:** CU-T03 (Configurar parámetros del sistema por grupo), CU-T04 (Configurar parámetros de correo electrónico SMTP), CU-T05 (Configurar parámetros de inteligencia artificial), CU-T07 (Configurar umbrales de alertas del dashboard), CU-T08 (Configurar parámetros del pipeline ELT)
+**Casos de uso cubiertos:** CU-T03 (Ver panel de configuración general), CU-T04 (Configurar y probar servicio de correo electrónico), CU-T05 (Configurar umbrales de alertas analíticas), CU-T06 (Configurar y programar ejecución del pipeline), CU-T07 (Monitorear métricas de almacenamiento MinIO), CU-T08 (Ver estado de salud de servicios del sistema), CU-T09 (Configurar parámetros del asistente IA)
 **Actor:** Administrador
 
 ---
@@ -44,7 +44,7 @@ Al guardar el grupo email, el sistema redirige con parámetro `test_smtp=1` que 
 
 ---
 
-## Funcionalidad 3: Configuración de IA (CU-T05)
+## Funcionalidad 3: Configuración de IA (CU-T09)
 
 Grupo `ia` con 10 parámetros para proveedores de inteligencia artificial. Implementado en `app/configuracion/panel.py`.
 
@@ -59,7 +59,7 @@ Además de `ia_api_key` (genérica), existen claves específicas: `ia_api_key_gr
 
 ---
 
-## Funcionalidad 4: Umbrales de alertas (CU-T07)
+## Funcionalidad 4: Umbrales de alertas (CU-T05)
 
 Grupo `alertas` con 4 umbrales para alertas del dashboard y ranking de rutas. Implementado en `app/configuracion/panel.py`.
 
@@ -71,7 +71,7 @@ Al guardar el grupo alertas, se invalida `invalidar_cache_alertas()` (KPIs del d
 
 ---
 
-## Funcionalidad 5: Configuración del pipeline ELT (CU-T08)
+## Funcionalidad 5: Configuración del pipeline ELT (CU-T06)
 
 Grupo `pipeline` con 4 parámetros de ejecución del pipeline. Implementado en `app/configuracion/panel.py`.
 
@@ -86,6 +86,24 @@ Al guardar, `_validar_schedule()` verifica la expresión cron con la biblioteca 
 
 ### RF-CFG-017 — Sincronización con Airflow vía API REST
 Al guardar el schedule, además de persistir en PocketBase, se sincroniza con Airflow mediante `airflow_client.set_variable("pipeline_schedule", valor)`. Si Airflow no responde, PocketBase queda actualizado pero se muestra advertencia al usuario.
+
+---
+
+## Funcionalidad 6: Monitoreo de salud de servicios y métricas de almacenamiento (CU-T07, CU-T08)
+
+Panel de monitoreo en tiempo real del estado de los servicios de infraestructura (PocketBase, MinIO, Airflow), con métricas de almacenamiento por bucket. Implementado en `app/configuracion/monitoreo.py`.
+
+### RF-CFG-018 — Mostrar estado de servicios en tiempo real
+`GET /configuracion/monitoreo` verifica la disponibilidad y latencia de los 3 servicios críticos: PocketBase (via `GET /api/health`), MinIO (via `client.list_buckets()`), Airflow (via `GET /api/v1/health`). Retorna estado: `online`, `degradado` o `offline` con latencia en ms para cada servicio. Si Airflow responde con scheduler healthy, se muestra como "healthy".
+
+### RF-CFG-019 — Métricas de almacenamiento MinIO por bucket (CU-T07)
+El chequeo de MinIO enumera todos los buckets y para cada uno calcula: número de objetos y tamaño total en MB (`size_mb = size_total / 1_048_576`). Las métricas se incluyen en la respuesta del monitoreo tanto en HTML como en JSON.
+
+### RF-CFG-020 — Auto-refresh JSON cada 30 segundos (CU-T08)
+`GET /configuracion/monitoreo/json` retorna el mismo payload `{servicios: [...], todos_ok: bool}` pero como JSON. El frontend realiza polling cada 30s para actualizar los indicadores sin recargar la página.
+
+### RNF-CFG-004 — Monitoreo no bloquea al usuario
+Los tres checks (_check_pocketbase, _check_minio, _check_airflow) son independientes. Si uno falla con excepción, retorna `{ok: False, estado: "offline", latencia_ms: -1}` sin propagar el error. Los otros servicios se muestran igualmente.
 
 ---
 
@@ -115,11 +133,14 @@ El cambio de horario en Airflow puede tardar hasta ~300s en生效 debido al cicl
 
 | CU | Entrada | Salida |
 |----|---------|--------|
+| CU-T03 | GET /configuracion (Cookie JWT) | HTML con panel de 5 grupos y navegación lateral |
 | CU-T03 | POST /configuracion/{grupo} con pares clave=valor del grupo | Redirección a /configuracion?msg=... con resultados |
 | CU-T04 | POST /configuracion/email/test (sin body, lee de PB) | JSON {ok: bool, mensaje: str} |
-| CU-T05 | POST /configuracion/ia con 10 parámetros | Redirección a /configuracion con mensaje |
-| CU-T07 | POST /configuracion/alertas con 4 umbrales | Redirección + invalidación de cachés |
-| CU-T08 | POST /configuracion/pipeline con 4 parámetros | Redirección + sincronización Airflow |
+| CU-T05 | POST /configuracion/alertas con 4 umbrales | Redirección + invalidación de cachés |
+| CU-T06 | POST /configuracion/pipeline con 4 parámetros | Redirección + sincronización Airflow |
+| CU-T07 | GET /configuracion/monitoreo (Cookie JWT) | HTML con estado de PocketBase, MinIO, Airflow |
+| CU-T07 | GET /configuracion/monitoreo/json (Cookie JWT) | JSON {servicios, todos_ok} para auto-refresh |
+| CU-T09 | POST /configuracion/ia con 10 parámetros | Redirección a /configuracion con mensaje |
 
 ---
 
@@ -153,9 +174,11 @@ El cambio de horario en Airflow puede tardar hasta ~300s en生效 debido al cicl
 
 - **CU-T03:** Dado que el Administrador navega al panel de configuración, cuando selecciona un grupo, edita sus valores y guarda, entonces el sistema persiste solo los registros de ese grupo en PocketBase y registra la acción en auditoría.
 - **CU-T04:** Dado que el Administrador configura los parámetros SMTP, cuando guarda y ejecuta la prueba de conexión, entonces el sistema envía un email real de verificación y muestra el resultado inline.
-- **CU-T05:** Dado que el Administrador configura los parámetros de IA, cuando guarda, entonces el sistema persiste los valores, invalida las cachés de narrativa y LLM client, y los nuevos valores se usan en la siguiente llamada.
-- **CU-T07:** Dado que el Administrador modifica los umbrales de alertas, cuando guarda, entonces el sistema invalida las cachés del dashboard y ranking de rutas para que los nuevos umbrales se reflejen inmediatamente.
-- **CU-T08:** Dado que el Administrador configura el horario del pipeline, cuando el valor es una expresión cron válida, entonces el sistema persiste en PocketBase y sincroniza con Airflow vía API, informando del resultado de cada paso.
+- **CU-T05:** Dado que el Administrador modifica los umbrales de alertas, cuando guarda, entonces el sistema invalida las cachés del dashboard y ranking de rutas para que los nuevos umbrales se reflejen inmediatamente.
+- **CU-T06:** Dado que el Administrador configura el horario del pipeline, cuando el valor es una expresión cron válida, entonces el sistema persiste en PocketBase y sincroniza con Airflow vía API, informando del resultado de cada paso.
+- **CU-T07:** Dado que el Administrador accede a `GET /configuracion/monitoreo`, entonces el sistema muestra el estado (online/offline/degradado) y latencia de PocketBase, MinIO y Airflow, incluyendo métricas de buckets MinIO (objetos y tamaño en MB).
+- **CU-T08:** Dado que el Administrador accede al monitoreo, cuando un servicio no responde, entonces su estado muestra "offline" con el mensaje de error; los servicios restantes se muestran correctamente (degradación parcial, no total).
+- **CU-T09:** Dado que el Administrador configura los parámetros de IA, cuando guarda, entonces el sistema persiste los valores, invalida las cachés de narrativa y LLM client, y los nuevos valores se usan en la siguiente llamada.
 
 ---
 
@@ -175,11 +198,13 @@ El cambio de horario en Airflow puede tardar hasta ~300s en生效 debido al cicl
 
 ## Casos de uso relacionados
 
-- CU-T03 (Configurar parámetros del sistema por grupo)
-- CU-T04 (Configurar parámetros de correo electrónico SMTP)
-- CU-T05 (Configurar parámetros de inteligencia artificial)
-- CU-T07 (Configurar umbrales de alertas del dashboard)
-- CU-T08 (Configurar parámetros del pipeline ELT)
+- CU-T03 (Ver panel de configuración general)
+- CU-T04 (Configurar y probar servicio de correo electrónico)
+- CU-T05 (Configurar umbrales de alertas analíticas)
+- CU-T06 (Configurar y programar ejecución del pipeline)
+- CU-T07 (Monitorear métricas de almacenamiento MinIO)
+- CU-T08 (Ver estado de salud de servicios del sistema)
+- CU-T09 (Configurar parámetros del asistente IA)
 
 ---
 

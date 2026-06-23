@@ -3,7 +3,7 @@
 **Módulo:** Rutas
 **Prefijo:** RUT
 **Código fuente:** `app/rutas/ranking_eficiencia.py`
-**Casos de uso cubiertos:** CU-E06 (Evaluar rendimiento de rutas), CU-E07 (Comparar tiempo real vs programado por ruta)
+**Casos de uso cubiertos:** CU-E06 (Evaluar rendimiento de rutas), CU-E07 (Comparar tiempo real vs programado por ruta), CU-O14 (Consultar narrativa IA de un gráfico o KPI)
 **Actor:** Analista de Datos
 
 ---
@@ -51,6 +51,9 @@ Tabla detallada con columnas: Ruta, Tiempo real (min), Tiempo programado (min), 
 ### RF-RUT-009 — Narrativa IA por ruta
 Botón por fila que abre popover con narrativa IA mostrando la eficiencia de la ruta, brecha de tiempo y recomendaciones contextuales.
 
+### RF-RUT-010 — Página de detalle por ruta
+`GET /rutas/{ruta}/detalle` (donde `{ruta}` es código en formato `AAA-BBB`) muestra análisis completo de una ruta específica: métricas de eficiencia, brecha tiempo real vs programado, desglose por aerolínea, y narrativa IA contextualizada. El parámetro de año es opcional.
+
 ### RNF-RUT-003 — Orden descendente por volumen por defecto
 La tabla de rutas se ordena por `total_vuelos` descendente para mostrar primero las rutas con mayor impacto operacional.
 
@@ -74,7 +77,8 @@ Toda ruta debe tener al menos 10 vuelos en el período para ser considerada en e
 | FUNCIÓN / ENDPOINT | ENTRADAS | SALIDAS |
 |---|---|---|
 | GET /rutas | Cookie JWT, year, airline, month | Página HTML con ranking de eficiencia, gráfico dispersión, tabla |
-| GET /rutas/narrativa | Cookie JWT, ruta, year, airline | JSON con narrativa IA de la ruta |
+| GET /rutas/narrativa | Cookie JWT, ruta, year, airline | JSON con narrativa IA de la ruta (CU-O14) |
+| GET /rutas/{ruta}/detalle | Cookie JWT, ruta (ej. ATL-DFW), year, airline | Página HTML con análisis detallado de una ruta específica |
 
 ---
 
@@ -127,6 +131,7 @@ Evaluar el rendimiento y eficiencia de las rutas operadas mediante un índice co
 
 - CU-E06 (Evaluar rendimiento de rutas)
 - CU-E07 (Comparar tiempo real vs programado por ruta)
+- CU-O14 (Consultar narrativa IA de un gráfico o KPI — endpoint `GET /rutas/narrativa`)
 
 ---
 

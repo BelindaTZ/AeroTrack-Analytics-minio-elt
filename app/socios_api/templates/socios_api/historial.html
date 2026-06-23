@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Historial API — Socios API{% endblock %}
+
+{% block breadcrumb %}
+<a href="/socios" class="bc-link">Socios API</a>
+<span class="bc-sep">›</span>
+<span class="bc-current">Historial</span>
+{% endblock %}
+
+{% block content %}
+<h1 style="font-size:20px;font-weight:700;margin:0 0 20px">Historial de llamadas API</h1>
+
+<form method="get" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;padding:16px;background:var(--at-surface);border:1px solid var(--at-border);border-radius:var(--at-r-lg)">
+  <select class="at-input" name="socio" style="width:auto;min-width:160px">
+    <option value="">Todos los socios</option>
+    {% for id, nombre in claves %}
+    <option value="{{ id }}" {% if filtro_socio == id %}selected{% endif %}>{{ nombre }}</option>
+    {% endfor %}
+  </select>
+  <input class="at-input" name="endpoint" placeholder="Endpoint" value="{{ filtro_endpoint }}" style="width:auto;min-width:140px">
+  <input class="at-input" name="desde" type="date" value="{{ filtro_desde }}" style="width:auto;min-width:140px">
+  <input class="at-input" name="hasta" type="date" value="{{ filtro_hasta }}" style="width:auto;min-width:140px">
+  <button type="submit" class="btn-at-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+</form>
+
+{% if historial %}
+<div class="at-table-wrapper">
+  <div class="at-table-scroll">
+    <table class="at-table">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Socio</th>
+          <th>Endpoint</th>
+          <th>Método</th>
+          <th>Código</th>
+          <th>Tiempo</th>
+          <th>IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in historial %}
+        <tr>
+          <td class="at-code" style="font-size:11.5px">{{ (h.created or '')[:19].replace('T',' ') }}</td>
+          <td style="font-size:12.5px">{{ h.socio_nombre or '—' }}</td>
+          <td class="at-code" style="font-size:11.5px">{{ h.endpoint or '—' }}</td>
+          <td><span class="at-badge at-badge-pending" style="font-size:10px">{{ h.metodo or '—' }}</span></td>
+          <td><span class="at-badge {% if (h.codigo_respuesta or 500) < 300 %}at-badge-success{% else %}at-badge-failed{% endif %}" style="font-size:10px">{{ h.codigo_respuesta or '—' }}</span></td>
+          <td class="at-code" style="font-size:11.5px">{{ h.tiempo_ms or '—' }}ms</td>
+          <td class="at-code" style="font-size:11px;color:var(--at-muted)">{{ h.ip_origen or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="at-card at-empty">
+  <i class="bi bi-clock-history at-empty-icon"></i>
+  <strong>Sin llamadas registradas</strong>
+  <p>Las consultas API aparecerán aquí automáticamente.</p>
+</div>
+{% endif %}
+{% endblock %}

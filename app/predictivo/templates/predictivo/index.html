@@ -859,7 +859,16 @@
         var wrap = document.getElementById('proy-chart-wrap');
         wrap.style.display='none'; msg.style.display='block'; msg.textContent=data.error;
       } else {
-        renderChart(data.meses_hist, data.historico, data.meses_proy, data.proyeccion, data.ic_sup, data.ic_inf, data.ajustado || []);
+        // Actualizar globales para what-if
+        HIST_VALS   = data.historico  || [];
+        PROY_VALS   = data.proyeccion || [];
+        HIST_LABELS = data.meses_hist || [];
+        PROY_LABELS = data.meses_proy || [];
+        IC_SUP      = data.ic_sup     || [];
+        IC_INF      = data.ic_inf     || [];
+        AJUSTADO    = data.ajustado   || [];
+
+        renderChart(HIST_LABELS, HIST_VALS, PROY_LABELS, PROY_VALS, IC_SUP, IC_INF, AJUSTADO);
         updateMeta(data.metodo, data.n_meses, data.precision_estimada || null);
         var badge = document.querySelector('.proy-badge.warn');
         if (badge) badge.style.display = data.advertencia ? 'inline-flex' : 'none';
@@ -1047,9 +1056,6 @@
   };
 
   // ── Simulador What-If ──────────────────────────────────────────────────────
-  var BUFFER_FACTOR = 0.7;  // pp de mejora por cada 5 min de buffer adicional
-  var VOL_FACTOR    = 0.3;  // pp de mejora por cada 10% de reducción de carga
-
   function updateWhatIf() {
     var buffer = parseInt(document.getElementById('sl-buffer').value, 10) || 0;
     var vol    = parseInt(document.getElementById('sl-vol').value, 10)    || 0;
@@ -1057,53 +1063,67 @@
     document.getElementById('lbl-buffer').textContent = '+' + buffer + ' min';
     document.getElementById('lbl-vol').textContent    = vol + '%';
 
-    var delta = (buffer / 5) * BUFFER_FACTOR + (vol / 10) * VOL_FACTOR;
     var resultEl = document.getElementById('whatif-result');
 
-    if (!chartInst || !PROY_VALS.length) return;
+    // Eliminar dataset What-If previo
+    if (chartInst && chartInst.data.datasets.length > 5) {
+      chartInst.data.datasets.splice(5, 1);
+      chartInst.update('none');
+    }
 
-    if (delta <= 0) {
-      // Eliminar dataset What-If si existe
-      if (chartInst.data.datasets.length > 5) {
-        chartInst.data.datasets.splice(5, 1);
-        chartInst.update('none');
-      }
+    if (buffer === 0 && vol === 0) {
       if (resultEl) resultEl.style.display = 'none';
       return;
     }
 
-    var altProy = PROY_VALS.map(function(v) { return Math.min(100, Math.round((v + delta) * 10) / 10); });
-    var nHist   = HIST_LABELS.length;
-    var nProy   = PROY_LABELS.length;
-    var altData = new Array(nHist - 1).fill(null)
-      .concat([HIST_VALS[HIST_VALS.length - 1] || null])
-      .concat(altProy);
+    var airline  = document.getElementById('sel-airline').value;
+    var year     = document.getElementById('sel-year').value;
+    var horizonte = document.getElementById('sel-horizonte').value;
 
-    var label = 'Escenario +' + delta.toFixed(1) + 'pp';
-    var ds = {
-      label: label,
-      data: altData,
-      borderColor: '#8b5cf6',
-      backgroundColor: 'rgba(139,92,246,.06)',
-      borderWidth: 2,
-      borderDash: [5, 3],
-      pointRadius: 3,
-      pointBackgroundColor: '#8b5cf6',
-      tension: 0.3,
-      fill: false,
-      spanGaps: false,
-    };
+    fetch('/predictivo/whatif', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        aerolinea: airline,
+        anio: year,
+        horizonte: parseInt(horizonte, 10) || 6,
+        buffer_minutos: buffer,
+        reduccion_carga: vol,
+      }),
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.error || !data.whatif) return;
 
-    if (chartInst.data.datasets.length > 5) {
-      chartInst.data.datasets[5] = ds;
-    } else {
+      var altProy = data.proyeccion || [];
+      var delta   = data.whatif.delta;
+      var nHist   = HIST_LABELS.length;
+      var altData = new Array(nHist - 1).fill(null)
+        .concat([HIST_VALS[HIST_VALS.length - 1] || null])
+        .concat(altProy);
+
+      var label = 'Escenario +' + delta.toFixed(1) + 'pp';
+      var ds = {
+        label: label,
+        data: altData,
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139,92,246,.06)',
+        borderWidth: 2,
+        borderDash: [5, 3],
+        pointRadius: 3,
+        pointBackgroundColor: '#8b5cf6',
+        tension: 0.3,
+        fill: false,
+        spanGaps: false,
+      };
       chartInst.data.datasets.push(ds);
-    }
-    chartInst.update('none');
+      chartInst.update('none');
 
-    var deltaEl = document.getElementById('whatif-delta');
-    if (deltaEl) deltaEl.textContent = '+' + delta.toFixed(1) + 'pp OTP proyectado';
-    if (resultEl) resultEl.style.display = 'flex';
+      var deltaEl = document.getElementById('whatif-delta');
+      if (deltaEl) deltaEl.textContent = '+' + delta.toFixed(1) + 'pp OTP proyectado';
+      if (resultEl) resultEl.style.display = 'flex';
+    })
+    .catch(function() {});
   }
 
   window.resetWhatIf = function() {

@@ -89,7 +89,7 @@ Configurar la programación horaria y los parámetros de ejecución del pipeline
 ## Escenarios
 
 ### Camino feliz
-1. El Administrador accede al panel de configuración del pipeline (grupo `pipeline`) y visualiza los valores actuales: horario, `batch_size`, `timeout_mins` y `max_retries`.
+1. El Administrador accede al panel de configuración del pipeline (grupo `pipeline`) y visualiza los valores actuales: horario (`pipeline_schedule`), `pipeline_batch_size`, `pipeline_max_workers` y `pipeline_reintentos`.
 2. Selecciona el preset `@daily` en el selector de horario y ajusta `batch_size` a 5000.
 3. `POST /configuracion/pipeline` valúa la expresión cron con la biblioteca `croniter`.
 4. El sistema persiste los valores en PocketBase (colección `configuracion_sistema`) y sincroniza con Airflow mediante `PATCH /api/v1/dags/aerotrack_elt` con el nuevo `schedule`.

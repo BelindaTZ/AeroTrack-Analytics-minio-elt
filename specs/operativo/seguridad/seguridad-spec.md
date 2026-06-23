@@ -110,7 +110,7 @@ Gestionar la autenticación de usuarios (inicio y cierre de sesión), la edició
 
 ### Camino feliz
 1. El usuario accede a `GET /auth/login`, visualiza el formulario e ingresa su email y contraseña.
-2. `POST /auth/login` valúa las credenciales contra PocketBase: si coinciden, genera un JWT de 24h, establece una cookie HTTP-only y redirige a `/pipeline`.
+2. `POST /auth/login` valúa las credenciales contra PocketBase: si coinciden, genera un JWT de 1h (`max_age=3600`), establece una cookie HTTP-only y redirige a `/pipeline`.
 3. El usuario navega a `GET /auth/perfil`, visualiza sus datos actuales; edita su nombre y email y los guarda mediante `POST /auth/perfil/datos`.
 4. El usuario cambia su contraseña mediante `POST /auth/perfil/password`, proporcionando la contraseña actual y la nueva.
 5. El usuario cierra sesión mediante `POST /auth/logout`; el sistema elimina la cookie y redirige a `/auth/login`.

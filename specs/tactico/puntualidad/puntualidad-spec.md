@@ -3,7 +3,7 @@
 **Módulo:** Puntualidad
 **Prefijo:** PUN
 **Código fuente:** `app/puntualidad/analizar_otp.py`
-**Casos de uso cubiertos:** CU-E03 (Analizar puntualidad OTP por aerolínea), CU-E04 (Comparar aerolíneas en rutas compartidas), CU-E05 (Ver tendencias de puntualidad por período)
+**Casos de uso cubiertos:** CU-E03 (Analizar puntualidad OTP por aerolínea), CU-E04 (Comparar aerolíneas en rutas compartidas), CU-E05 (Ver tendencias de puntualidad por período), CU-O14 (Consultar narrativa IA de un gráfico o KPI)
 **Actor:** Analista de Datos
 
 ---
@@ -172,6 +172,7 @@ Analizar el On-Time Performance (OTP) de las aerolíneas con perspectiva compara
 - CU-E03 (Analizar puntualidad OTP por aerolínea)
 - CU-E04 (Comparar aerolíneas en rutas compartidas)
 - CU-E05 (Ver tendencias de puntualidad por período)
+- CU-O14 (Consultar narrativa IA de un gráfico o KPI — endpoint `GET /puntualidad/narrativa`)
 
 ---
 

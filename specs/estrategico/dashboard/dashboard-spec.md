@@ -3,7 +3,7 @@
 **Módulo:** Dashboard
 **Prefijo:** DSH
 **Código fuente:** `app/dashboard/kpis.py`
-**Casos de uso cubiertos:** CU-E01 (Ver dashboard de KPIs con filtros), CU-E02 (Detectar y visualizar alertas en KPIs)
+**Casos de uso cubiertos:** CU-E01 (Ver dashboard de KPIs con filtros), CU-E02 (Detectar y visualizar alertas en KPIs), CU-O14 (Consultar narrativa IA de un gráfico o KPI)
 **Actor:** Analista de Datos
 
 ---
@@ -65,6 +65,15 @@ Los umbrales se cargan desde PocketBase con `_UMBRALES_TTL = 60` segundos. Al gu
 
 ### RNF-DSH-004 — Gráficos generados con Plotly
 Los gráficos del dashboard usan `plotly.graph_objects` (no Chart.js), a diferencia del resto del sistema. Se renderizan como HTML estático embebido con `plotly.js`.
+
+---
+
+## Funcionalidad 3: Narrativa IA por KPI o gráfico del dashboard (CU-O14)
+
+Generación de narrativa textual contextualizada para KPIs y gráficos del dashboard, servida bajo demanda vía endpoint REST.
+
+### RF-DSH-011 — Endpoint de narrativa IA
+`GET /dashboard/narrativa` recibe filtros `year`, `month`, `airline` y genera una narrativa IA contextualizada usando `generar_narrativa()` de `app/utils/ia_narrativa.py`. Retorna JSON `{texto, proveedor, desde_cache}`. La narrativa se muestra en popover al hacer clic sobre un elemento del dashboard. Permiso: `dashboard:ver`. Cacheada 300s (TTL de narrativas, Principio VII de la constitución).
 
 ---
 
@@ -141,6 +150,7 @@ Proporcionar visibilidad ejecutiva de los indicadores clave de desempeño operac
 
 - CU-E01 (Ver dashboard de KPIs con filtros)
 - CU-E02 (Detectar y visualizar alertas en KPIs)
+- CU-O14 (Consultar narrativa IA de un gráfico o KPI — endpoint `GET /dashboard/narrativa`)
 
 ---
 

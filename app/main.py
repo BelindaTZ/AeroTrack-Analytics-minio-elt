@@ -26,6 +26,11 @@ from app.predictivo.proyeccion_riesgo import router as predictivo_router
 from app.predictivo.informe_ejecutivo import router as informe_router
 from app.asistente_ia.router import router as ia_router
 
+# Lote 5
+from app.clientes.router import router as clientes_router
+from app.socios_api.router import router as socios_router
+from app.socios_api.api import router as api_router
+
 from app.shared.deps import _redirect_to_login, get_current_user, render
 
 app = FastAPI(title="AeroTrack Analytics", version="1.0.0")
@@ -56,6 +61,11 @@ app.include_router(reportes_router,     prefix="/reportes",                  tag
 app.include_router(predictivo_router,   prefix="/predictivo",                tags=["predictivo"])
 app.include_router(informe_router,      prefix="/predictivo",                tags=["predictivo"])
 app.include_router(ia_router,           prefix="/ia",                        tags=["asistente_ia"])
+
+# Lote 5
+app.include_router(clientes_router,     prefix="/clientes",                  tags=["clientes"])
+app.include_router(socios_router,       prefix="/socios",                    tags=["socios_api"])
+app.include_router(api_router,          prefix="",                           tags=["api_publica"])
 
 
 # ── Root redirect ─────────────────────────────────────────────────────────────

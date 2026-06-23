@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.asistente_ia.llm_client import call_llm, get_ia_config, modulo_activo, resolver_api_key
 from app.asistente_ia.rag import parse_intent, build_context, build_messages
+from app.shared.clients import pb_client as pb
 from app.shared.deps import render, require_permission
 from app.shared.utils import audit
 
@@ -45,13 +46,26 @@ def _save_session(session_id: str, history: list[dict]) -> None:
             _sessions.pop(k, None)
 
 
+def _persist_conversacion(user_id: str, pregunta: str, respuesta: str, fuentes: dict) -> None:
+    """Persiste un intercambio en PocketBase. Resiliente: no propaga errores."""
+    try:
+        pb.create_record("conversaciones_asistente", {
+            "usuario_id": user_id,
+            "pregunta": pregunta,
+            "respuesta": respuesta,
+            "fuentes": fuentes,
+        })
+    except Exception:
+        log.warning("No se pudo persistir la conversación en PocketBase", exc_info=True)
+
+
 def _ensure_session(request: Request) -> str:
     return request.cookies.get("chat_session") or secrets.token_hex(16)
 
 
 @router.get("", response_class=HTMLResponse)
 def chat_page(request: Request):
-    _perm_ver(request)
+    user = _perm_ver(request)
     activo    = modulo_activo()
     cfg       = get_ia_config()
     proveedor = cfg.get("ia_proveedor", "groq")
@@ -61,13 +75,29 @@ def chat_page(request: Request):
     session_id = _ensure_session(request)
     history    = _get_session(session_id)
 
+    try:
+        historial_records = pb.list_records_all(
+            "conversaciones_asistente",
+            filter=f'usuario_id="{user["sub"]}"',
+            sort="-created",
+        )[:5]
+    except Exception:
+        historial_records = []
+
+    try:
+        fuentes_records = pb.list_records_all("asistente_fuentes", sort="clave")
+    except Exception:
+        fuentes_records = []
+
     response = render(request, "asistente_ia/chat.html", {
-        "activo":     activo,
-        "proveedor":  proveedor,
-        "modelo":     modelo,
-        "tiene_key":  tiene_key,
-        "session_id": session_id,
-        "history":    history,
+        "activo":           activo,
+        "proveedor":        proveedor,
+        "modelo":           modelo,
+        "tiene_key":        tiene_key,
+        "session_id":       session_id,
+        "history":          history,
+        "historial":        historial_records,
+        "fuentes":          fuentes_records,
     })
     response.set_cookie("chat_session", session_id, httponly=True, max_age=_SESSION_TTL)
     return response
@@ -121,6 +151,8 @@ async def chat_message(request: Request):
     # Mantener solo las últimas 20 interacciones (10 pares)
     _save_session(session_id, new_history[-20:])
 
+    _persist_conversacion(user["sub"], question, respuesta, filtros)
+
     audit.registrar(
         user["sub"], user["email"], "consultar_ia", "asistente_ia",
         recurso_tipo="chat", recurso_id=session_id[:8],
@@ -142,3 +174,46 @@ async def reset_session(request: Request):
     response = JSONResponse({"session_id": new_id})
     response.set_cookie("chat_session", new_id, httponly=True, max_age=_SESSION_TTL)
     return response
+
+
+@router.get("/historial")
+def historial(request: Request):
+    user = _perm_ver(request)
+    records = pb.list_records_all(
+        "conversaciones_asistente",
+        filter=f'usuario_id="{user["sub"]}"',
+        sort="-created",
+    )
+    return JSONResponse(records[:20])
+
+
+@router.get("/fuentes")
+def fuentes(request: Request):
+    _perm_ver(request)
+    try:
+        records = pb.list_records_all("asistente_fuentes", sort="clave")
+    except Exception:
+        records = []
+    return JSONResponse(records)
+
+
+@router.post("/fuentes/toggle")
+async def toggle_fuente(request: Request):
+    _perm_exec(request)
+    body = await request.json()
+    clave = str(body.get("clave", "")).strip()
+    if not clave:
+        return JSONResponse({"error": "clave requerida"}, status_code=400)
+    try:
+        records = pb.list_records_all("asistente_fuentes", filter=f'clave="{clave}"')
+        if not records:
+            return JSONResponse({"error": f"Fuente '{clave}' no encontrada"}, status_code=404)
+        record = records[0]
+        nueva_activa = not record.get("activa", False)
+        pb.update_record("asistente_fuentes", record["id"], {"activa": nueva_activa})
+        # Invalidar cache en rag.py
+        from app.asistente_ia.rag import _SOURCE_CACHE
+        _SOURCE_CACHE["data"] = None
+        return JSONResponse({"clave": clave, "activa": nueva_activa})
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)

@@ -21,6 +21,8 @@ templates.env.loader = FileSystemLoader([
     str(_BASE / "reportes" / "templates"),
     str(_BASE / "predictivo" / "templates"),
     str(_BASE / "asistente_ia" / "templates"),
+    str(_BASE / "clientes" / "templates"),
+    str(_BASE / "socios_api" / "templates"),
 ])
 
 # Tablas del modelo dimensional con sus PKs e iconos
@@ -52,6 +54,8 @@ MODULOS_SIDEBAR = [
     {"clave": "reportes",           "label": "Reportes",           "icon": "bi-file-earmark-pdf",   "url": "/reportes",         "entrega": 2},
     {"clave": "predictivo",         "label": "Predictivo IA",      "icon": "bi-graph-up-arrow",     "url": "/predictivo",       "entrega": 3},
     {"clave": "asistente_ia",       "label": "Asistente IA",       "icon": "bi-cpu-fill",           "url": "/ia",               "entrega": 3},
+    {"clave": "clientes",      "label": "Clientes",      "icon": "bi-people-fill",        "url": "/clientes",       "entrega": 4},
+    {"clave": "socios_api",    "label": "Socios API",    "icon": "bi-link-45deg",         "url": "/socios",         "entrega": 4},
 ]
 
 # Menú de administración (requiere permiso seguridad.ver)

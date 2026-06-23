@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Socios API — AeroTrack Analytics{% endblock %}
+
+{% block breadcrumb %}
+<span class="bc-current">Socios API</span>
+{% endblock %}
+
+{% block head_extra %}
+<style>
+  .api-section { margin-bottom:32px; }
+  .api-section-title { font-size:15px; font-weight:700; margin:0 0 14px; display:flex; align-items:center; gap:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <h1 style="font-size:20px;font-weight:700;margin:0">Socios API</h1>
+  <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-clave">
+    <i class="bi bi-plus-lg"></i> Nueva clave
+  </button>
+</div>
+
+{% if claves %}
+<div class="api-section">
+  <h2 class="api-section-title"><i class="bi bi-key" style="color:var(--at-blue-500)"></i> Claves API</h2>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    {% for c in claves %}
+    <div class="at-card" style="padding:16px 20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:14px;font-weight:600">{{ c.nombre }}</div>
+          <div style="font-size:11.5px;color:var(--at-muted);margin-top:2px;font-family:'JetBrains Mono',monospace">
+            ID: {{ c.id[:12] }}…
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="at-badge {% if c.activa %}at-badge-success{% else %}at-badge-failed{% endif %}">
+            <span class="badge-dot"></span>{{ 'Activa' if c.activa else 'Revocada' }}
+          </span>
+          {% if c.activa %}
+          <button class="btn-at-ghost text-danger" onclick="revocar('{{ c.id }}')" style="font-size:12px">
+            <i class="bi bi-x-circle"></i> Revocar
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--at-border)">
+        <div style="font-size:11.5px;color:var(--at-muted)">
+          <span style="display:block;font-weight:600;color:var(--at-sub)">Consultas hoy</span>
+          <span class="at-code">{{ c.consultas_hoy or 0 }} / {{ c.limite_diario or 1000 }}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--at-muted)">
+          <span style="display:block;font-weight:600;color:var(--at-sub)">Total consultas</span>
+          <span class="at-code">{{ c.consultas_total or 0 }}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--at-muted)">
+          <span style="display:block;font-weight:600;color:var(--at-sub)">Expiración</span>
+          <span>{{ (c.expiracion or '—')[:10] }}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--at-muted)">
+          <span style="display:block;font-weight:600;color:var(--at-sub)">Última consulta</span>
+          <span>{{ (c.ultima_consulta or '—')[:19].replace('T',' ') }}</span>
+        </div>
+      </div>
+
+      {% set whs = webhooks_por_clave.get(c.id, []) %}
+      {% if whs %}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--at-border)">
+        <div style="font-size:11px;font-weight:600;color:var(--at-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Webhooks</div>
+        {% for w in whs %}
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.03)">
+          <span style="flex:1">{{ w.nombre }}</span>
+          <span class="at-code" style="font-size:11px">{{ w.url[:40] }}…</span>
+          <span class="at-badge {% if w.activo %}at-badge-success{% else %}at-badge-failed{% endif %}" style="font-size:10px">
+            {{ 'Activo' if w.activo else 'Inactivo' }}
+          </span>
+          <span class="at-badge at-badge-pending" style="font-size:10px;text-transform:capitalize">{{ w.ultimo_estado or 'pendiente' }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="at-card at-empty">
+  <i class="bi bi-key at-empty-icon"></i>
+  <strong>Sin claves API</strong>
+  <p>Crea tu primera clave para habilitar acceso a socios.</p>
+</div>
+{% endif %}
+
+<hr class="my-4">
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <h2 class="api-section-title" style="margin:0"><i class="bi bi-webhook" style="color:var(--at-blue-500)"></i> Webhooks</h2>
+  <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-webhook">
+    <i class="bi bi-plus-lg"></i> Nuevo webhook
+  </button>
+</div>
+
+<!-- Modal nueva clave -->
+<div class="modal fade" id="modal-clave" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Nueva clave API</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form id="form-clave">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+          <input class="at-input" name="nombre" placeholder="Nombre del socio" required>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <input class="at-input" name="limite_diario" type="number" value="1000" placeholder="Límite diario">
+            <input class="at-input" name="expiracion" type="date" placeholder="Expiración (opcional)">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-at-primary">Crear clave</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nuevo webhook -->
+<div class="modal fade" id="modal-webhook" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Nuevo webhook</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form id="form-webhook">
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+          <input class="at-input" name="nombre" placeholder="Nombre descriptivo" required>
+          <select class="at-input" name="clave_id" required>
+            <option value="">Seleccionar clave API...</option>
+            {% for c in claves %}
+            <option value="{{ c.id }}">{{ c.nombre }}</option>
+            {% endfor %}
+          </select>
+          <input class="at-input" name="url" type="url" placeholder="URL del webhook" required>
+          <div style="font-size:12px;color:var(--at-muted)">Eventos a suscribir:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            {% for ev in eventos_disponibles %}
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px">
+              <input type="checkbox" name="eventos" value="{{ ev }}"> {{ ev }}
+            </label>
+            {% endfor %}
+          </div>
+          <input class="at-input" name="clave_hmac" placeholder="Clave HMAC para firma" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn-at-primary">Crear webhook</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function revocar(id) {
+  if (!confirm('¿Revocar esta clave API? Los webhooks asociados dejarán de funcionar.')) return;
+  fetch('/socios/claves/'+id+'/revocar', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    credentials: 'same-origin',
+  }).then(function(r){ if(r.ok) window.location.reload(); });
+}
+
+document.getElementById('form-clave')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  var data = {};
+  new FormData(this).forEach(function(v,k){ data[k] = v; });
+  fetch('/socios/claves', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(data), credentials:'same-origin',
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if (d.error) { alert(d.error); return; }
+    alert('Clave generada:\n\n'+d.clave_plana+'\n\n'+d.advertencia);
+    window.location.reload();
+  });
+});
+
+document.getElementById('form-webhook')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  var data = {};
+  var fd = new FormData(this);
+  fd.forEach(function(v,k){
+    if (k === 'eventos') {
+      if (!data.eventos) data.eventos = [];
+      data.eventos.push(v);
+    } else {
+      data[k] = v;
+    }
+  });
+  fetch('/socios/webhooks', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(data), credentials:'same-origin',
+  })
+  .then(function(r){ if(r.ok) window.location.reload(); else return r.json().then(function(d){ throw new Error(d.error); }); })
+  .catch(function(err){ alert('Error: '+err.message); });
+});
+</script>
+{% endblock %}

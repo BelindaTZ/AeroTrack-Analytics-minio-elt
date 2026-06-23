@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import sys; sys.stdout.reconfigure(encoding="utf-8")
 """
 AeroTrack Analytics â€” Setup colecciones de administraciÃ³n en PocketBase
@@ -241,7 +241,8 @@ def schema_auditoria(app_users_id=""):
              "options": {"maxSelect": 1,
                          "values": ["seguridad","pipeline_elt","modelo_dimensional",
                                     "dashboard","puntualidad","rutas","cancelaciones",
-                                    "reportes","predictivo","configuracion","monitoreo"]}},
+                                    "reportes","predictivo","configuracion","monitoreo",
+                                    "clientes","socios_api"]}},
             {"name": "recurso_tipo", "type": "text",   "required": False, "options": {}},
             {"name": "recurso_id",   "type": "text",   "required": False, "options": {}},
             {"name": "detalle",      "type": "text",   "required": False, "options": {}},
@@ -272,6 +273,8 @@ MODULOS = [
     {"clave":"predictivo",         "nombre_display":"Predictivo",         "icono":"bi-graph-up-arrow", "orden":9, "activo":True},
     {"clave":"configuracion",      "nombre_display":"ConfiguraciÃ³n",      "icono":"bi-sliders",        "orden":10,"activo":True},
     {"clave":"monitoreo",          "nombre_display":"Monitoreo",          "icono":"bi-activity",       "orden":11,"activo":True},
+    {"clave":"clientes",           "nombre_display":"Clientes",           "icono":"bi-people",         "orden":12,"activo":True},
+    {"clave":"socios_api",         "nombre_display":"Socios API",         "icono":"bi-link-45deg",     "orden":13,"activo":True},
 ]
 
 PERMISOS_DEF = {
@@ -286,6 +289,8 @@ PERMISOS_DEF = {
     "predictivo":         ["ver","exportar","configurar"],
     "configuracion":      ["ver","configurar"],
     "monitoreo":          ["ver"],
+    "clientes":           ["ver","crear","editar","eliminar","exportar"],
+    "socios_api":         ["ver","crear","configurar","eliminar"],
 }
 
 ANALISTA = {
@@ -445,11 +450,174 @@ def main():
     for cfg in CONFIG:
         rid = upsert("configuracion_sistema", cfg, "clave", cfg["clave"])
         if rid:
-            n_cfg += 1
-            if cfg.get("modulo") == "ia":
-                n_ia += 1
-    log(f"{n_cfg} configuraciones verificadas")
-    log(f"{n_ia} configuraciones IA agregadas/verificadas")
+                n_cfg += 1
+                if cfg.get("modulo") == "ia":
+                    n_ia += 1
+        log(f"{n_cfg} configuraciones verificadas")
+        log(f"{n_ia} configuraciones IA agregadas/verificadas")
+
+    def schema_conversaciones_asistente(app_users_id=""):
+        """Historial de conversaciones del asistente IA (CU-O14)."""
+        return {
+            "name": "conversaciones_asistente", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                _rel_field("usuario_id", app_users_id, required=True),
+                {"name": "pregunta",  "type": "text", "required": True,  "options": {}},
+                {"name": "respuesta", "type": "text", "required": True,  "options": {}},
+                {"name": "fuentes",   "type": "json", "required": False, "options": {"maxSize": 2000000}},
+            ]
+        }
+
+
+    def schema_asistente_fuentes():
+        """Fuentes de conocimiento toggleables para el asistente IA (CU-T09)."""
+        return {
+            "name": "asistente_fuentes", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                {"name": "clave",       "type": "text",   "required": True,  "options": {}},
+                {"name": "nombre",      "type": "text",   "required": True,  "options": {}},
+                {"name": "descripcion", "type": "text",   "required": False, "options": {}},
+                {"name": "tabla",       "type": "text",   "required": True,  "options": {}},
+                {"name": "tipo",        "type": "select", "required": True,
+                 "options": {"maxSelect": 1, "values": ["agg", "fact"]}},
+                {"name": "activa",      "type": "bool",   "required": False, "options": {}},
+            ]
+        }
+
+
+    # ── Clientes ─────────────────────────────────────────────────────────────────
+
+    def schema_pb_clientes():
+        return {
+            "name": "pb_clientes", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                {"name": "nombre",          "type": "text",   "required": True,  "options": {}},
+                {"name": "iata",            "type": "text",   "required": True,  "unique": True, "options": {}},
+                {"name": "contacto_email",  "type": "email",  "required": True,  "options": {}},
+                {"name": "tipo_servicio",   "type": "select", "required": True,
+                 "options": {"maxSelect": 1, "values": ["basico","profesional","enterprise"]}},
+                {"name": "fecha_inicio",    "type": "date",   "required": True,  "options": {}},
+                {"name": "activo",          "type": "bool",   "required": False, "options": {}},
+                {"name": "notas",           "type": "text",   "required": False, "options": {}},
+            ]
+        }
+
+    def schema_pb_suscripciones(pb_clientes_id=""):
+        return {
+            "name": "pb_suscripciones", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                _rel_field("cliente_id", pb_clientes_id, required=True),
+                {"name": "tipo_reporte",   "type": "select", "required": True,
+                 "options": {"maxSelect": 1, "values": ["pdf","excel","csv"]}},
+                {"name": "frecuencia",     "type": "select", "required": True,
+                 "options": {"maxSelect": 1, "values": ["diaria","semanal","mensual"]}},
+                {"name": "filtros",        "type": "json",   "required": False, "options": {"maxSize": 2000000}},
+                {"name": "activa",         "type": "bool",   "required": False, "options": {}},
+                {"name": "proxima_entrega","type": "date",   "required": False, "options": {}},
+            ]
+        }
+
+    def schema_pb_demo_tokens():
+        return {
+            "name": "pb_demo_tokens", "type": "base",
+            "listRule": "",
+            "createRule": "",
+            "schema": [
+                {"name": "cliente_nombre","type": "text",   "required": True,  "options": {}},
+                {"name": "token",         "type": "text",   "required": True,  "unique": True, "options": {}},
+                {"name": "iata_demo",     "type": "text",   "required": True,  "options": {}},
+                {"name": "expira_en",     "type": "date",   "required": True,  "options": {}},
+                {"name": "usado",         "type": "bool",   "required": False, "options": {}},
+            ]
+        }
+
+    def schema_pb_entregas_historial(pb_suscripciones_id=""):
+        return {
+            "name": "pb_entregas_historial", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                _rel_field("suscripcion_id", pb_suscripciones_id, required=True),
+                {"name": "fecha_entrega", "type": "date",   "required": True,  "options": {}},
+                {"name": "tipo_reporte",  "type": "text",   "required": False, "options": {}},
+                {"name": "estado",        "type": "select", "required": True,
+                 "options": {"maxSelect": 1, "values": ["exitoso","fallido"]}},
+                {"name": "detalle_error", "type": "text",   "required": False, "options": {}},
+                {"name": "url_descarga",  "type": "text",   "required": False, "options": {}},
+            ]
+        }
+
+    def schema_pb_api_claves():
+        return {
+            "name": "pb_api_claves", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                {"name": "nombre",          "type": "text",   "required": True,  "options": {}},
+                {"name": "clave_hash",      "type": "text",   "required": True,  "options": {}},
+                {"name": "permisos",        "type": "json",   "required": False, "options": {"maxSize": 2000000}},
+                {"name": "limite_diario",   "type": "number", "required": False, "options": {}},
+                {"name": "consultas_hoy",   "type": "number", "required": False, "options": {}},
+                {"name": "consultas_total", "type": "number", "required": False, "options": {}},
+                {"name": "ultima_consulta", "type": "date",   "required": False, "options": {}},
+                {"name": "expiracion",      "type": "date",   "required": False, "options": {}},
+                {"name": "activa",          "type": "bool",   "required": False, "options": {}},
+            ]
+        }
+
+    def schema_pb_api_webhooks(pb_api_claves_id=""):
+        return {
+            "name": "pb_api_webhooks", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                {"name": "nombre",      "type": "text",   "required": True,  "options": {}},
+                _rel_field("clave_id", pb_api_claves_id, required=True),
+                {"name": "url",         "type": "text",   "required": True,  "options": {}},
+                {"name": "eventos",     "type": "json",   "required": True,  "options": {"maxSize": 2000000}},
+                {"name": "clave_hmac",  "type": "text",   "required": True,  "options": {}},
+                {"name": "activo",      "type": "bool",   "required": False, "options": {}},
+                {"name": "ultimo_envio","type": "date",   "required": False, "options": {}},
+                {"name": "ultimo_estado","type": "select","required": False,
+                 "options": {"maxSelect": 1, "values": ["exitoso","fallido","pendiente"]}},
+            ]
+        }
+
+    def schema_pb_api_historial(pb_api_claves_id=""):
+        return {
+            "name": "pb_api_historial", "type": "base",
+            "listRule": "@request.auth.id != ''",
+            "createRule": "",
+            "schema": [
+                _rel_field("clave_id", pb_api_claves_id),
+                {"name": "endpoint",       "type": "text",   "required": False, "options": {}},
+                {"name": "metodo",         "type": "text",   "required": False, "options": {}},
+                {"name": "codigo_respuesta","type": "number","required": False, "options": {}},
+                {"name": "tiempo_ms",      "type": "number", "required": False, "options": {}},
+                {"name": "ip_origen",      "type": "text",   "required": False, "options": {}},
+            ]
+        }
+
+    FUENTES_IA = [
+        {"clave":"otp_global",             "nombre":"OTP Global",              "descripcion":"KPIs y tendencias OTP globales por aerolÃ­nea y mes",     "tabla":"agg_otp_aerolinea_mes",        "tipo":"agg", "activa":True},
+        {"clave":"cancelaciones",          "nombre":"Cancelaciones FAA",       "descripcion":"Cancelaciones por cÃ³digo FAA",                           "tabla":"agg_cancelaciones_causa",      "tipo":"agg", "activa":True},
+        {"clave":"cancelaciones_aerolinea","nombre":"Canc. x AerolÃ­nea",      "descripcion":"Cancelaciones por aerolÃ­nea y causa",                    "tabla":"agg_cancelaciones_aerolinea_causa","tipo":"agg","activa":True},
+        {"clave":"cancelaciones_ruta",     "nombre":"Canc. x Ruta",            "descripcion":"Rutas con mayor tasa de cancelaciÃ³n",                     "tabla":"agg_cancelaciones_ruta",       "tipo":"agg", "activa":True},
+        {"clave":"causas_retraso",         "nombre":"Causas de Retraso",       "descripcion":"Minutos de retraso por causa (carrier, clima, NAS, etc.)","tabla":"agg_causas_retraso_mes",       "tipo":"agg", "activa":True},
+        {"clave":"rutas_eficiencia",       "nombre":"Eficiencia x Ruta",       "descripcion":"Rutas mÃ¡s y menos eficientes",                            "tabla":"agg_rutas_eficiencia",         "tipo":"agg", "activa":True},
+        {"clave":"desvios",                "nombre":"DesvÃ­os x Ruta",          "descripcion":"Rutas con mÃ¡s desvÃ­os",                                 "tabla":"agg_desvios_ruta",             "tipo":"agg", "activa":True},
+        {"clave":"otp_dia_semana",         "nombre":"OTP x DÃ­a Semana",        "descripcion":"OTP por dÃ­a de la semana (global)",                      "tabla":"agg_otp_dia_semana",           "tipo":"agg", "activa":True},
+        {"clave":"otp_aerolinea_dia",      "nombre":"OTP AerolÃ­nea x DÃ­a",    "descripcion":"OTP por aerolÃ­nea y dÃ­a de la semana",                  "tabla":"agg_otp_aerolinea_dia_semana", "tipo":"agg", "activa":True},
+        {"clave":"detalle_vuelos",         "nombre":"Detalle de Vuelos",        "descripcion":"Detalle dinÃ¡mico de vuelos individuales",                "tabla":"fact_vuelo",                   "tipo":"fact","activa":True},
+    ]
 
     # â”€â”€ Migrar reglas de seguridad de auditorÃ­a (si la colecciÃ³n ya existe) â”€â”€
     print("\n[6b/9] Reglas de seguridad de 'auditoria'...")
@@ -500,17 +668,92 @@ def main():
 
     # â”€â”€ auditoria (despuÃ©s de app_users para garantizar el ID) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     print("\n[9/9] ColecciÃ³n 'auditoria'...")
-    # Refrescar app_users_id: si se acaba de crear, ahora existe
     app_users_id_final = S.get(f"{BASE}/api/collections/app_users").json().get("id", app_users_id)
     create_col(schema_auditoria(app_users_id_final), cols)
 
-    # â”€â”€ Resumen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â”€â”€ conversaciones_asistente (CU-O14) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    print("\n[10/10] ColecciÃ³n 'conversaciones_asistente'...")
+    app_users_id_final2 = S.get(f"{BASE}/api/collections/app_users").json().get("id", app_users_id)
+    create_col(schema_conversaciones_asistente(app_users_id_final2), cols)
+
+    # -- Migrar campos json existentes (maxSize requerido en PB 0.22) --
+    for _col_name, _field_name in [
+        ("conversaciones_asistente", "fuentes"),
+    ]:
+        _col = get_col(_col_name)
+        if _col:
+            _schema = _col.get("schema", [])
+            _changed = False
+            for _f in _schema:
+                if _f["name"] == _field_name and _f["type"] == "json":
+                    _opts = _f.get("options", {})
+                    if _opts.get("maxSize") is None:
+                        _f["options"] = {"maxSize": 2000000}
+                        _changed = True
+            if _changed:
+                _r = S.patch(f"{BASE}/api/collections/{_col['id']}", json={**_col, "schema": _schema})
+                if _r.ok:
+                    log(f"'{_col_name}'.{_field_name} -- maxSize=2000000 added")
+
+
+    # â”€â”€ asistente_fuentes (CU-T09) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    print("\n[11/11] ColecciÃ³n 'asistente_fuentes'...")
+    create_col(schema_asistente_fuentes(), cols)
+    n_fuentes = 0
+    for f in FUENTES_IA:
+        fid = upsert("asistente_fuentes", f, "clave", f["clave"])
+        if fid:
+            n_fuentes += 1
+    log(f"{n_fuentes} fuentes de IA verificadas")
+
+    # -- Agregar clientes y socios_api al select modulo de auditoria --
+    update_select_values("auditoria", "modulo",
+                         ["seguridad","pipeline_elt","modelo_dimensional",
+                          "dashboard","puntualidad","rutas","cancelaciones",
+                          "reportes","predictivo","configuracion","monitoreo",
+                          "clientes","socios_api"])
+
+    # -- pb_clientes --
+    print("\n[12/15] Coleccion 'pb_clientes'...")
+    create_col(schema_pb_clientes(), cols)
+
+    # -- pb_suscripciones --
+    print("\n[13/15] Coleccion 'pb_suscripciones'...")
+    pb_clientes_id = cols.get("pb_clientes", "")
+    create_col(schema_pb_suscripciones(pb_clientes_id), cols)
+    add_fields_if_missing("pb_suscripciones", [
+        _rel_field("cliente_id", pb_clientes_id, required=True),
+    ])
+
+    # -- pb_demo_tokens --
+    print("\n[14/15] Coleccion 'pb_demo_tokens'...")
+    create_col(schema_pb_demo_tokens(), cols)
+
+    # -- pb_entregas_historial --
+    print("\n[15/15] Coleccion 'pb_entregas_historial'...")
+    pb_suscripciones_id = cols.get("pb_suscripciones", "")
+    create_col(schema_pb_entregas_historial(pb_suscripciones_id), cols)
+
+    # -- pb_api_claves --
+    print("\n[16/18] Coleccion 'pb_api_claves'...")
+    create_col(schema_pb_api_claves(), cols)
+
+    # -- pb_api_webhooks --
+    print("\n[17/18] Coleccion 'pb_api_webhooks'...")
+    pb_api_claves_id = cols.get("pb_api_claves", "")
+    create_col(schema_pb_api_webhooks(pb_api_claves_id), cols)
+
+    # -- pb_api_historial --
+    print("\n[18/18] Coleccion 'pb_api_historial'...")
+    create_col(schema_pb_api_historial(pb_api_claves_id), cols)
+
     cols_final = existing_cols()
     cfg_total  = len(records("configuracion_sistema"))
     print("\n" + "="*60)
     print("  Setup completado OK")
     print(f"  Roles: {len(role_ids)} | Modulos: {len(mod_ids)} | Permisos: {len(perm_ids)}")
     print(f"  Configuraciones totales: {cfg_total} (IA: {n_ia})")
+    print(f"  Fuentes IA: {n_fuentes}")
     print(f"  Colecciones en PocketBase: {len(cols_final)}")
     print(f"  Verifica en: {BASE}/_/")
     print("="*60 + "\n")

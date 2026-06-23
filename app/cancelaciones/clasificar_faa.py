@@ -129,7 +129,7 @@ def _compute_page(filtros: dict) -> dict:
 
     has_airline = "airline" in filtros and filtros["airline"]
     if has_airline:
-        df_canc = load_agg("agg_cancelaciones_causa_aerolinea", filtros)
+        df_canc = load_agg("agg_cancelaciones_aerolinea_causa", filtros)
     else:
         df_canc = load_agg("agg_cancelaciones_causa", filtros)
     df_kpi  = load_agg("agg_kpi_global_dia", {k: v for k, v in filtros.items() if k != "airline"})
