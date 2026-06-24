@@ -75,11 +75,11 @@ El Administrador accede al panel de clientes y ve las métricas de la cartera (t
 
 ## Criterios de aceptación
 
-1. Dado que el Administrador crea un cliente con código IATA único, cuando guarda, entonces el sistema registra el cliente y lo muestra en la lista con estado activo.
-2. Dado que un cliente tiene suscripción activa con frecuencia mensual, cuando se crea la suscripción, entonces el sistema calcula la próxima fecha de entrega a 30 días.
-3. Dado que el Administrador genera un token de demo con 7 días de expiración, cuando el prospecto accede a la URL dentro del plazo, entonces visualiza el dashboard filtrado por su aerolínea y el token se marca como usado.
-4. Dado que un token de demo está expirado, cuando se accede a su URL, entonces el sistema redirige a inicio de sesión con mensaje de error.
-5. Dado que el Administrador solicita el historial de entregas de un cliente, entonces el sistema retorna los registros ordenados por fecha descendente.
+- **CU-T10:** Dado que el Administrador crea un cliente con código IATA único, cuando guarda, entonces el sistema registra el cliente y lo muestra en la lista con estado activo.
+- **CU-T11:** Dado que un cliente tiene suscripción activa con frecuencia mensual, cuando se crea la suscripción, entonces el sistema calcula la próxima fecha de entrega a 30 días.
+- **CU-O15:** Dado que el Administrador genera un token de demo con 7 días de expiración, cuando el prospecto accede a la URL dentro del plazo, entonces visualiza el dashboard filtrado por su aerolínea y el token se marca como usado.
+- **CU-O15:** Dado que un token de demo está expirado, cuando se accede a su URL, entonces el sistema redirige a inicio de sesión con mensaje de error.
+- **CU-O16:** Dado que el Administrador solicita el historial de entregas de un cliente, entonces el sistema retorna los registros ordenados por fecha descendente.
 
 ## Dependencias
 

@@ -88,11 +88,11 @@ El Administrador accede al panel de socios, crea una clave para "AeroData Partne
 
 ## Criterios de aceptación
 
-1. Dado que el Administrador crea una clave API, cuando el socio la usa en un endpoint público de consulta, entonces el sistema valida existencia, estado activo, no expiración y límite, retorna los datos solicitados y registra la llamada en el historial.
-2. Dado que una clave supera su límite diario de 1000 consultas, cuando el socio realiza la petición adicional, entonces el sistema retorna 429.
-3. Dado que se configura un webhook para el evento de pipeline completado, cuando el pipeline termina exitosamente, entonces el sistema envía un payload JSON firmado con HMAC-SHA256 a la URL del socio.
-4. Dado que el Administrador consulta el historial filtrado por endpoint de OTP, entonces el sistema muestra solo las llamadas a ese endpoint.
-5. Dado que el Administrador revoca una clave, cuando el socio intenta usarla, entonces el sistema retorna 401.
+- **CU-T12:** Dado que el Administrador crea una clave API, cuando el socio la usa en un endpoint público de consulta, entonces el sistema valida existencia, estado activo, no expiración y límite, retorna los datos solicitados y registra la llamada en el historial.
+- **CU-T12:** Dado que una clave supera su límite diario de 1000 consultas, cuando el socio realiza la petición adicional, entonces el sistema retorna 429.
+- **CU-T13:** Dado que se configura un webhook para el evento de pipeline completado, cuando el pipeline termina exitosamente, entonces el sistema envía un payload JSON firmado con HMAC-SHA256 a la URL del socio.
+- **CU-O18:** Dado que el Administrador consulta el historial filtrado por endpoint de OTP, entonces el sistema muestra solo las llamadas a ese endpoint.
+- **CU-O17:** Dado que el Administrador revoca una clave, cuando el socio intenta usarla, entonces el sistema retorna 401.
 
 ## Dependencias
 

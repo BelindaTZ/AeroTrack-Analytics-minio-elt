@@ -135,6 +135,7 @@ Proporcionar visibilidad ejecutiva de los indicadores clave de desempeño operac
 
 - **CU-E01:** Dado que el Analista accede al dashboard, cuando los datos están disponibles en las agregaciones, entonces el sistema muestra los KPIs globales, gráficos y tabla de aerolíneas con filtros por año, mes y aerolínea.
 - **CU-E02:** Dado que existen umbrales configurados en el repositorio de configuración, cuando un KPI cruza el umbral, entonces el sistema muestra una alerta visual (borde rojo, indicador) en la tarjeta o fila de tabla correspondiente.
+- **CU-O14:** Consultar narrativa IA de un gráfico o KPI.
 
 ---
 
