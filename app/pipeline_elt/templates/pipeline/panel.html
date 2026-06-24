@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Pipeline ELT âEUR” AeroTrack Analytics{% endblock %}
+{% block title %}Pipeline ELT — AeroTrack Analytics{% endblock %}
 
 {% block breadcrumb %}
 <span class="bc-current">Pipeline ELT</span>
@@ -7,7 +7,7 @@
 
 {% block head_extra %}
 <style>
-  /* â”EURâ”EUR Hero execute section â”EURâ”EUR */
+  /* ── Hero execute section ── */
   .pipeline-hero {
     background: linear-gradient(135deg, #0f1117 0%, #141822 60%, #0d1a2e 100%);
     border: 1px solid rgba(255,255,255,.08);
@@ -74,7 +74,7 @@
 
   .hero-actions { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
 
-  /* â”EURâ”EUR Progress bar track â”EURâ”EUR */
+  /* ── Progress bar track ── */
   .pipeline-progress-section {
     background: var(--at-surface);
     border: 1px solid var(--at-border);
@@ -93,7 +93,7 @@
     font-size: 12px; font-weight: 600; color: var(--at-blue-500);
   }
 
-  /* â”EURâ”EUR Task timeline â”EURâ”EUR */
+  /* ── Task timeline ── */
   .task-timeline { display: flex; flex-direction: column; gap: 10px; }
   .task-timeline-item {
     display: grid;
@@ -152,10 +152,10 @@
   }
   .task-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
-  /* â”EURâ”EUR Recent runs mini-table â”EURâ”EUR */
+  /* ── Recent runs mini-table ── */
   .runs-section { margin-top: 24px; }
 
-  /* â”EURâ”EUR Elapsed counter â”EURâ”EUR */
+  /* ── Elapsed counter ── */
   .at-elapsed-counter {
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px; font-weight: 500; color: var(--at-blue-500);
@@ -190,9 +190,9 @@
   <div class="hero-copy">
     <div class="hero-dag-id">DAG / {{ dag_id }}</div>
     <h1 class="hero-title">
-      {% if is_running %}Ejecutando pipelineâEUR¦
-      {% elif is_success %}EjecuciÃ³n completada
-      {% elif is_failed %}EjecuciÃ³n fallida
+      {% if is_running %}Ejecutando pipeline…
+      {% elif is_success %}Ejecución completada
+      {% elif is_failed %}Ejecución fallida
       {% elif state == 'no_runs' %}Listo para ejecutar
       {% else %}{{ state | capitalize }}
       {% endif %}
@@ -205,10 +205,10 @@
         {% elif is_failed %}at-badge-failed
         {% else %}at-badge-pending{% endif %}">
         <span class="badge-dot" aria-hidden="true"></span>
-        {% if is_running %}En ejecuciÃ³n
+        {% if is_running %}En ejecución
         {% elif is_success %}Completado
         {% elif is_failed %}Error
-        {% else %}Sin ejecuciÃ³n{% endif %}
+        {% else %}Sin ejecución{% endif %}
       </span>
       <!-- Run ID -->
       {% if estado and estado.dag_run_id %}
@@ -232,9 +232,9 @@
               class="btn-at-hero"
               id="btn-trigger"
               {% if is_running %}disabled{% endif %}
-              aria-label="{% if is_running %}Pipeline en ejecuciÃ³n{% else %}Ejecutar pipeline ahora{% endif %}">
+              aria-label="{% if is_running %}Pipeline en ejecución{% else %}Ejecutar pipeline ahora{% endif %}">
         <i class="bi bi-{% if is_running %}hourglass-split{% else %}play-fill{% endif %}" aria-hidden="true"></i>
-        {% if is_running %}En ejecuciÃ³nâEUR¦{% else %}Ejecutar ahora{% endif %}
+        {% if is_running %}En ejecución…{% else %}Ejecutar ahora{% endif %}
       </button>
     </form>
     <a href="/pipeline/historial" class="btn-at-ghost" style="font-size:12px">
@@ -251,7 +251,7 @@
   <div class="progress-header">
     <span class="progress-label">
       <i class="bi bi-activity me-2" style="color:var(--at-blue-500)" aria-hidden="true"></i>
-      Progreso de ejecuciÃ³n
+      Progreso de ejecución
     </span>
     <span class="progress-pct" aria-label="{{ pct }}% completado">{{ pct }}%</span>
   </div>
@@ -297,16 +297,16 @@
       <div class="task-info">
         <div class="task-id">{{ task.task_id }}</div>
         <div class="task-state-label">
-          {% if ts == 'running' %}En ejecuciÃ³n
+          {% if ts == 'running' %}En ejecución
           {% elif ts == 'success' %}Completado exitosamente
-          {% elif ts == 'failed' %}FallÃ³ âEUR” ver logs
+          {% elif ts == 'failed' %}Falló — ver logs
           {% elif ts == 'queued' %}En cola de espera
           {% elif ts == 'skipped' %}Omitido
           {% else %}Pendiente{% endif %}
         </div>
         {% if ts == 'running' %}
         <span class="task-elapsed" aria-live="polite">
-          Tiempo: <span class="at-elapsed-counter" data-start="{{ task.start_date or '' }}">âEUR¦</span>
+          Tiempo: <span class="at-elapsed-counter" data-start="{{ task.start_date or '' }}">…</span>
         </span>
         {% endif %}
       </div>
@@ -348,7 +348,7 @@
     <div class="at-table-header">
       <span class="at-table-title">
         <i class="bi bi-clock-history me-2" style="color:var(--at-muted)" aria-hidden="true"></i>
-        Ãšltimas ejecuciones
+        Últimas ejecuciones
       </span>
       <a href="/pipeline/historial" class="btn-at-ghost" style="font-size:12px">
         Ver todo <i class="bi bi-chevron-right" aria-hidden="true"></i>
@@ -380,10 +380,10 @@
               </span>
             </td>
             <td class="at-code" style="font-size:12px;color:var(--at-muted)">
-              {{ (run.start_date or '')[:19].replace('T', ' ') or 'âEUR”' }}
+              {{ (run.start_date or '')[:19].replace('T', ' ') or '—' }}
             </td>
             <td class="at-code" style="font-size:12px;color:var(--at-muted)">
-              {{ (run.end_date or '')[:19].replace('T', ' ') or 'âEUR”' }}
+              {{ (run.end_date or '')[:19].replace('T', ' ') or '—' }}
             </td>
           </tr>
           {% endfor %}
@@ -431,22 +431,22 @@
   scanElapsedEls();
   updateElapsed();
 
-  // â”EURâ”EUR Helpers de estado â”EURâ”EUR
+  // ── Helpers de estado ──
   function isActive(st) { return st === 'running' || st === 'queued'; }
 
   function heroTitle(st) {
-    if (isActive(st))      return 'Ejecutando pipelineâEUR¦';
-    if (st === 'success')  return 'EjecuciÃ³n completada';
-    if (st === 'failed')   return 'EjecuciÃ³n fallida';
+    if (isActive(st))      return 'Ejecutando pipeline…';
+    if (st === 'success')  return 'Ejecución completada';
+    if (st === 'failed')   return 'Ejecución fallida';
     if (st === 'no_runs')  return 'Listo para ejecutar';
     return st.charAt(0).toUpperCase() + st.slice(1);
   }
 
   function badgeLabel(st) {
-    if (isActive(st))     return 'En ejecuciÃ³n';
+    if (isActive(st))     return 'En ejecución';
     if (st === 'success') return 'Completado';
     if (st === 'failed')  return 'Error';
-    return 'Sin ejecuciÃ³n';
+    return 'Sin ejecución';
   }
 
   function badgeCls(st) {
@@ -464,9 +464,9 @@
   }
 
   var TASK_ICONS  = { running: 'arrow-repeat', success: 'check-lg', failed: 'x-lg', queued: 'clock', skipped: 'skip-forward' };
-  var TASK_LABELS = { running: 'En ejecuciÃ³n', success: 'Completado exitosamente', failed: 'FallÃ³ âEUR” ver logs', queued: 'En cola de espera', skipped: 'Omitido' };
+  var TASK_LABELS = { running: 'En ejecución', success: 'Completado exitosamente', failed: 'Falló — ver logs', queued: 'En cola de espera', skipped: 'Omitido' };
 
-  // â”EURâ”EUR Actualizadores de DOM â”EURâ”EUR
+  // ── Actualizadores de DOM ──
   function updateHero(estado) {
     var st = estado.state || 'no_runs';
     var active = isActive(st);
@@ -496,7 +496,7 @@
     if (btn) {
       btn.disabled = active;
       btn.innerHTML = '<i class="bi bi-' + (active ? 'hourglass-split' : 'play-fill') + '" aria-hidden="true"></i> '
-                    + (active ? 'En ejecuciÃ³nâEUR¦' : 'Ejecutar ahora');
+                    + (active ? 'En ejecución…' : 'Ejecutar ahora');
     }
   }
 
@@ -537,7 +537,7 @@
       + '<div class="task-info">'
       +   '<div class="task-id">' + task.task_id + '</div>'
       +   '<div class="task-state-label">' + (TASK_LABELS[ts] || 'Pendiente') + '</div>'
-      + (ts === 'running' ? '<span class="task-elapsed" aria-live="polite">Tiempo: <span class="at-elapsed-counter" data-start="' + (task.start_date || '') + '">âEUR¦</span></span>' : '')
+      + (ts === 'running' ? '<span class="task-elapsed" aria-live="polite">Tiempo: <span class="at-elapsed-counter" data-start="' + (task.start_date || '') + '">…</span></span>' : '')
       + '</div>'
       + '<div class="task-actions">' + actionsHtml + '</div>'
       + '</div>';
@@ -559,8 +559,8 @@
     var CLS = { running: 'at-badge-running', success: 'at-badge-success', failed: 'at-badge-failed', queued: 'at-badge-warning' };
     tbody.innerHTML = historial.map(function (run) {
       var cls   = CLS[run.state] || 'at-badge-pending';
-      var start = (run.start_date || '').slice(0, 19).replace('T', ' ') || 'âEUR”';
-      var end   = (run.end_date   || '').slice(0, 19).replace('T', ' ') || 'âEUR”';
+      var start = (run.start_date || '').slice(0, 19).replace('T', ' ') || '—';
+      var end   = (run.end_date   || '').slice(0, 19).replace('T', ' ') || '—';
       return '<tr>'
         + '<td class="at-code" style="max-width:240px;font-size:11.5px">' + run.dag_run_id + '</td>'
         + '<td><span class="at-badge ' + cls + '"><span class="badge-dot" aria-hidden="true"></span>' + run.state + '</span></td>'
@@ -575,7 +575,7 @@
     var historial = data.historial || [];
     var st = estado.state || 'no_runs';
 
-    // Si la estructura de la pÃ¡gina cambiÃ³ (ej. no_runs â†” con datos), recarga completa
+    // Si la estructura de la página cambió (ej. no_runs ↔ con datos), recarga completa
     var hasProgressInDOM = !!document.getElementById('pipeline-progress-section');
     var needsProgress    = st !== 'no_runs';
     if (hasProgressInDOM !== needsProgress) {
@@ -606,14 +606,14 @@
     }
   }, 1000);
 
-  /* â”EURâ”EUR Trigger form â”EURâ”EUR */
+  /* ── Trigger form ── */
   var triggerForm = document.getElementById('trigger-form');
   if (triggerForm) {
     triggerForm.addEventListener('submit', function () {
       var btn = document.getElementById('btn-trigger');
       if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> IniciandoâEUR¦';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Iniciando…';
       }
     });
   }

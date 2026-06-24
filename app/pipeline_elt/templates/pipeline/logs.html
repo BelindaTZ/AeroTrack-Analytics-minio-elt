@@ -19,8 +19,7 @@
     {{ task.task_id }}
   </a>
   {% endfor %}
-  {% set current_task = tasks | selectattr('task_id', 'equalto', task_id) | first %}
-  {% if current_task and current_task.state in ('failed', 'up_for_retry') %}
+  {% if 'ejecutar' in user_permissions.get('pipeline_elt', []) %}
   <form action="/pipeline/logs/{{ run_id }}/{{ task_id }}/reintentar" method="post" style="margin-left:auto">
     <button type="submit" class="btn-at-coral" style="font-size:12px">
       <i class="bi bi-arrow-repeat"></i> Reintentar

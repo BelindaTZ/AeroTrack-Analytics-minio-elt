@@ -276,6 +276,7 @@
 <!-- ══════════════════════════════════════════════════════
      ASISTENTE IA FLOTANTE
 ════════════════════════════════════════════════════════ -->
+{% if 'ejecutar' in user_permissions.get('asistente_ia', []) %}
 <style>
 #ia-fab{position:fixed;bottom:24px;right:24px;z-index:8500;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;cursor:pointer;font-size:20px;box-shadow:0 4px 20px rgba(99,102,241,.45);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;}
 #ia-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(99,102,241,.65);}
@@ -468,6 +469,7 @@
   });
 })();
 </script>
+{% endif %}
 
 </body>
 </html>

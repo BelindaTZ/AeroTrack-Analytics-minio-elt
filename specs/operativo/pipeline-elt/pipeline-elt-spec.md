@@ -4,87 +4,97 @@
 **Prefijo:** PEL
 **Código fuente:** `app/pipeline_elt/router.py`, `app/pipeline_elt/clients/airflow_client.py`, `dags/aerotrack_elt_dag.py`
 **Casos de uso cubiertos:** CU-O05 (Ejecutar pipeline ELT manualmente), CU-O06 (Monitorear estado del DAG en ejecución), CU-O07 (Consultar historial de ejecuciones), CU-O08 (Ver logs de error y reintentar ejecución)
-**Actor:** Usuario autenticado
+**Actor:** Administrador
 
 ---
+## Funcionalidad 1: Configurar y programar ejecución del pipeline (CU-T06)
 
-## Funcionalidad 1: Ejecutar pipeline ELT manualmente (CU-O05)
+- RF-PEL-001: El sistema debe permitir al Administrador definir el horario de ejecución del pipeline mediante presets (Manual, Diario, Cada hora, Semanal, Mensual, Anual) o una expresión cron personalizada, validada con croniter antes de guardar.
 
-Trigger manual del DAG de Airflow desde `app/pipeline_elt/router.py` usando el cliente API REST `app/pipeline_elt/clients/airflow_client.py`.
+- RF-PEL-002: El sistema debe sincronizar el horario configurado con una Variable de Airflow (pipeline_schedule), sin modificar el archivo del DAG.
+
+- RF-PEL-003: El sistema debe permitir configurar el tamaño de lote, número de procesos paralelos y reintentos de extracción (valores almacenados en PocketBase; el DAG actualmente usa constantes internas: MAX_WORKERS=10, BATCH_SIZE=200 páginas, retries=2 por tarea).
+
+- RF-PEL-004: El sistema debe informar al Administrador que el cambio de horario puede tardar hasta el siguiente ciclo de refresco del scheduler de Airflow (~300 s).
+---
+
+## Funcionalidad 2: Ejecutar pipeline ELT manualmente (CU-O05)
+
+Trigger manual del DAG de Airflow desde la interfaz web.
 
 ### RF-PEL-021 — Trigger de ejecución manual
-`POST /pipeline/trigger` envía una solicitud `POST /api/v1/dags/aerotrack_elt_pipeline/dagRuns` a la API de Airflow. El botón de trigger se deshabilita si el pipeline ya está en ejecución (`is_running`). Redirige a `/pipeline` con mensaje de confirmación.
+El sistema debe permitir disparar el pipeline ELT manualmente. La opción de ejecución debe deshabilitarse si el pipeline ya está activo. Al completarse el disparo, el sistema redirige al panel con un mensaje de confirmación.
 
 ### RF-PEL-022 — Registrar ejecución en auditoría
-Al disparar el pipeline, se registra en auditoría con tipo `ejecutar`, recurso `dag`, detalle incluyendo el `dag_run_id` devuelto por Airflow.
+El sistema debe registrar en auditoría cada disparo del pipeline, incluyendo el identificador de ejecución generado por el orquestador.
 
 ---
 
-## Funcionalidad 2: Monitorear estado del DAG en ejecución (CU-O06)
+## Funcionalidad 3: Monitorear estado del DAG en ejecución (CU-O06)
 
-Seguimiento en tiempo real del estado del pipeline desde la interfaz principal (`GET /pipeline` y endpoints JSON).
+Seguimiento en tiempo real del estado del pipeline desde la interfaz principal.
 
 ### RF-PEL-023 — Mostrar estado actual del pipeline
-`GET /pipeline` renderiza el panel principal que muestra: estado global del último `dag_run`, lista de tareas con su estado individual, barra de progreso, y últimas 5 ejecuciones. Los estados posibles del DAG son: `no_runs`, `running`, `queued`, `success`, `failed`.
+El sistema debe mostrar el panel principal con el estado global de la última ejecución del pipeline, la lista de tareas con su estado individual, una barra de progreso y las últimas 5 ejecuciones. Los estados posibles son: sin ejecuciones, en ejecución, en cola, exitoso, fallido.
 
 ### RF-PEL-024 — Polling automático cada 10 segundos
-El frontend (`panel.html`) implementa un contador regresivo de 10s. Al llegar a 0, solicita `GET /pipeline/estado-full` que retorna JSON con `{estado, historial}`. Actualiza dinámicamente: título del hero, badge de estado, barra de progreso, timeline de tareas, y tabla de historial sin recargar la página.
+El sistema debe actualizar automáticamente la vista cada 10 segundos, obteniendo el estado actual del pipeline y actualizando dinámicamente el estado general, la barra de progreso, el listado de tareas y el historial, sin recargar la página completa.
 
 ### RF-PEL-025 — Timeline de tareas con estado individual
-Cada tarea (`extract`, `load`, `transform`) se muestra con su estado (`running`, `success`, `failed`, `queued`, `skipped`, `none`) identificado por color y badge. Las tareas en ejecución muestran contador de tiempo transcurrido. Las tareas fallidas muestran enlace directo a logs.
+El sistema debe mostrar cada tarea del pipeline con su estado actual (en ejecución, exitoso, fallido, en cola, omitido, sin datos), identificado visualmente por color e indicador. Las tareas en ejecución deben mostrar el tiempo transcurrido. Las tareas fallidas deben incluir enlace directo a sus logs.
 
 ### RF-PEL-026 — Consultar estado como JSON
-`GET /pipeline/estado` retorna el último `dag_run` de Airflow con sus `task_instances` como JSON. Usado por el polling del frontend.
+El sistema debe exponer el estado actual del pipeline en formato JSON, incluyendo el estado de la última ejecución y el estado de cada tarea individual. Este endpoint es consumido por la actualización automática de la interfaz.
 
 ---
 
-## Funcionalidad 3: Consultar historial de ejecuciones (CU-O07)
+## Funcionalidad 4: Consultar historial de ejecuciones (CU-O07)
 
-Visualización del historial de ejecuciones desde `app/pipeline_elt/router.py`.
+Visualización del historial de ejecuciones del pipeline.
 
 ### RF-PEL-027 — Mostrar historial de ejecuciones
-`GET /pipeline/historial` consulta la API REST de Airflow (`GET /api/v1/dags/aerotrack_elt_pipeline/dagRuns?limit=50&order_by=-execution_date`) y renderiza una tabla con las últimas 50 ejecuciones, mostrando: Run ID, Estado, Inicio, Fin, y enlace a logs.
+El sistema debe mostrar las últimas 50 ejecuciones del pipeline en una tabla con: identificador de ejecución, estado, fecha de inicio, fecha de fin y enlace a los logs correspondientes.
 
 ### RF-PEL-028 — Nueva ejecución desde historial
-La página de historial incluye botón "Nueva ejecución" que postea a `/pipeline/trigger`, permitiendo disparar el pipeline sin volver al panel principal.
+El sistema debe ofrecer la opción de iniciar una nueva ejecución desde la página de historial, sin necesidad de regresar al panel principal.
 
 ---
 
-## Funcionalidad 4: Ver logs de error y reintentar ejecución (CU-O08)
+## Funcionalidad 5: Ver logs de error y reintentar ejecución (CU-O08)
 
-Acceso a logs de tareas y reintento selectivo desde `app/pipeline_elt/router.py`.
+Acceso a logs de tareas y reintento selectivo.
 
 ### RF-PEL-029 — Ver logs de tarea específica
-`GET /pipeline/logs/{run_id}/{task_id}` obtiene el log de una tarea específica (con número de intento por defecto `attempt=1`) desde la API de Airflow (`GET /api/v1/dags/{dag_id}/dagRuns/{run_id}/taskInstances/{task_id}/logs/{attempt}`) y lo muestra en vista con formato monospace. Muestra además navegación entre tareas de la misma ejecución.
+El sistema debe mostrar los logs de una tarea específica de una ejecución determinada, con formato de texto monoespaciado y navegación entre las tareas de la misma ejecución.
 
 ### RF-PEL-030 — Reintentar tarea específica (no el pipeline completo)
-`POST /pipeline/logs/{run_id}/{task_id}/reintentar` invoca `POST /api/v1/dags/{dag_id}/dagRuns/{run_id}/clearTaskInstances` de la API de Airflow con `{"dry_run": false, "task_ids": [task_id]}`. Solo despeja la tarea indicada, no reinicia el pipeline completo.
+El sistema debe permitir reintentar una tarea fallida de forma individual, sin reiniciar el pipeline completo. Solo limpia el estado de la tarea indicada, sin afectar las demás tareas.
 
 ### RF-PEL-031 — Botón de reintento condicional al estado
-El botón "Reintentar" solo se muestra cuando el estado de la tarea es `failed` o `up_for_retry` (validado en template con `if current_task.state in ('failed', 'up_for_retry')`). Previene reintentos innecesarios sobre tareas en ejecución o exitosas.
+El sistema debe mostrar la opción de reintento únicamente cuando la tarea está en estado fallido o pendiente de reintento. No debe mostrarse para tareas en ejecución o completadas exitosamente.
 
 ### RF-PEL-032 — Registrar reintento en auditoría
-Al reintentar una tarea, se registra en auditoría con tipo `reintentar`, recurso `task_instance`, y detalle con `run_id/task_id`.
+El sistema debe registrar en auditoría cada reintento de tarea, incluyendo el identificador de ejecución y el identificador de la tarea reintentada.
 
 ---
 
 ## Reglas de negocio
 
 ### RN-PEL-021 — Ejecución manual bloqueada si ya hay una activa
-El botón "Ejecutar ahora" se deshabilita mientras el pipeline esté en estado `running` o `queued`. La restricción se aplica tanto en UI como a nivel de Airflow (`max_active_runs=1`).
+La opción de ejecución manual se deshabilita mientras el pipeline esté en estado activo o en cola. La restricción se aplica tanto en la interfaz como en el orquestador, que admite como máximo una ejecución simultánea.
 
 ### RN-PEL-022 — Reintento no reinicia pipeline completo
-Al reintentar una tarea vía `clear_task_instance`, solo esa tarea se marca para re-ejecución. Las tareas aguas arriba que ya completaron no se repiten. La tarea reintentada espera a que sus dependencias estén disponibles (si la tarea anterior falló, debe reintentarse primero).
+Al reintentar una tarea individualmente, solo esa tarea se marca para re-ejecución. Las tareas aguas arriba que ya completaron no se repiten. La tarea reintentada espera a que sus dependencias estén disponibles.
 
 ### RN-PEL-023 — DAG de 3 tareas en secuencia estricta
-El pipeline ELT tiene 3 tareas: `extract` (PocketBase → Parquet, timeout 2h), `load` (Parquet → MinIO, timeout 30min), `transform` (raw → modelo estrella, timeout 2h). La dependencia es `extract >> load >> transform`, con timeout total del DAG de 4h.
+El pipeline ELT tiene 3 tareas ejecutadas en orden estricto: extracción (timeout 2h), carga (timeout 30min) y transformación con agregaciones (timeout 2h). La tarea de transformación incluye la construcción del modelo estrella (fact_vuelo + 11 dimensiones) y la generación de las tablas de indicadores precalculados como paso final. Cada tarea espera la finalización exitosa de la anterior. El timeout total del pipeline es de 4h.
 
 ---
 
 ## Historias de usuario
 
 - Como Administrador, quiero disparar el pipeline manualmente, para actualizar los datos en momentos específicos según las necesidades del negocio.
-- Como Administrador, quiero ver el estado en tiempo real de cada etapa del pipeline, para detectar fallas sin acceder directamente a Airflow.
+- Como Administrador, quiero ver el estado en tiempo real de cada etapa del pipeline, para detectar fallas sin acceder directamente al orquestador.
 - Como Administrador, quiero consultar el historial de las últimas 50 ejecuciones, para analizar patrones de fallo y rendimiento.
 - Como Administrador, quiero reintentar una tarea fallida sin reiniciar el pipeline completo, para recuperar el proceso rápidamente sin perder el trabajo ya completado.
 
@@ -100,26 +110,26 @@ Ejecutar el pipeline ELT manualmente, monitorear su estado en tiempo real, consu
 
 ### Camino feliz
 1. El Admin hace clic en "Ejecutar ahora" en el panel del pipeline.
-2. `POST /pipeline/trigger` dispara el DAG `aerotrack_elt` en Airflow y redirige al panel con un mensaje de confirmación.
-3. El panel comienza a realizar polling cada 10s vía `GET /pipeline/estado`: las tareas `extract` → `load` → `transform` se marcan secuencialmente como `running` → `success`.
+2. El sistema dispara el DAG en Airflow y redirige al panel con un mensaje de confirmación.
+3. El panel comienza a realizar polling cada 10s: las tareas de extracción → carga → transformación se marcan secuencialmente como en ejecución → exitoso.
 4. Todas las tareas completan exitosamente; el panel muestra estado "success" con la duración total.
-5. El Admin consulta `GET /pipeline/historial` y visualiza las últimas 50 ejecuciones en una tabla paginada con estado, fecha de inicio, duración y enlace a logs.
+5. El Admin consulta el historial y visualiza las últimas 50 ejecuciones en una tabla con estado, fecha de inicio, duración y enlace a logs.
 
 ### Manejo de errores
-- **Pipeline ya en ejecución:** Si `GET /pipeline/estado` retorna `is_running=true`, el botón "Ejecutar ahora" permanece deshabilitado.
+- **Pipeline ya en ejecución:** Si el pipeline está activo, la opción "Ejecutar ahora" permanece deshabilitada.
 - **Tarea fallida:** El timeline muestra la tarea en rojo con un enlace a la vista de logs.
-- **Reintento de tarea:** `POST /pipeline/logs/{run_id}/{task_id}/reintentar` despeja el estado de solo esa tarea mediante `POST /api/v1/dags/aerotrack_elt/clearTaskInstances` y registra el reintento en auditoría.
-- **Timeout en consulta de logs:** Si la API de Airflow no responde en 30s, la vista de logs muestra un mensaje de error y permite reintentar la consulta.
-- **DAG timeout de 4h:** Si la ejecución excede las 4h, Airflow la marca como `failed` automáticamente.
+- **Reintento de tarea:** El sistema limpia el estado de solo esa tarea y registra el reintento en auditoría.
+- **Timeout en consulta de logs:** Si el orquestador no responde en 30s, la vista de logs muestra un mensaje de error y permite reintentar la consulta.
+- **Timeout del DAG de 4h:** Si la ejecución excede las 4h, el orquestador la marca como fallida automáticamente.
 
 ---
 
 ## Criterios de aceptación
 
-- **CU-O05:** Dado que el pipeline no está en ejecución (`is_running=false`), cuando el Admin hace clic en "Ejecutar ahora", entonces el sistema dispara el DAG en Airflow y registra la acción en auditoría.
-- **CU-O06:** Dado que el pipeline está en ejecución, cuando el frontend realiza polling cada 10s a `GET /pipeline/estado`, entonces el sistema actualiza el estado de cada tarea, la barra de progreso y el timeline sin recargar la página.
-- **CU-O07:** Dado que el Admin accede a `GET /pipeline/historial`, entonces el sistema muestra las últimas 50 ejecuciones con estado, fecha de inicio, duración y enlace a logs.
-- **CU-O08:** Dado que una tarea individual está en estado `failed` o `up_for_retry`, cuando el Admin hace clic en "Reintentar", entonces el sistema despeja solo esa tarea vía API de Airflow y registra el reintento en auditoría.
+- **CU-O05:** Dado que el pipeline no está en ejecución, cuando el Admin hace clic en "Ejecutar ahora", entonces el sistema dispara el DAG en Airflow y registra la acción en auditoría.
+- **CU-O06:** Dado que el pipeline está en ejecución, cuando el sistema actualiza el estado cada 10 segundos, entonces actualiza el estado de cada tarea, la barra de progreso y el timeline sin recargar la página.
+- **CU-O07:** Dado que el Admin accede al historial de ejecuciones, entonces el sistema muestra las últimas 50 ejecuciones con estado, fecha de inicio, duración y enlace a logs.
+- **CU-O08:** Dado que una tarea individual está en estado fallido o pendiente de reintento, cuando el Admin hace clic en "Reintentar", entonces el sistema reintenta solo esa tarea y registra el reintento en auditoría.
 
 ---
 

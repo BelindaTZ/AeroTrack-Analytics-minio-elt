@@ -4,67 +4,67 @@
 **Prefijo:** AUD
 **Código fuente:** `app/auditoria/`
 **Casos de uso cubiertos:** CU-O12 (Consultar log de auditoría con filtros), CU-O13 (Exportar log de auditoría)
-**Actor:** Usuario autenticado con permiso `seguridad:ver`
+**Actor:** Administrador
 
 ---
 
 ## Funcionalidad 1: Consultar log de auditoría (CU-O12)
 
-Visualización del log de auditoría con filtros combinables, paginación de 50 registros y modal de detalle. Implementado en `app/auditoria/log.py`. El log es inmutable: no existen endpoints de edición ni borrado en FastAPI, y la colección de PocketBase tiene `deleteRule=null` y `updateRule=null`.
+Visualización del log de auditoría con filtros combinables, paginación de 50 registros y modal de detalle. El log es inmutable: no existen operaciones de edición ni borrado, y la colección de repositorio tiene reglas que impiden su modificación.
 
 ### RF-AUD-001 — Listar registros paginados
-`GET /auditoria` retorna los registros ordenados por `-created` (más recientes primero) con paginación de 50 registros por página. Soporta navegación anterior/siguiente.
+El sistema debe retornar los registros de auditoría ordenados por fecha de creación descendente (más recientes primero) con paginación de 50 registros por página y navegación anterior/siguiente.
 
 ### RF-AUD-002 — Filtros combinables
-Seis filtros: `modulo` (select dinámico desde datos reales, 11 valores posibles), `accion` (select dinámico, 11 valores posibles), `usuario` (texto, busca en `usuario_email` e `usuario_id`), `resultado` (select: exitoso/fallido), `desde` (date, creater >=), `hasta` (date, created <=). Los filtros se combinan con AND en PocketBase.
+El sistema debe ofrecer seis filtros combinables: módulo (selector dinámico desde datos reales, 11 valores posibles), acción (selector dinámico, 11 valores posibles), usuario (texto, busca en email e identificador), resultado (selector: exitoso/fallido), desde (fecha, registros desde esa fecha), hasta (fecha, registros hasta esa fecha). Los filtros se aplican con operador AND.
 
-### RF-AUD-003 — Filtros con actualización AJAX
-Los filtros aplican via fetch AJAX sin recargar la página completa. El historial y la paginación se actualizan inline. Los selects de módulo y acción se poblan dinámicamente desde los valores distintos presentes en la colección.
+### RF-AUD-003 — Filtros con actualización sin recarga
+El sistema debe aplicar los filtros sin recargar la página completa, actualizando la tabla y la paginación en línea. Los selectores de módulo y acción se deben poblar dinámicamente desde los valores distintos presentes en el log.
 
 ### RF-AUD-004 — Modal de detalle JSON
-Cada fila del log es clickeable y abre un modal Bootstrap con: datos estructurados (fecha, usuario, módulo, acción, resultado, IP) y el campo `detalle` renderizado como JSON con sintaxis resaltada (o texto plano si no es JSON válido).
+El sistema debe mostrar al hacer clic en un registro un panel modal con los datos estructurados del evento (fecha, usuario, módulo, acción, resultado, IP) y el campo de detalle renderizado con sintaxis resaltada como JSON, o como texto plano si no es JSON válido.
 
 ### RF-AUD-005 — Conversión de zona horaria
-Los timestamps UTC de PocketBase se convierten a hora local Ecuador (America/Guayaquil, UTC-5, sin DST) para visualización en UI. El formato es `YYYY-MM-DD HH:MM:SS`.
+El sistema debe convertir los timestamps UTC a hora local Ecuador (America/Guayaquil, UTC-5, sin horario de verano) para su visualización. El formato de presentación es `YYYY-MM-DD HH:MM:SS`. La conversión se realiza mediante la biblioteca estándar de Python.
 
 ---
 
 ## Funcionalidad 2: Exportar log de auditoría (CU-O13)
 
-Exportación del log filtrado a CSV con streaming. Implementado en `app/auditoria/log.py:99`.
+Exportación del log filtrado a CSV con streaming.
 
 ### RF-AUD-006 — Exportación CSV con mismos filtros
-`GET /auditoria/export` re-aplica exactamente los mismos filtros que la consulta actual y exporta todos los registros coincidentes (sin paginación) a CSV.
+El sistema debe exportar todos los registros que coincidan con los filtros activos al momento de la exportación (sin paginación) a un archivo CSV descargable.
 
 ### RF-AUD-007 — 10 columnas en exportación
-El CSV incluye: Fecha, Usuario (ID), Email, Módulo, Acción, Recurso tipo, Recurso ID, Resultado, IP, Detalle. Encoding UTF-8.
+El sistema debe generar el archivo CSV con 10 columnas: Fecha, Usuario (ID), Email, Módulo, Acción, Recurso tipo, Recurso ID, Resultado, IP, Detalle. Codificación UTF-8.
 
 ### RF-AUD-008 — Botón de exportación en UI
-La UI muestra un botón "Exportar CSV" que enlaza a `/auditoria/export?{filtros_actuales}`. Los filtros aplicados en la consulta se reflejan en la exportación.
+El sistema debe mostrar un botón "Exportar CSV" que refleje los filtros activos en la exportación resultante.
 
 ---
 
 ### RNF-AUD-001 — Log inmutable (doble capa)
-No existen endpoints PUT/PATCH/DELETE para la colección `auditoria` en FastAPI. A nivel de PocketBase, la colección tiene `deleteRule=null`, `updateRule=null`, `createRule=""` (cualquier autenticado puede insertar), `listRule="@request.auth.id != ''"`. Esto impide modificación o borrado incluso vía API directa de PocketBase.
+El sistema no debe exponer operaciones de modificación ni borrado sobre el log de auditoría. A nivel de repositorio, la colección prohíbe modificaciones y borrados, permite inserción a cualquier usuario autenticado, y restringe la consulta a usuarios autenticados. Esto impide la alteración de registros incluso a través del acceso directo al repositorio.
 
 ### RNF-AUD-002 — La auditoría no bloquea la operación principal
-La función `audit.registrar()` envuelve la escritura en try/except. Si PocketBase no está disponible o la escritura falla, la operación principal continúa sin interrupción.
+El sistema debe registrar los eventos de auditoría de forma resiliente. Si el repositorio no está disponible o la escritura falla, la operación principal continúa sin interrupción.
 
 ### RNF-AUD-003 — Paginación fija de 50 registros
-El tamaño de página es fijo (`_PAGE_SIZE = 50`). No es configurable por el usuario.
+El tamaño de página es fijo en 50 registros y no es configurable por el usuario.
 
 ---
 
 ### RN-AUD-001 — Los registros son INSERT-only
-La función `registrar()` en `app/shared/utils/audit.py` solo ejecuta `create_record`. Nunca update ni delete. No existe función de edición o borrado de auditoría en toda la base de código.
+El sistema solo ejecuta operaciones de inserción en el log de auditoría. No existe funcionalidad de modificación o borrado de registros de auditoría en ninguna parte del sistema.
 
 ### RN-AUD-002 — Los campos accion y modulo son tipo select con valores controlados
 `accion` acepta: login, logout, login_fallido, crear, editar, eliminar, ejecutar, exportar, configurar, validar, ver_reporte. `modulo` acepta: seguridad, pipeline_elt, modelo_dimensional, dashboard, puntualidad, rutas, cancelaciones, reportes, predictivo, configuracion, monitoreo. No se pueden insertar valores fuera de estos conjuntos.
 
 ### RN-AUD-003 — resultado tiene tres valores posibles
-exitoso, fallido, parcial. El default es "exitoso".
+exitoso, fallido, parcial. El valor por defecto es "exitoso".
 
-### RN-AUD-004 — zona horaria fija UTC-5
+### RN-AUD-004 — Zona horaria fija UTC-5
 Todos los timestamps se convierten a America/Guayaquil (UTC-5, sin horario de verano) para visualización.
 
 ---
@@ -73,28 +73,28 @@ Todos los timestamps se convierten a America/Guayaquil (UTC-5, sin horario de ve
 
 | CU | Entrada | Salida |
 |----|---------|--------|
-| CU-O12 | GET /auditoria?modulo=&accion=&usuario=&resultado=&desde=&hasta=&page= | HTML con tabla de 50 registros, paginación, filtros y modal de detalle. |
-| CU-O13 | GET /auditoria/export?{mismos filtros} | CSV streaming con 10 columnas y encoding UTF-8. |
+| CU-O12 | Filtros: modulo, accion, usuario, resultado, desde, hasta, page | HTML con tabla de 50 registros, paginación, filtros y modal de detalle. |
+| CU-O13 | Mismos filtros de la consulta activa | CSV streaming con 10 columnas y codificación UTF-8. |
 
 ---
 
 ## Escenarios
 
 ### Camino feliz — Consultar log con filtros
-1. El usuario autenticado accede a `GET /auditoria`. Se muestran los últimos 50 registros ordenados por fecha descendente.
+1. El usuario autenticado accede al log de auditoría. Se muestran los últimos 50 registros ordenados por fecha descendente.
 2. El usuario selecciona el módulo "seguridad" en el filtro de módulo.
-3. AJAX fetch a `GET /auditoria?modulo=seguridad` actualiza la tabla sin recargar la página.
+3. La tabla se actualiza sin recargar la página mostrando solo registros del módulo seguridad.
 4. El usuario hace clic en un registro; se abre un modal con los datos estructurados y el detalle JSON.
 
 ### Camino feliz — Exportar log
 1. El usuario aplica filtros: módulo="reportes", resultado="exitoso".
 2. Hace clic en "Exportar CSV".
-3. `GET /auditoria/export?modulo=reportes&resultado=exitoso` genera un CSV con todos los registros que coinciden.
+3. El sistema genera un CSV con todos los registros que coinciden con los filtros.
 4. El navegador descarga el archivo `auditoria.csv`.
 
 ### Manejo de errores
 - **Sin registros:** Si ningún registro coincide con los filtros, la tabla muestra mensaje "No hay registros con los filtros actuales" con icono informativo.
-- **Error en fetch AJAX:** Si la consulta AJAX falla, los filtros existentes se mantienen y no se actualiza la tabla (no hay retroalimentación de error al usuario).
+- **Error en actualización sin recarga:** Si la consulta falla, los filtros existentes se mantienen y no se actualiza la tabla.
 - **Detalle no JSON:** Si el campo `detalle` no es JSON válido, se muestra como texto plano en el modal.
 
 ---
@@ -110,7 +110,7 @@ Todos los timestamps se convierten a America/Guayaquil (UTC-5, sin horario de ve
 
 - **Seguridad:** Autenticación JWT y autorización con permiso `seguridad:ver` (re-usa el permiso del módulo de seguridad).
 - **PocketBase:** Colección `auditoria` con reglas de seguridad: deleteRule=null, updateRule=null, createRule="", listRule="@request.auth.id != ''".
-- **Zona horaria:** Conversión UTC → America/Guayaquil (UTC-5) hardcodeada en `app/auditoria/log.py:17`.
+- **Zona horaria:** Conversión UTC → America/Guayaquil (UTC-5) mediante la biblioteca estándar de Python (datetime.timezone), sin dependencia de pytz ni zoneinfo.
 
 ---
 
@@ -137,4 +137,4 @@ Todos los timestamps se convierten a America/Guayaquil (UTC-5, sin horario de ve
 - Visualización de estadísticas o gráficos sobre el log (solo tabla plana).
 - Suscripción a notificaciones de nuevos eventos de auditoría.
 - Filtro por rango de fechas con hora específica (solo fecha completa).
-- Ordenación personalizable (siempre por -created).
+- Ordenación personalizable (siempre por fecha descendente).

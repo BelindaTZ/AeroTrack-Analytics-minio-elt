@@ -4,7 +4,7 @@
 **Prefijo:** CAN
 **Código fuente:** `app/cancelaciones/clasificar_faa.py`
 **Casos de uso cubiertos:** CU-E08 (Analizar cancelaciones por causa FAA), CU-E09 (Analizar impacto operacional de desvíos), CU-E10 (Tendencia de cancelaciones), CU-O14 (Consultar narrativa IA de un gráfico o KPI)
-**Actor:** Analista de Datos
+**Actor:** Analista de Datos/Administrador
 
 ---
 
@@ -13,28 +13,28 @@
 Análisis de cancelaciones clasificadas por código oficial FAA (A: Carrier, B: Weather, C: NAS, D: Security) con filtro por aerolínea.
 
 ### RF-CAN-001 — Mostrar KPIs de cancelaciones en tarjetas
-Cuatro tarjetas con indicadores clave: Total cancelados, Tasa cancelación (%), Total vuelos, Causas FAA distintas. Cada tarjeta tiene botón de narrativa IA.
+El sistema debe mostrar cuatro tarjetas con indicadores clave: total de vuelos cancelados, tasa de cancelación (%), total de vuelos y cantidad de causas FAA distintas. Cada tarjeta debe incluir la opción de obtener narrativa IA.
 
 ### RF-CAN-002 — Mostrar distribución por código FAA en gráfico de dona
-Gráfico de dona (Chart.js) con desglose por código FAA (A/B/C/D), colores: azul, ámbar, verde, rojo. Clic en segmento abre narrativa IA.
+El sistema debe mostrar un gráfico de dona con el desglose de cancelaciones por código FAA (A: azul, B: ámbar, C: verde, D: rojo). Al seleccionar un segmento se debe abrir la narrativa IA correspondiente.
 
 ### RF-CAN-003 — Mostrar flujo Sankey de cancelaciones
-Diagrama Sankey (Plotly) mostrando el flujo desde Total vuelos → Operados / Cancelados → Desglose por código FAA. Se oculta si no hay cancelaciones.
+El sistema debe mostrar un diagrama de flujo que presente la trayectoria desde el total de vuelos hacia operados y cancelados, y de ahí al desglose por código FAA. El diagrama se oculta si no hay cancelaciones en el período.
 
 ### RF-CAN-004 — Filtrar por año, mes y aerolínea
-Tres selectores que recargan el módulo vía fetch. El filtro de aerolínea utiliza `agg_cancelaciones_causa_aerolinea` (que incluye columna `carrier`), no `agg_cancelaciones_causa` (que no la tiene).
+El sistema debe ofrecer tres filtros (año, mes, aerolínea) que actualizan el módulo sin recargar la página. Cuando se aplica filtro de aerolínea, el sistema debe utilizar la tabla de agregación con desglose por aerolínea; sin filtro, usa la tabla general de cancelaciones.
 
 ### RF-CAN-005 — Mostrar tasa de cancelación con umbral 5%
-La tasa de cancelación se compara contra el umbral del 5%. Si excede, se muestra en rojo; si cumple, en verde. El indicador "Estado tasa global" aparece en la narrativa IA.
+El sistema debe comparar la tasa de cancelación contra el umbral del 5%. Si excede, se muestra en rojo; si cumple, en verde.
 
 ### RNF-CAN-001 — Tabla de agregación específica con aerolínea
-La tabla `agg_cancelaciones_causa_aerolinea` agrupa por `cancellation_code` + `carrier` + `year` + `month` para permitir filtrado por aerolínea. Cuando no hay filtro de aerolínea, se usa `agg_cancelaciones_causa` (más ligera).
+El sistema debe seleccionar la tabla de agregación adecuada según la presencia de filtro de aerolínea: la tabla con desglose por aerolínea cuando hay filtro activo, o la tabla general cuando no hay filtro.
 
 ### RNF-CAN-002 — Datos cacheados 5 minutos
-Módulo cacheado en `_page_cache` con `_PAGE_TTL = 300` segundos.
+El sistema debe cachear los datos del módulo durante 5 minutos.
 
-### RNF-CAN-003 — Códigos FAA definidos en constante
-Los 4 códigos FAA con sus descripciones están definidos en `_FAA_CODIGOS` dentro del módulo: A=Carrier, B=Weather, C=NAS, D=Security.
+### RNF-CAN-003 — Códigos FAA definidos en el dominio
+Los 4 códigos FAA con sus descripciones son parte del dominio del módulo: A=Carrier, B=Weather, C=NAS, D=Security.
 
 ---
 
@@ -43,22 +43,22 @@ Los 4 códigos FAA con sus descripciones están definidos en `_FAA_CODIGOS` dent
 Análisis de desvíos a aeropuertos alternativos, cuantificando tiempo adicional y distancia extra por ruta.
 
 ### RF-CAN-006 — Mostrar top 20 rutas con más desvíos
-Tabla con las 20 rutas con mayor número de desvíos. Columnas: Ruta (origen-destino), Aeropuerto alternativo, Desvíos, Retraso llegada prom. (min), Distancia desvío prom. (mi).
+El sistema debe mostrar las 20 rutas con mayor número de desvíos en una tabla con columnas: ruta (origen-destino), aeropuerto alternativo, desvíos, retraso de llegada promedio (min) y distancia de desvío promedio (mi).
 
 ### RF-CAN-007 — Mostrar gráfico de desvíos por ruta
-Gráfico de barras horizontal (Chart.js) con las rutas en eje Y y desvíos en eje X. Incluye serie secundaria de retraso promedio por desvío (eje superior). Clic en barra abre narrativa IA.
+El sistema debe mostrar un gráfico de barras horizontal con las rutas en el eje vertical y el número de desvíos en el horizontal, incluyendo una serie secundaria de retraso promedio por desvío. Al seleccionar una barra se debe abrir la narrativa IA correspondiente.
 
 ### RF-CAN-008 — Filtrar desvíos por año y mes
-Los datos de desvíos se filtran por año y mes usando las columnas `year`/`month` de `agg_desvios_ruta`. Los registros se reagrupan por ruta para mantener el top 20 consolidado.
+El sistema debe filtrar los datos de desvíos por año y mes, reagrupando por ruta para mantener el top 20 consolidado.
 
 ### RF-CAN-009 — Narrativa IA por ruta desviada
-Botón por fila y clic en barra abren popover con narrativa IA mostrando: ruta, desvíos totales, aeropuerto alternativo, retraso promedio, distancia adicional.
+Por cada fila de la tabla y barra del gráfico, el sistema debe ofrecer la opción de obtener narrativa IA mostrando: ruta, total de desvíos, aeropuerto alternativo, retraso promedio y distancia adicional.
 
-### RNF-CAN-004 — Columnas year/month agregadas en pipeline
-La tabla `agg_desvios_ruta` incluye `year` y `month` en el GROUP BY de la pipeline para permitir filtrado temporal. Sin filtro se muestran todos los desvíos del histórico.
+### RNF-CAN-004 — Columnas de período en tabla de desvíos
+La tabla de desvíos incluye columnas de año y mes para permitir filtrado temporal. Sin filtro se muestran todos los desvíos del histórico.
 
-### RNF-CAN-005 — Retorno agregado por ruta
-Los datos de `agg_desvios_ruta` se reagrupan por ruta (origin + dest + alt_airport) en `_desvios_agg()` para consolidar múltiples períodos en una sola fila.
+### RNF-CAN-005 — Agregación por ruta en desvíos
+El sistema debe reagrupar los datos de desvíos por ruta (origen + destino + aeropuerto alternativo) para consolidar múltiples períodos en una sola fila.
 
 ---
 
@@ -67,13 +67,13 @@ Los datos de `agg_desvios_ruta` se reagrupan por ruta (origin + dest + alt_airpo
 Tendencia mensual de cancelaciones con desglose por código FAA.
 
 ### RF-CAN-010 — Mostrar tendencia mensual de cancelaciones
-Gráfico de barras (Chart.js) con cancelaciones totales por mes, superponiendo líneas por código FAA (A=azul, B=ámbar, C=verde, D=rojo).
+El sistema debe mostrar un gráfico de barras con las cancelaciones totales por mes, superponiendo líneas individuales por código FAA (A: azul, B: ámbar, C: verde, D: rojo).
 
 ### RF-CAN-011 — Narrativa IA por mes
-Clic en barra del mes abre popover con narrativa IA mostrando: cancelaciones del mes, promedio mensual, diferencia vs promedio, mes pico, tasa de cancelación global.
+Al seleccionar una barra del mes, el sistema debe mostrar narrativa IA con: cancelaciones del mes, promedio mensual, diferencia vs promedio, mes pico y tasa de cancelación global.
 
 ### RF-CAN-012 — Datos por código FAA en tendencia
-El sistema desglosa cada mes en sus 4 componentes FAA, mostrando líneas individuales para identificar cambios estacionales o eventos específicos.
+El sistema debe desglosar cada mes en sus 4 componentes FAA, mostrando líneas individuales para identificar cambios estacionales o eventos específicos.
 
 ### RNF-CAN-006 — Códigos sin datos se omiten en la leyenda
 Los códigos FAA que no tienen registros en un período no generan líneas en el gráfico de tendencia.
@@ -89,7 +89,7 @@ Se considera que la operación cumple el estándar cuando la tasa de cancelació
 El código A agrupa cancelaciones por causas imputables a la aerolínea (tripulación, mantenimiento, etc.). Es el único código sobre el cual la aerolínea tiene control directo.
 
 ### RN-CAN-003 — Desvíos no se contabilizan como cancelaciones
-Un vuelo desviado (Diverted=1) no es un vuelo cancelado. Ambos indicadores se reportan por separado en el módulo.
+Un vuelo desviado no es un vuelo cancelado. Ambos indicadores se reportan por separado en el módulo.
 
 ---
 
@@ -121,24 +121,24 @@ Analizar las cancelaciones clasificadas por código oficial FAA (A/B/C/D) y el i
 ## Escenarios
 
 ### Camino feliz
-1. El Analista accede a `GET /cancelaciones` con su Cookie JWT y filtros opcionales (año, mes, aerolínea).
-2. Si hay filtro de aerolínea, el sistema carga `agg_cancelaciones_causa_aerolinea`; si no, carga `agg_cancelaciones_causa`. También carga `agg_kpi_global_dia` y `agg_desvios_ruta` con filtros de año/mes.
-3. El sistema muestra 4 tarjetas KPI, gráfico de dona por código FAA, diagrama Sankey de flujo, tendencia mensual con líneas por código FAA, y tabla + gráfico de barras horizontal de desvíos top 20.
+1. El Analista accede al módulo de cancelaciones con su sesión activa y filtros opcionales (año, mes, aerolínea).
+2. Si hay filtro de aerolínea, el sistema carga la tabla con desglose por aerolínea; si no, carga la tabla general.
+3. El sistema muestra 4 tarjetas KPI, gráfico de dona por código FAA, diagrama de flujo, tendencia mensual con líneas por código FAA, y tabla + gráfico de desvíos top 20.
 4. El Analista selecciona una aerolínea en el filtro; el sistema recarga usando la tabla con desglose por aerolínea.
-5. El Analista hace clic en un segmento de la dona, barra de tendencia o barra de desvíos; el sistema abre un popover con narrativa IA.
+5. El Analista hace clic en un segmento de la dona, barra de tendencia o barra de desvíos; el sistema abre un panel emergente con narrativa IA.
 
 ### Manejo de errores
-- **Tablas agregadas no disponibles (FileNotFoundError):** Se muestra "Los datos no están disponibles. Ejecute el pipeline ELT primero."
-- **Error en endpoint /narrativa:** El servidor retorna objeto vacío y el popover muestra "Sin narrativa disponible."
-- **Error de conexión en fetch de narrativa:** El popover muestra "Error al conectar con la IA."
-- **Sin cancelaciones en el período:** El diagrama Sankey se oculta automáticamente; la dona y la tendencia muestran estado vacío.
-- **Sin desvíos en el período:** La sección de desvíos (tabla y chart) no se renderiza.
+- **Tablas agregadas no disponibles:** Se muestra "Los datos no están disponibles. Ejecute el pipeline ELT primero."
+- **Error en endpoint de narrativa:** El servidor retorna objeto vacío y el panel emergente muestra "Sin narrativa disponible."
+- **Error de conexión en fetch de narrativa:** El panel emergente muestra "Error al conectar con la IA."
+- **Sin cancelaciones en el período:** El diagrama de flujo se oculta automáticamente; la dona y la tendencia muestran estado vacío.
+- **Sin desvíos en el período:** La sección de desvíos (tabla y gráfico) no se renderiza.
 
 ---
 
 ## Criterios de aceptación
 
-- **CU-E08:** Dado que existen datos en `agg_cancelaciones_causa` (o `agg_cancelaciones_causa_aerolinea` con filtro), cuando el Analista accede al módulo de cancelaciones, entonces el sistema muestra la distribución por código FAA con KPIs, dona, Sankey y permite filtrar por aerolínea.
+- **CU-E08:** Dado que existen datos en `agg_cancelaciones_causa` (o con filtro de aerolínea), cuando el Analista accede al módulo de cancelaciones, entonces el sistema muestra la distribución por código FAA con KPIs, dona, diagrama de flujo y permite filtrar por aerolínea.
 - **CU-E09:** Dado que existen datos en `agg_desvios_ruta`, cuando el Analista visualiza la sección de desvíos, entonces el sistema muestra el top 20 de rutas con más desvíos en tabla y gráfico de barras horizontal, filtrable por año y mes.
 - **CU-E10:** Dado que existen datos de tendencia mensual en `agg_cancelaciones_causa`, cuando el Analista visualiza el gráfico de tendencia, entonces el sistema muestra las cancelaciones totales por mes con líneas desglosadas por código FAA (A/B/C/D).
 
@@ -147,7 +147,7 @@ Analizar las cancelaciones clasificadas por código oficial FAA (A/B/C/D) y el i
 ## Dependencias
 
 - **Seguridad:** Autenticación mediante JWT y autorización por permiso `cancelaciones:ver`.
-- **Pipeline ELT:** Generación de las tablas agregadas `agg_cancelaciones_causa`, `agg_cancelaciones_causa_aerolinea`, `agg_kpi_global_dia` y `agg_desvios_ruta`.
+- **Pipeline ELT:** Generación de las tablas agregadas `agg_cancelaciones_causa`, `agg_cancelaciones_aerolinea_causa`, `agg_kpi_global_dia` y `agg_desvios_ruta`.
 
 ---
 
@@ -166,7 +166,7 @@ Analizar las cancelaciones clasificadas por código oficial FAA (A/B/C/D) y el i
 - Edición de códigos FAA, registros de cancelaciones o datos de desvíos.
 - Notificaciones automáticas cuando la tasa de cancelación supera el 5%.
 - Clasificación manual de causas de cancelación fuera de los 4 códigos FAA estándar.
-- Análisis de cancelaciones por ruta específica (cubierto parcialmente en el asistente IA vía `agg_cancelaciones_ruta`).
+- Análisis de cancelaciones por ruta específica (cubierto parcialmente en el asistente IA).
 
 ---
 

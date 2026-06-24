@@ -1,45 +1,9 @@
-<!--
-SYNC IMPACT REPORT
-==================
-Generated: 2026-06-21
-Skill: speckit-constitution
+# AeroTrack Analytics — Reglas y Principios del Sistema
 
-Version change: 2.0.0 → 2.1.0
-Bump type: MINOR — Principio XVII reescrito: unificación de Python a 3.12 en todo
-           el stack (FastAPI + Airflow), decisión cerrada por recomendación del
-           profesor del curso. Tabla ISO actualizada al modelo 2023 (9 características,
-           añadiendo Capacidad de Interacción y Seguridad de Funcionamiento).
+Fuente: `.specify/memory/constitution.md` v2.2.0 (ratificada 2026-06-21, última enmienda 2026-06-22).
+Los principios se transcriben textualmente agrupados por área temática.
 
-Modified principles:
-  XVII. Stack tecnológico estandarizado — texto anterior especificaba Python 3.13
-        para FastAPI / Python 3.12 para Airflow como "intencional"; nuevo texto
-        establece Python 3.12 unificado como decisión cerrada.
-
-Added: Sección G reordenada antes de Gobernanza (corrección de orden lógico).
-       Tabla ISO actualizada a revisión 2023 (9 características).
-
-Removed: N/A
-
-Templates reviewed:
-  ✅ .specify/templates/plan-template.md   — "Constitution Check" section genérica;
-     sin referencias hardcoded a principios — sin cambios requeridos.
-  ✅ .specify/templates/spec-template.md  — sin referencias a principios
-     específicos; estructura genérica — sin cambios requeridos.
-  ✅ .specify/templates/tasks-template.md — sin referencias a principios
-     específicos; categorías genéricas — sin cambios requeridos.
-
-Deferred items: NINGUNO.
-
-Follow-up TODOs (heredados de v2.0.0, sin cambio de estado):
-  1. [SEGURIDAD] Eliminar defaults hardcodeados en app/config.py (líneas 11, 12, 28)
-     y dags/config.py — deben lanzar excepción al arrancar si .env no los provee. Ver Principio IV.
-  2. [SEGURIDAD] Confirmar Fernet key hardcodeada en docker-compose.yml línea 136. Ver Principio IV.
-  3. [FRONTEND] Unificar Chart.js a versión 4.4.4. Ver Principio XIV.
-  4. [FRONTEND] Documentar cada uso de | safe con comentario inline. Ver Principio XV.
-  5. [INFRAESTRUCTURA] Migrar librerías CDN a /static/vendor/ con SRI antes de producción. Ver Principio XVI.
--->
-
-# AeroTrack Analytics — Constitución del Proyecto
+---
 
 ## A. Arquitectura de Datos
 
@@ -60,6 +24,8 @@ normal"/"Sin desvío"). Las 8 dimensiones restantes exigen FK válida; un
 vuelo sin match recibe FK=0, detectable como huérfana en
 `validar_integridad()`. El pipeline mantiene 10 tablas de agregación
 derivadas y recalculables, nunca fuente de verdad.
+
+---
 
 ## B. Seguridad y Configuración
 
@@ -88,6 +54,8 @@ exportación CSV). Esta garantía de inmutabilidad opera a nivel de la API
 de la aplicación — no existe Row-Level Security en PocketBase, por lo
 que el acceso administrativo directo a PocketBase queda fuera del
 alcance de este principio y debe restringirse por infraestructura.
+
+---
 
 ## C. Resiliencia y Rendimiento
 
@@ -124,6 +92,8 @@ de reintento automático (2 intentos, espera 5 minutos) y callback de
 fallo con logging. Ninguna tarea del pipeline corre sin timeout
 definido.
 
+---
+
 ## D. Inteligencia Artificial Responsable
 
 ### X. Contexto de IA limitado a KPIs agregados
@@ -141,6 +111,8 @@ renderiza en `base.html` únicamente cuando el usuario posee el permiso
 El endpoint `/ia/chat` aplica la misma verificación como segunda línea
 de defensa. La interfaz nunca presenta un control al que el usuario no
 puede acceder — visibilidad y autorización son coherentes.
+
+---
 
 ## E. Frontend y Sistema de Diseño
 
@@ -179,7 +151,6 @@ inline que justifique el caso.
 
 ### XVI. Dependencias externas como deuda técnica documentada
 
-
 El sistema depende actualmente de 6 orígenes CDN externos (Google Fonts,
 jsdelivr, cdn.plot.ly) sin SRI ni fallback local — esto es una brecha
 conocida, no una decisión aceptada permanentemente. Meta de madurez:
@@ -212,6 +183,8 @@ o la clase `at-code`; (d) los modales de creación siguen Bootstrap con
 `modal-body` en flex-column gap:12px; (e) las llamadas asíncronas usan
 `fetch` con `credentials:'same-origin'` y body en JSON, nunca `FormData`.
 
+---
+
 ## F. Stack Tecnológico
 
 ### XVII. Stack tecnológico estandarizado
@@ -222,6 +195,8 @@ de Airflow). **Python 3.12 unificado en todo el stack** (FastAPI y
 Airflow) — decisión cerrada por recomendación del profesor del curso por
 motivos de compatibilidad. No se permite divergencia de versión de
 Python entre los dos entornos del proyecto.
+
+---
 
 ## G. Conformidad con Normas de Calidad
 
@@ -247,30 +222,32 @@ Trazabilidad característica → principio:
 | Seguridad | III (RBAC), IV (sin secretos hardcodeados), V (auditoría inmutable), X (contexto IA solo KPIs), XV (serialización segura) |
 | Mantenibilidad | XII (tokens centralizados), XIV (versión única Chart.js), II (modelo dimensional documentado) |
 | Flexibilidad (ex-Portabilidad) | IV (config por entorno), I (separación de capas) |
-| Seguridad de Funcionamiento (Safety) | II (`validar_integridad()` detecta FK huérfanas antes de que lleguen al cliente), X (contexto IA solo KPIs reales, sin alucinación), VI (datos analíticos del núcleo nunca degradan silenciosamente) — protege contra que AeroTrack entregue inteligencia operacional incorrecta a una aerolínea cliente, lo cual podría derivar en decisiones reales sobre tripulación, rutas o capacidad con impacto en la seguridad operacional |
+| Seguridad de Funcionamiento (Safety) | II (validar_integridad() detecta FK huérfanas), X (contexto IA solo KPIs reales), VI (datos analíticos del núcleo nunca degradan silenciosamente) |
 
-## Restricciones de Calidad
+---
 
-- Todo caso de uso del catálogo de 53 CUs debe tener especificación
-  formal antes de implementarse.
-- Toda funcionalidad nueva declara explícitamente sus dependencias con
-  otros módulos y su criterio de aceptación verificable.
-- Las narrativas IA se presentan siempre en un modal por gráfico/KPI,
-  nunca como bloque a nivel de módulo completo.
+## Reglas transversales de aplicación universal
 
-## Flujo de Desarrollo
+Estas reglas aparecen en múltiples spec.md bajo el patrón `RN-XXX-001` y se aplican a todos los módulos:
 
-`speckit-constitution` (este archivo) → `speckit-specify` →
-`speckit-clarify` → `speckit-plan` → `speckit-tasks` →
-`speckit-implement` → `speckit-checklist`/`speckit-analyze`.
-Especificaciones organizadas en `specs/` por nivel organizacional
-(`estrategico/`, `tactico/`, `operativo/`), replicando el mapa OE/OT/OO.
+### RN-TRX-001 — Auditoría obligatoria en toda operación administrativa
 
-## Gobernanza
+Toda operación de creación, edición, eliminación, ejecución, exportación o configuración debe registrarse llamando a `audit.registrar()` en `app/shared/utils/audit.py`. La llamada va dentro de un `try/except` implícito (la función nunca lanza). No se puede omitir la auditoría en operaciones que modifican estado.
 
-Esta constitución prevalece sobre cualquier práctica informal. Toda
-modificación se documenta con justificación y fecha de enmienda.
-Mientras `.kiro/` esté activo, `steering/tech.md` y `steering/structure.md`
-deben reflejar la misma versión.
+Módulos donde aplica: seguridad, pipeline_elt, modelo_dimensional, configuracion, reportes, predictivo, asistente_ia, clientes, socios_api.
 
-**Versión**: 2.2.0 | **Ratificada**: 2026-06-21 | **Última enmienda**: 2026-06-22
+### RN-TRX-002 — RBAC obligatorio en todo endpoint no público
+
+Todo endpoint FastAPI que devuelva datos o ejecute operaciones debe invocar `require_permission(modulo, accion)` como primera instrucción. El único endpoint sin verificación de permisos es `GET /auth/login` y `POST /auth/login`.
+
+### RN-TRX-003 — Serialización segura de datos Python → JavaScript
+
+Toda variable Python que se pase a un template Jinja2 para uso en JavaScript debe usar `| tojson`. El uso de `| safe` directo sin `json.dumps()` previo está prohibido salvo los dos casos documentados en el Principio XV.
+
+### RN-TRX-004 — Los datos analíticos se leen exclusivamente de aerotrack-dims
+
+Ningún módulo de análisis (dashboard, puntualidad, rutas, cancelaciones, reportes, predictivo, asistente IA) lee de PocketBase ni de `aerotrack-raw`. Toda consulta usa `read_parquet()`, `load_agg()` o `load_enriched_fact()` sobre el bucket `aerotrack-dims`.
+
+### RN-TRX-005 — Paginación en todo listado HTML
+
+Todo endpoint que retorna una lista de registros HTML aplica `PAGE_SIZE = 50` (definido en `app/shared/templates.py:44`). Los endpoints JSON para APIs públicas o exportaciones CSV quedan exentos de este límite con autenticación verificada.

@@ -10,90 +10,90 @@
 
 ## Funcionalidad 1: Gestionar usuarios del sistema (CU-T01)
 
-Administración CRUD de usuarios del sistema desde `app/seguridad/usuarios/usuarios.py`. El repositorio no almacena usuarios en tabla propia; las operaciones se delegan a PocketBase colección `app_users`.
+Administración CRUD de usuarios del sistema. El repositorio de usuarios se almacena en la colección `app_users` de PocketBase; las operaciones se delegan a dicho repositorio.
 
 ### RF-SEG-001 — Listar usuarios
-El sistema lista usuarios en `GET /auth/usuarios` con paginación de 20 registros por página, ordenados por `-created`. Soporta filtros combinables: texto libre (`q`, busca en `nombre` y `email`), `rol_id` y `activo` (true/false). Muestra el rol expandido desde PocketBase.
+El sistema debe listar usuarios con paginación de 20 registros por página, ordenados por fecha de creación descendente. Debe soportar filtros combinables: texto libre (busca en nombre y email), rol y estado (activo/inactivo), mostrando el rol expandido de cada usuario.
 
 ### RF-SEG-002 — Crear usuario con contraseña temporal
-`POST /auth/usuarios` recibe `nombre`, `email`, `rol_id`. El sistema genera una contraseña temporal mediante `generar_contrasena_temporal(nombre)` (formato: `Nombre.Año@3digitos`), la envía por correo vía `email_utils.send_welcome_email()` con el enlace de login, y persiste en PocketBase con `activo=True`. El email de bienvenida es transaccional (no bloquea la creación si falla el envío, muestra advertencia al administrador).
+El sistema debe crear un usuario recibiendo nombre, email y rol. El sistema debe generar automáticamente una contraseña temporal, enviarla al nuevo usuario por correo electrónico con el enlace de acceso, y persistir el usuario con estado activo. El envío de correo es transaccional: si falla, la creación del usuario no se bloquea y se muestra advertencia al administrador.
 
 ### RF-SEG-003 — Editar datos de usuario
-`GET /auth/usuarios/{uid}` muestra formulario precargado. `POST /auth/usuarios/{uid}` actualiza `nombre`, `email` y `rol_id` en PocketBase. Registra auditoría con tipo `editar`.
+El sistema debe mostrar un formulario precargado con los datos actuales del usuario y permitir actualizar nombre, email y rol. Debe registrar la acción en auditoría.
 
 ### RF-SEG-004 — Cambiar estado activo/inactivo
-`POST /auth/usuarios/{uid}/estado` conmuta el flag `activo` del usuario. Un usuario inactivo no puede iniciar sesión (validado en login). Muestra modal de confirmación antes de ejecutar.
+El sistema debe permitir conmutar el estado activo/inactivo de un usuario. Un usuario inactivo no puede iniciar sesión. Debe mostrar confirmación antes de ejecutar el cambio.
 
 ### RF-SEG-005 — Protección de auto-desactivación
-El sistema rechaza explícitamente (`if uid == user["sub"]`) que un administrador se desactive a sí mismo, retornando error "No puedes desactivar tu propia cuenta." Previene el bloqueo administrativo irreversible.
+El sistema debe rechazar explícitamente que un administrador desactive su propia cuenta, retornando el error "No puedes desactivar tu propia cuenta." Esto previene el bloqueo administrativo irreversible.
 
 ### RF-SEG-006 — Restablecer contraseña
-`POST /auth/usuarios/{uid}/reset-password` genera una nueva contraseña temporal, la asigna en PocketBase via `change_user_password()`, y muestra la nueva contraseña al administrador en pantalla (única excepción a no mostrar credenciales, por ser entorno controlado).
+El sistema debe generar una nueva contraseña temporal para el usuario indicado y mostrarla al administrador en pantalla (única instancia controlada en que se expone una credencial generada, por tratarse de un entorno administrativo).
 
 ### RNF-SEG-001 — Sesión JWT inmutable al cambiar email
-El JWT usa `sub = record["id"]` (id de PocketBase) como identificador, no el email. Cambiar el email del usuario o su propia contraseña no invalida las sesiones activas.
+El token de sesión utiliza el identificador único del usuario (no el email). Cambiar el email del usuario o su contraseña no invalida las sesiones activas.
 
 ---
 
 ## Funcionalidad 2: Administrar roles y asignar permisos (CU-T02)
 
-CRUD de roles desde `app/seguridad/rbac/roles_admin.py` y gestión de matriz de permisos desde `app/seguridad/rbac/permisos.py`. Los roles se almacenan en PocketBase colección `roles`; los permisos asignados en `roles_permisos`.
+CRUD de roles y gestión de la matriz de permisos. Los roles se almacenan en PocketBase colección `roles`; los permisos asignados en `roles_permisos`.
 
 ### RF-SEG-007 — Listar roles con conteo de usuarios
-`GET /auth/roles` muestra todos los roles ordenados por nombre, cada uno con etiqueta "Sistema"/"Personalizado" según `es_sistema`, y el conteo de usuarios asignados obtenido consultando `app_users` por `rol_id`.
+El sistema debe mostrar todos los roles ordenados por nombre, cada uno con etiqueta "Sistema"/"Personalizado" según su tipo, y el conteo de usuarios asignados.
 
 ### RF-SEG-008 — Crear rol
-`POST /auth/roles` recibe `nombre` y `descripción`. Crea el rol en PocketBase con `es_sistema=False`, `activo=True` (solo roles personalizados pueden crearse).
+El sistema debe permitir crear roles personalizados recibiendo nombre y descripción. Solo los roles personalizados pueden crearse desde la interfaz.
 
 ### RF-SEG-009 — Editar rol (con protección de sistema)
-`GET /auth/roles/{rid}` carga formulario. `POST /auth/roles/{rid}` actualiza nombre y descripción. Roles con `es_sistema=True` no pueden editarse (redirección con error).
+El sistema debe mostrar un formulario de edición para el rol seleccionado y permitir actualizar nombre y descripción. Los roles de sistema no pueden editarse; el intento redirige con error.
 
 ### RF-SEG-010 — Eliminar rol (con protecciones)
-`POST /auth/roles/{rid}/eliminar`. Bloqueado si:
-- `es_sistema=True` → "No se puede eliminar un rol del sistema."
+El sistema debe bloquear la eliminación de un rol si:
+- Es un rol de sistema → "No se puede eliminar un rol del sistema."
 - Tiene usuarios asignados → "El rol tiene N usuario(s) asignado(s). Reasígnalos primero."
 
-Al eliminar, realiza cascada manual: borra todos los registros en `roles_permisos` vinculados al rol antes de eliminar el rol.
+Al eliminar, el sistema debe realizar la eliminación en cascada de todos los permisos asociados al rol antes de eliminarlo.
 
 ### RF-SEG-011 — Gestionar matriz de permisos por rol
-`GET /auth/roles/{rid}/permisos` muestra formulario con todos los módulos como filas y las 7 acciones disponibles (ver, crear, editar, eliminar, ejecutar, exportar, configurar) como columnas con checkboxes. Muestra permisos actuales precargados.
+El sistema debe mostrar un formulario con todos los módulos del sistema como filas y las 7 acciones disponibles (ver, crear, editar, eliminar, ejecutar, exportar, configurar) como columnas con casillas de verificación, precargado con los permisos actuales del rol.
 
 ### RF-SEG-012 — Guardado de permisos como replace completo
-`POST /auth/roles/{rid}/permisos`: elimina todos los registros `roles_permisos` existentes para el rol (replace completo), luego inserta solo los seleccionados. Esto evita estados inconsistentes por selecciones parciales.
+El sistema debe eliminar todos los permisos existentes del rol antes de insertar únicamente los seleccionados en el formulario. Esto evita estados inconsistentes por selecciones parciales.
 
 ### RF-SEG-013 — Invalidación de caché al guardar permisos
-Tras guardar permisos, invoca `invalidate_permission_cache(rid)` que elimina la entrada del caché en memoria del rol modificado. La próxima solicitud de cualquier usuario de ese rol forzará una recarga desde PocketBase.
+El sistema debe invalidar la caché de permisos del rol modificado tras guardar. La próxima solicitud de cualquier usuario de ese rol forzará una recarga desde el repositorio.
 
 ### RNF-SEG-002 — Caché de permisos con TTL 5 minutos
-Los permisos por rol se cachean en `_perm_cache` (`app/shared/deps.py`) con `_PERM_TTL = 300` segundos. Cada consulta verifica expiración; si caducó, recarga y actualiza.
+El sistema debe cachear los permisos por rol durante 5 minutos. Cada consulta verifica expiración; si caducó, recarga y actualiza.
 
 ### RNF-SEG-003 — Vistas de solo lectura usan el permiso "ver"
-Las rutas de listado (`GET`) usan `require_permission("seguridad", "ver")`; las rutas de escritura usan `crear`, `editar`, `eliminar` o `configurar` según corresponda.
+Las operaciones de consulta requieren permiso `seguridad:ver`; las operaciones de escritura requieren `crear`, `editar`, `eliminar` o `configurar` según corresponda.
 
 ### RNF-SEG-004 — JWT HS256 con TTL y clave secreta configurables
-El JWT usa algoritmo HS256 con TTL configurable vía variable de entorno `TOKEN_EXPIRE_MINUTES` (sin valor por defecto en código) y clave secreta configurable vía `SECRET_KEY` — Principio IV de la constitución.
+El sistema debe firmar los tokens JWT con el algoritmo HS256, con tiempo de expiración y clave secreta configurables mediante variables de entorno, sin valores por defecto en código — Principio IV de la constitución.
 
 ### RNF-SEG-005 — Autorización en capa de aplicación
-Toda autorización se valida en la capa de aplicación (FastAPI), nunca en la base de datos — Principio III de la constitución.
+El sistema debe validar toda autorización en la capa de aplicación, nunca en la base de datos — Principio III de la constitución.
 
 ### RNF-SEG-006 — Auditoría de acciones administrativas
-Toda acción administrativa relevante debe registrarse en el log de auditoría inmutable — Principio V de la constitución.
+El sistema debe registrar en el log de auditoría inmutable toda acción administrativa relevante — Principio V de la constitución.
 
 ---
 
 ## Reglas de negocio
 
 ### RN-SEG-001 — Roles de sistema inmutables
-Los roles con `es_sistema=True` no pueden editarse ni eliminarse. Solo roles personalizados (`es_sistema=False`) son modificables.
+Los roles de sistema no pueden editarse ni eliminarse. Solo los roles personalizados son modificables.
 
 ### RN-SEG-002 — No auto-desactivación
-Un administrador no puede desactivar su propia cuenta. Garantiza que siempre haya al menos un administrador activo.
+Un administrador no puede desactivar su propia cuenta. Esto garantiza que siempre haya al menos un administrador activo.
 
 ### RN-SEG-003 — Email único por usuario
-PocketBase enforces unicidad de email en colección `app_users`. El sistema verifica adicionalmente antes de actualizar perfil que el nuevo email no pertenezca a otro usuario.
+El repositorio enforces unicidad de email. El sistema verifica adicionalmente antes de actualizar perfil que el nuevo email no pertenezca a otro usuario.
 
 ### RN-SEG-004 — Contraseña temporal en primer acceso
-Todo usuario nuevo recibe contraseña temporal. El sistema no provee formulario de "cambio obligatorio en primer login"; el usuario debe cambiarla voluntariamente desde su perfil.
+Todo usuario nuevo recibe contraseña temporal. El sistema no provee formulario de cambio obligatorio en primer login; el usuario debe cambiarla voluntariamente desde su perfil.
 
 ---
 
@@ -113,24 +113,24 @@ Administrar los usuarios del sistema y la matriz de roles y permisos, garantizan
 ## Escenarios
 
 ### Camino feliz
-1. El Administrador accede a `GET /auth/usuarios` y visualiza la lista paginada de usuarios con filtros por texto libre, rol y estado activo/inactivo.
-2. El Administrador crea un usuario mediante `POST /auth/usuarios`; el sistema genera una contraseña temporal, la asigna en PocketBase y envía un email de bienvenida.
-3. El Administrador navega a `GET /auth/roles/{rid}/permisos`, selecciona las acciones permitidas para cada módulo y guarda mediante `POST /auth/roles/{rid}/permisos`.
-4. El sistema aplica el reemplazo completo de permisos (elimina todos los existentes, inserta solo los seleccionados) e invalida la caché del rol modificado.
-5. El Administrador intenta desactivar a otro usuario; el sistema conmuta el flag `activo` y registra la operación en auditoría.
+1. El Administrador accede a la gestión de usuarios y visualiza la lista paginada con filtros por texto libre, rol y estado activo/inactivo.
+2. El Administrador crea un usuario; el sistema genera una contraseña temporal, la asigna en el repositorio y envía un email de bienvenida.
+3. El Administrador navega a la gestión de permisos del rol, selecciona las acciones permitidas para cada módulo y guarda.
+4. El sistema aplica el reemplazo completo de permisos e invalida la caché del rol modificado.
+5. El Administrador conmuta el estado de otro usuario; el sistema registra la operación en auditoría.
 
 ### Manejo de errores
-- **Auto-desactivación:** Si el Administrador intenta desactivar su propia cuenta (`uid == user["sub"]`), el sistema rechaza con "No puedes desactivar tu propia cuenta."
-- **Email duplicado:** Al crear o editar un usuario con un email ya existente en PocketBase, el sistema retorna error de validación antes de persistir.
-- **Rol de sistema inmutable:** Intentar editar o eliminar un rol con `es_sistema=True` retorna error y redirige sin modificar datos.
-- **Rol con usuarios asignados:** Intentar eliminar un rol que tiene al menos un usuario asignado retorna "El rol tiene N usuario(s) asignado(s). Reasígnalos primero."
+- **Auto-desactivación:** Si el Administrador intenta desactivar su propia cuenta, el sistema rechaza con "No puedes desactivar tu propia cuenta."
+- **Email duplicado:** Al crear o editar un usuario con un email ya existente, el sistema retorna error de validación antes de persistir.
+- **Rol de sistema inmutable:** Intentar editar o eliminar un rol de sistema retorna error y redirige sin modificar datos.
+- **Rol con usuarios asignados:** Intentar eliminar un rol con al menos un usuario asignado retorna "El rol tiene N usuario(s) asignado(s). Reasígnalos primero."
 - **Error en envío de email:** Si el email de bienvenida no puede enviarse, la creación del usuario no se bloquea pero se muestra una advertencia al Administrador.
 
 ---
 
 ## Criterios de aceptación
 
-- **CU-T01:** Dado que el Administrador accede a la gestión de usuarios, cuando crea, edita, desactiva o restablece la contraseña de un usuario, entonces el sistema ejecuta la operación en PocketBase y registra la acción en el log de auditoría.
+- **CU-T01:** Dado que el Administrador accede a la gestión de usuarios, cuando crea, edita, desactiva o restablece la contraseña de un usuario, entonces el sistema ejecuta la operación en el repositorio y registra la acción en el log de auditoría.
 - **CU-T02:** Dado que el Administrador accede a la gestión de roles, cuando crea, edita, elimina o modifica los permisos de un rol, entonces el sistema aplica las reglas de negocio correspondientes (roles de sistema inmutables, reemplazo completo de permisos, protección de roles con usuarios asignados) e invalida la caché del rol modificado.
 
 ---
@@ -139,7 +139,7 @@ Administrar los usuarios del sistema y la matriz de roles y permisos, garantizan
 
 - **Seguridad:** Autenticación mediante JWT y autorización sobre el propio módulo de seguridad (permisos `seguridad:ver`, `seguridad:crear`, `seguridad:editar`, `seguridad:eliminar`).
 - **PocketBase:** Colecciones `app_users` (almacenamiento de usuarios), `roles` (roles del sistema), `roles_permisos` (asignación de permisos por rol) y `auditoria_log` (registro de auditoría).
-- **Email:** Servicio de correo electrónico para envío de contraseñas temporales (`email_utils.send_welcome_email`).
+- **Email:** Servicio de correo electrónico para envío de contraseñas temporales.
 
 ---
 

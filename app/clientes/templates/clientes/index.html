@@ -7,49 +7,81 @@
 
 {% block head_extra %}
 <style>
-  .cl-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:24px; }
-  .cl-metric-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:18px 20px; }
-  .cl-metric-val { font-size:26px; font-weight:700; color:var(--at-text); font-family:'JetBrains Mono',monospace; }
-  .cl-metric-label { font-size:12px; color:var(--at-muted); margin-top:4px; }
-  .cl-metric-card .bi { font-size:22px; opacity:.6; }
-  .cliente-row { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:var(--at-r-lg); transition:background .15s; }
-  .cliente-row:hover { background:rgba(255,255,255,.03); }
+  .cl-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:24px; }
+  .cl-kpi-card { background:var(--at-surface); border:1px solid var(--at-border); border-radius:var(--at-r-lg); padding:18px 20px; position:relative; overflow:hidden; box-shadow:var(--at-shadow-sm); }
+  .cl-kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:3px 3px 0 0; }
+  .cl-kpi-card.blue::before  { background:var(--at-blue-500); }
+  .cl-kpi-card.green::before { background:var(--at-green-500); }
+  .cl-kpi-card.amber::before { background:#f59e0b; }
+  .cl-kpi-card.red::before   { background:var(--at-red-500); }
+  .cl-kpi-top { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .cl-kpi-icon { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+  .cl-kpi-icon.blue  { background:rgba(13,110,253,.12);  color:var(--at-blue-500); }
+  .cl-kpi-icon.green { background:rgba(25,135,84,.12);   color:var(--at-green-500); }
+  .cl-kpi-icon.amber { background:rgba(245,158,11,.12);  color:#f59e0b; }
+  .cl-kpi-icon.red   { background:rgba(220,53,69,.12);   color:var(--at-red-500); }
+  .cl-kpi-label { font-size:11px; font-weight:600; color:var(--at-muted); text-transform:uppercase; letter-spacing:.6px; }
+  .cl-kpi-val { font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:700; color:var(--at-text); line-height:1; }
+
+  .cliente-avatar { width:34px; height:34px; border-radius:9px; background:rgba(13,110,253,.1); color:var(--at-blue-500); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
   .cliente-iata { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; color:var(--at-blue-500); background:rgba(59,130,246,.1); padding:2px 8px; border-radius:6px; }
-  .cliente-info { flex:1; min-width:0; }
-  .cliente-nombre { font-size:14px; font-weight:600; color:var(--at-text); }
-  .cliente-email { font-size:12px; color:var(--at-muted); margin-top:2px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-  <h1 style="font-size:20px;font-weight:700;margin:0">Clientes</h1>
-  <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
-    <i class="bi bi-plus-lg"></i> Nuevo cliente
-  </button>
+
+<div class="page-heading">
+  <h1>
+    <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-people-fill"></i></span>
+    Clientes
+  </h1>
+  <p>Aerolíneas cliente con acceso a AeroTrack Analytics y sus suscripciones activas.</p>
 </div>
 
-<div class="cl-metrics">
-  <div class="cl-metric-card">
-    <div class="cl-metric-val" style="color:var(--at-blue-500)">{{ total }}</div>
-    <div class="cl-metric-label">Total clientes</div>
+<!-- KPI grid -->
+<div class="cl-kpi-grid">
+  <div class="cl-kpi-card blue">
+    <div class="cl-kpi-top">
+      <div class="cl-kpi-icon blue"><i class="bi bi-people"></i></div>
+      <span class="cl-kpi-label">Total</span>
+    </div>
+    <div class="cl-kpi-val">{{ total }}</div>
   </div>
-  <div class="cl-metric-card">
-    <div class="cl-metric-val" style="color:#10b981">{{ activos }}</div>
-    <div class="cl-metric-label">Activos</div>
+  <div class="cl-kpi-card green">
+    <div class="cl-kpi-top">
+      <div class="cl-kpi-icon green"><i class="bi bi-check-circle"></i></div>
+      <span class="cl-kpi-label">Activos</span>
+    </div>
+    <div class="cl-kpi-val">{{ activos }}</div>
   </div>
-  <div class="cl-metric-card">
-    <div class="cl-metric-val" style="color:#f59e0b">{{ en_prueba }}</div>
-    <div class="cl-metric-label">Plan básico / Prueba</div>
+  <div class="cl-kpi-card amber">
+    <div class="cl-kpi-top">
+      <div class="cl-kpi-icon amber"><i class="bi bi-hourglass-split"></i></div>
+      <span class="cl-kpi-label">Básico / Prueba</span>
+    </div>
+    <div class="cl-kpi-val">{{ en_prueba }}</div>
   </div>
-  <div class="cl-metric-card">
-    <div class="cl-metric-val" style="color:#ef4444">{{ inactivos }}</div>
-    <div class="cl-metric-label">Inactivos</div>
+  <div class="cl-kpi-card red">
+    <div class="cl-kpi-top">
+      <div class="cl-kpi-icon red"><i class="bi bi-x-circle"></i></div>
+      <span class="cl-kpi-label">Inactivos</span>
+    </div>
+    <div class="cl-kpi-val">{{ inactivos }}</div>
   </div>
 </div>
 
+<!-- Tabla de clientes -->
 {% if clientes %}
 <div class="at-table-wrapper">
+  <div class="at-table-header">
+    <span class="at-table-title">
+      Clientes
+      <span style="font-size:12px;font-weight:400;color:var(--at-muted);margin-left:6px">({{ total }})</span>
+    </span>
+    <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear">
+      <i class="bi bi-plus-lg"></i> Nuevo cliente
+    </button>
+  </div>
   <div class="at-table-scroll">
     <table class="at-table">
       <thead>
@@ -66,16 +98,18 @@
         {% for c in clientes %}
         <tr>
           <td>
-            <div class="cliente-row" style="padding:0">
-              <i class="bi bi-building" style="font-size:18px;color:var(--at-muted)"></i>
-              <div class="cliente-info">
-                <div class="cliente-nombre">{{ c.nombre }}</div>
-                <div class="cliente-email">{{ c.contacto_email }}</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="cliente-avatar">{{ (c.nombre or '?')[:1].upper() }}</div>
+              <div>
+                <div style="font-size:13.5px;font-weight:600;color:var(--at-text)">{{ c.nombre }}</div>
+                <div style="font-size:11.5px;color:var(--at-muted)">{{ c.contacto_email }}</div>
               </div>
             </div>
           </td>
           <td><span class="cliente-iata">{{ c.iata }}</span></td>
-          <td><span class="at-badge at-badge-pending" style="text-transform:capitalize">{{ c.tipo_servicio or 'basico' }}</span></td>
+          <td>
+            <span class="at-badge at-badge-pending" style="text-transform:capitalize">{{ c.tipo_servicio or 'básico' }}</span>
+          </td>
           <td class="at-code" style="font-size:12px;color:var(--at-muted)">{{ (c.fecha_inicio or '')[:10] }}</td>
           <td>
             <span class="at-badge {% if c.activo %}at-badge-success{% else %}at-badge-failed{% endif %}">
@@ -83,7 +117,11 @@
               {{ 'Activo' if c.activo else 'Inactivo' }}
             </span>
           </td>
-          <td><a href="/clientes/{{ c.id }}" class="btn-at-ghost" style="font-size:12px">Detalle</a></td>
+          <td style="text-align:right">
+            <a href="/clientes/{{ c.id }}" class="btn-at-ghost" style="font-size:12px">
+              <i class="bi bi-arrow-right"></i> Detalle
+            </a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -95,6 +133,9 @@
   <i class="bi bi-people at-empty-icon"></i>
   <strong>Sin clientes registrados</strong>
   <p>Crea tu primer cliente para comenzar.</p>
+  <button class="btn-at-primary" data-bs-toggle="modal" data-bs-target="#modal-crear" style="margin-top:8px">
+    <i class="bi bi-plus-lg"></i> Nuevo cliente
+  </button>
 </div>
 {% endif %}
 
@@ -103,14 +144,16 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Nuevo cliente</h5>
+        <h5 class="modal-title" style="display:flex;align-items:center;gap:8px">
+          <i class="bi bi-person-plus" style="color:var(--at-blue-500)"></i> Nuevo cliente
+        </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <form id="form-crear">
         <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
           <input class="at-input" name="nombre" placeholder="Nombre del cliente" required>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <input class="at-input" name="iata" placeholder="IATA (2 letras)" maxlength="2" style="text-transform:uppercase" required>
+            <input class="at-input" name="iata" placeholder="Código IATA (2 letras)" maxlength="2" style="text-transform:uppercase" required>
             <select class="at-input" name="tipo_servicio">
               <option value="basico">Básico</option>
               <option value="profesional">Profesional</option>
@@ -118,9 +161,11 @@
             </select>
           </div>
           <input class="at-input" name="contacto_email" type="email" placeholder="Email de contacto" required>
-          <label style="font-size:12px;color:var(--at-muted)">Fecha de inicio</label>
-          <input class="at-input" name="fecha_inicio" type="date" required>
-          <textarea class="at-input" name="notas" placeholder="Notas (opcional)" rows="2"></textarea>
+          <div>
+            <label style="font-size:12px;color:var(--at-muted);display:block;margin-bottom:4px">Fecha de inicio</label>
+            <input class="at-input" name="fecha_inicio" type="date" required>
+          </div>
+          <textarea class="at-input" name="notas" placeholder="Notas internas (opcional)" rows="2"></textarea>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-at-ghost" data-bs-dismiss="modal">Cancelar</button>

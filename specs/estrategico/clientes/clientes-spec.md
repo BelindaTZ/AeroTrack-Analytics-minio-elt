@@ -15,35 +15,35 @@ Administrar la cartera de clientes aerolínea de AeroTrack, gestionar suscripcio
 ### Funcionalidad 1: Ver panel de captación y gestionar clientes aerolínea (CU-E19, CU-T10)
 
 - **RF-CLI-001**: El sistema debe mostrar un panel con métricas globales de la cartera: total de clientes, activos, inactivos y en plan básico/prueba.
-- **RF-CLI-002**: El sistema debe permitir listar clientes desde `GET /clientes` con paginación por orden de creación.
-- **RF-CLI-003**: El sistema debe permitir crear un cliente vía `POST /clientes` con: nombre, código IATA (2 letras, único), email de contacto, tipo de servicio (básico/profesional/enterprise), fecha de inicio y notas opcionales.
-- **RF-CLI-004**: El sistema debe permitir editar los datos de un cliente existente vía `POST /clientes/{id}`.
-- **RF-CLI-005**: El sistema debe permitir activar o desactivar un cliente vía `POST /clientes/{id}/estado`; un cliente inactivo no recibe entregas automáticas de reportes.
+- **RF-CLI-002**: El sistema debe permitir listar clientes con paginación por orden de creación.
+- **RF-CLI-003**: El sistema debe permitir crear un cliente con los siguientes datos: nombre, código IATA (2 letras, único), email de contacto, tipo de servicio (básico/profesional/enterprise), fecha de inicio y notas opcionales.
+- **RF-CLI-004**: El sistema debe permitir editar los datos de un cliente existente.
+- **RF-CLI-005**: El sistema debe permitir activar o desactivar un cliente; un cliente inactivo no recibe entregas automáticas de reportes.
 
 ### Funcionalidad 2: Configurar suscripciones de reporte por cliente (CU-T11)
 
-- **RF-CLI-006**: El sistema debe permitir crear suscripciones vía `POST /clientes/{id}/suscripcion` definiendo: tipo de reporte (PDF/Excel/CSV), frecuencia (diaria/semanal/mensual), filtros opcionales (mismos que `app/reportes/`) y estado activo.
+- **RF-CLI-006**: El sistema debe permitir crear suscripciones definiendo: tipo de reporte (PDF/Excel/CSV), frecuencia (diaria/semanal/mensual), filtros opcionales y estado activo.
 - **RF-CLI-007**: El sistema debe calcular y mostrar la próxima fecha de entrega según la frecuencia configurada (1 día, 7 días o 30 días desde la creación).
 
 ### Funcionalidad 3: Generar enlace de demo y ver historial de entregas (CU-O15, CU-O16)
 
-- **RF-CLI-008**: El sistema debe generar un token de demostración vía `POST /clientes/{id}/demo` con días de expiración configurables (default 7) y código IATA de la aerolínea a mostrar.
-- **RF-CLI-009**: El sistema debe exponer `GET /demo/{token}` como acceso público sin JWT que valida el token, verifica expiración, marca como usado y redirige a `/dashboard?airline={iata}`.
-- **RF-CLI-010**: El sistema debe mostrar el historial de entregas por cliente desde `GET /clientes/{id}/historial` con fecha, tipo de reporte, estado (exitoso/fallido) y enlace de descarga.
+- **RF-CLI-008**: El sistema debe generar un token de demostración con días de expiración configurables y código IATA de la aerolínea a mostrar.
+- **RF-CLI-009**: El sistema debe exponer un acceso público sin autenticación que valida el token de demostración, verifica su expiración, lo marca como usado y redirige al dashboard filtrado por la aerolínea correspondiente.
+- **RF-CLI-010**: El sistema debe mostrar el historial de entregas por cliente con fecha, tipo de reporte, estado (exitoso/fallido) y enlace de descarga.
 
 ## Requisitos no funcionales
 
-- **RNF-CLI-001**: Toda acción de creación y edición se registra en auditoría con módulo `clientes`.
-- **RNF-CLI-002**: Los tokens de demo expiran automáticamente; el sistema los rechaza con redirect a login si están vencidos o ya usados.
-- **RNF-CLI-003**: El RBAC se valida en FastAPI con `require_permission("clientes", *)`: `ver`, `crear`, `editar`, `eliminar`, `exportar`.
-- **RNF-CLI-004**: La escritura es resiliente — si PocketBase no responde en operaciones de auditoría, no interrumpe la respuesta al usuario.
+- **RNF-CLI-001**: El sistema debe registrar en auditoría toda acción de creación, edición y eliminación de clientes, con módulo identificador `clientes`.
+- **RNF-CLI-002**: El sistema debe expirar automáticamente los tokens de demostración y rechazar el acceso redirigiendo al inicio de sesión si están vencidos o ya fueron utilizados.
+- **RNF-CLI-003**: El sistema debe validar el control de acceso basado en roles para cada operación, exigiendo los permisos correspondientes: ver, crear, editar, eliminar y exportar.
+- **RNF-CLI-004**: El sistema debe ser resiliente en operaciones de auditoría — si el servicio de persistencia no responde, la operación principal no debe interrumpirse.
 
 ## Reglas de negocio
 
 - **RN-CLI-001**: Un cliente con estado inactivo no puede recibir entregas automáticas aunque tenga suscripciones activas.
-- **RN-CLI-002**: El código IATA de un cliente debe ser único en el sistema (unique constraint en colección `pb_clientes`).
+- **RN-CLI-002**: El código IATA de un cliente debe ser único en el sistema.
 - **RN-CLI-003**: Un token de demo vencido no puede reactivarse; debe generarse uno nuevo.
-- **RN-CLI-004**: Un token de demo se marca como `usado=true` tras el primer acceso; no puede reutilizarse.
+- **RN-CLI-004**: Un token de demostración se marca como utilizado tras el primer acceso y no puede reutilizarse.
 
 ## Entradas y salidas
 
@@ -63,7 +63,7 @@ Administrar la cartera de clientes aerolínea de AeroTrack, gestionar suscripcio
 
 ### Camino feliz
 
-El Administrador accede a `GET /clientes` y ve las métricas de la cartera (total: 12, activos: 9, inactivos: 3, prueba: 4). Crea un nuevo cliente vía modal con nombre "AeroLatina", IATA "AL", email "contacto@aerolatina.com", servicio "profesional". El sistema lo registra en `pb_clientes` y lo muestra en la lista con estado activo. El Administrador abre el detalle, configura una suscripción mensual de PDF. El sistema calcula próxima entrega a 30 días. Genera un token de demo de 7 días para IATA "AL". Copia la URL y se la envía al prospecto. El prospecto accede a `GET /demo/{token}` y es redirigido al dashboard filtrado por "AL".
+El Administrador accede al panel de clientes y ve las métricas de la cartera (total: 12, activos: 9, inactivos: 3, prueba: 4). Crea un nuevo cliente con nombre "AeroLatina", IATA "AL", email "contacto@aerolatina.com", servicio "profesional". El sistema lo registra y lo muestra en la lista con estado activo. El Administrador abre el detalle, configura una suscripción mensual de PDF. El sistema calcula próxima entrega a 30 días. Genera un token de demo de 7 días para IATA "AL". Copia la URL y se la envía al prospecto. El prospecto accede al enlace de demo y es redirigido al dashboard filtrado por "AL".
 
 ### Manejo de errores
 
@@ -75,17 +75,17 @@ El Administrador accede a `GET /clientes` y ve las métricas de la cartera (tota
 
 ## Criterios de aceptación
 
-1. Dado que el Administrador crea un cliente con código IATA único, cuando guarda, entonces el sistema registra el cliente en `pb_clientes` y lo muestra en la lista con estado activo.
-2. Dado que un cliente tiene suscripción activa con frecuencia mensual, cuando se crea la suscripción, entonces el sistema calcula `proxima_entrega = fecha_actual + 30 días`.
+1. Dado que el Administrador crea un cliente con código IATA único, cuando guarda, entonces el sistema registra el cliente y lo muestra en la lista con estado activo.
+2. Dado que un cliente tiene suscripción activa con frecuencia mensual, cuando se crea la suscripción, entonces el sistema calcula la próxima fecha de entrega a 30 días.
 3. Dado que el Administrador genera un token de demo con 7 días de expiración, cuando el prospecto accede a la URL dentro del plazo, entonces visualiza el dashboard filtrado por su aerolínea y el token se marca como usado.
-4. Dado que un token de demo está expirado, cuando se accede a su URL, entonces el sistema redirige a login con mensaje de error.
+4. Dado que un token de demo está expirado, cuando se accede a su URL, entonces el sistema redirige a inicio de sesión con mensaje de error.
 5. Dado que el Administrador solicita el historial de entregas de un cliente, entonces el sistema retorna los registros ordenados por fecha descendente.
 
 ## Dependencias
 
-- **Seguridad** — RBAC con permiso `clientes.*` y autenticación JWT.
-- **PocketBase** — colecciones `pb_clientes`, `pb_suscripciones`, `pb_demo_tokens`, `pb_entregas_historial`.
-- **Dashboard** — la demo redirige a `/dashboard?airline={iata}` para vista de solo lectura.
+- **Seguridad** — RBAC con permisos del módulo `clientes` y autenticación JWT.
+- **Persistencia** — Servicio de almacenamiento para clientes, suscripciones, tokens de demo y historial de entregas.
+- **Dashboard** — La demo redirige al dashboard en modo de solo lectura filtrado por la aerolínea del token.
 
 ## Casos de uso relacionados
 

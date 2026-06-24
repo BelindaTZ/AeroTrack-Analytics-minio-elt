@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}ConfiguraciÃ³n âEUR” AeroTrack Analytics{% endblock %}
+{% block title %}Configuración — AeroTrack Analytics{% endblock %}
 
 {% block breadcrumb %}
-<span class="bc-item">AdministraciÃ³n</span>
-<span class="bc-sep">âEURº</span>
-<span class="bc-current">ConfiguraciÃ³n</span>
+<span class="bc-item">Administración</span>
+<span class="bc-sep">›</span>
+<span class="bc-current">Configuración</span>
 {% endblock %}
 
 {% block head_extra %}
@@ -49,15 +49,15 @@
 <div class="page-heading">
   <h1>
     <span class="heading-icon blue" aria-hidden="true"><i class="bi bi-sliders"></i></span>
-    ConfiguraciÃ³n
+    Configuración
   </h1>
-  <p>ParÃ¡metros del sistema por mÃ³dulo. Los cambios aplican sin reiniciar servicios.</p>
+  <p>Parámetros del sistema por módulo. Los cambios aplican sin reiniciar servicios.</p>
 </div>
 
 <div class="config-layout">
 
   <!-- Nav -->
-  <nav class="config-nav" aria-label="Grupos de configuraciÃ³n">
+  <nav class="config-nav" aria-label="Grupos de configuración">
     {% for grupo in grupos_orden %}
     {% set meta = grupo_meta[grupo] %}
     <button class="config-nav-item {% if _active == grupo %}active{% endif %}"
@@ -101,7 +101,7 @@
             <div class="config-input-wrap">
               {% if item.tipo == 'bool' %}
               <select name="{{ item.clave }}" class="form-control-at" {% if not item.editable %}disabled{% endif %}>
-                <option value="true" {% if item.valor_real == 'true' %}selected{% endif %}>SÃ­ (activado)</option>
+                <option value="true" {% if item.valor_real == 'true' %}selected{% endif %}>Sí (activado)</option>
                 <option value="false" {% if item.valor_real != 'true' %}selected{% endif %}>No (desactivado)</option>
               </select>
               {% elif item.tipo == 'password' %}
@@ -109,7 +109,7 @@
                      value="{{ item.valor }}"
                      class="form-control-at" autocomplete="new-password"
                      {% if not item.editable %}disabled{% endif %}
-                     placeholder="âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢âEUR¢">
+                     placeholder="••••••••">
               {% elif item.tipo in ('int', 'float') %}
               <input type="number" name="{{ item.clave }}"
                      value="{{ item.valor_real }}"
@@ -211,7 +211,7 @@ function testSmtp() {
   if (!result) return;
   result.style.display = 'block';
   result.className = 'smtp-test-result';
-  result.textContent = 'Probando conexiÃ³n SMTPâEUR¦';
+  result.textContent = 'Probando conexión SMTP…';
   fetch('/configuracion/email/test', { method: 'POST', credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(data) {

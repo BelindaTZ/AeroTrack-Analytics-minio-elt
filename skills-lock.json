@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "uml": {
+      "source": "markdown-viewer/skills",
+      "sourceType": "github",
+      "skillPath": "uml/SKILL.md",
+      "computedHash": "c62dded9248c5d98acb3bd26434f0b0b3a3a48437948f2ca33c33e742cb62840"
+    }
+  }
+}

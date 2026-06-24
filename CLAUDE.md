@@ -26,9 +26,22 @@
   - `GET /ia/fuentes` + `POST /ia/fuentes/toggle` en `router.py` — toggle con invalidación de cache
   - Sidebar en `chat.html` — collapsible "Fuentes activas" con checkboxes toggleables
   - Setup script refactorizado: `schema_conversaciones_asistente` movida antes de `main()`, migración auditoria corregida
+- Naturalización de 16 spec files completada:
+  - 11 archivos ya estaban naturalizados (seguridad, pipeline-elt, auditoria, puntualidad, rutas, cancelaciones, dashboard, reportes, predictivo, asistente-ia, tactico/seguridad)
+  - 5 archivos corregidos: clientes (8 violaciones), socios-api (7), pipeline-elt táctico (6), modelo-dimensional (4), configuracion (3)
+  - Violações eliminadas: nombres de endpoints en RFs, funciones Python en RNFs, nombres de librerías en dependencias, "pandas" en especificaciones, referencias a PocketBase en textos de requisitos
+- Cruce doc empresarial v3 vs 16 specs vs código completado:
+  - 53 CUs cubiertos entre todos los specs
+  - Corregido: RN-PEL-023 (transform incluye agg), nombre tabla cancelaciones, colección modulos en seguridad, CU-O14 en asistente-ia
+  - Pendiente: actualizar doc empresarial de 48h a configurable para demo token
+- Correcciones nivel operativo completadas:
+  - Seguridad: RNF-SEG-027 — SECRET_KEY obligatoria sin default
+  - Pipeline ELT: RF-PEL-031 — botón reintentar verificado (logs.html:22-28)
+  - Modelo Dimensional: CSV UTF-8 estándar, casting con pandas.api.types
+  - Auditoría: CSV UTF-8, timezone con datetime.timezone
 
 ### In Progress
-- (none)
+- Revisión nivel táctico y estratégico (misma metodología que nivel operativo)
 
 ### Blocked
 - (none)
@@ -44,6 +57,9 @@
 
 ## Next Steps
 - (todos los gaps de Lote 4 completados)
+- (naturalización de spec files completada)
+- Revisión nivel táctico y estratégico
+- Aplicar correcciones doc empesarial (48h→7d, pipeline 4→3 etapas)
 
 ## Critical Context
 - `statsmodels` (Holt-Winters) usado en predictivo, no Prophet como menciona spec — gap documentado en auditoría
