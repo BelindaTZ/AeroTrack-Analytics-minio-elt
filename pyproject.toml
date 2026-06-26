@@ -1,0 +1,40 @@
+[project]
+name = "aerotrack-analytics"
+version = "1.0.0"
+description = "Business Intelligence system for aviation data"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = [
+    "E501",   # line too long
+    "E701",   # multiple statements on one line
+    "E702",   # multiple statements on one line (semicolon)
+    "E402",   # module import not at top
+    "E741",   # ambiguous variable name (l, I, O)
+    "N801",   # invalid class name
+    "N806",   # variable in function should be lowercase
+    "N817",   # camelcase imported as acronym
+    "N818",   # error suffix on exception name
+    "B905",   # zip without strict
+    "B904",   # raise without from inside except
+    "B007",   # unused loop control variable
+    "F841",   # unused variable (pendiente de limpiar)
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true

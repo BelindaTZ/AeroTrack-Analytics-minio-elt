@@ -4,16 +4,16 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from croniter import croniter
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.dashboard.kpis import invalidar_cache_alertas
-from app.utils.ia_narrativa import invalidar_cfg_cache as _invalidar_ia_narrativa
 from app.rutas.ranking_eficiencia import invalidar_cache_umbral_ruta
 from app.shared.clients import pb_client
 from app.shared.deps import render, require_permission
 from app.shared.utils import audit
-from croniter import croniter
+from app.utils.ia_narrativa import invalidar_cfg_cache as _invalidar_ia_narrativa
 
 router = APIRouter()
 _perm_ver = require_permission("configuracion", "ver")
@@ -22,11 +22,11 @@ _perm_edit = require_permission("configuracion", "configurar")
 _GRUPOS = ["email", "alertas", "pipeline", "ia", "sistema"]
 
 _GRUPO_META = {
-    "email":    {"label": "Email / SMTP",           "icon": "bi-envelope-fill",   "color": "#3b82f6"},
-    "alertas":  {"label": "Alertas y Umbrales",     "icon": "bi-bell-fill",       "color": "#f59e0b"},
-    "pipeline": {"label": "Pipeline ELT",           "icon": "bi-gear-fill",       "color": "#6366f1"},
-    "ia":       {"label": "Inteligencia Artificial","icon": "bi-cpu-fill",        "color": "#10b981"},
-    "sistema":  {"label": "Sistema General",        "icon": "bi-sliders",         "color": "#94a3b8"},
+    "email": {"label": "Email / SMTP", "icon": "bi-envelope-fill", "color": "#3b82f6"},
+    "alertas": {"label": "Alertas y Umbrales", "icon": "bi-bell-fill", "color": "#f59e0b"},
+    "pipeline": {"label": "Pipeline ELT", "icon": "bi-gear-fill", "color": "#6366f1"},
+    "ia": {"label": "Inteligencia Artificial", "icon": "bi-cpu-fill", "color": "#10b981"},
+    "sistema": {"label": "Sistema General", "icon": "bi-sliders", "color": "#94a3b8"},
 }
 
 _PRESETS_SCHEDULE = {"manual", "@daily", "@hourly", "@weekly", "@monthly", "@yearly"}
@@ -79,12 +79,16 @@ def _save_group(grupo: str, form_data: dict) -> None:
 def panel(request: Request):
     user = _perm_ver(request)
     config = _get_all_config()
-    return render(request, "configuracion/index.html", {
-        "grupos": config,
-        "grupo_meta": _GRUPO_META,
-        "grupos_orden": _GRUPOS,
-        "active_grupo": "email",
-    })
+    return render(
+        request,
+        "configuracion/index.html",
+        {
+            "grupos": config,
+            "grupo_meta": _GRUPO_META,
+            "grupos_orden": _GRUPOS,
+            "active_grupo": "email",
+        },
+    )
 
 
 @router.post("/{grupo}")
@@ -106,6 +110,7 @@ async def guardar_grupo(request: Request, grupo: str):
 
         if grupo == "pipeline" and "pipeline_schedule" in form_data:
             from app.pipeline_elt.clients import airflow_client as af
+
             nuevo_valor = form_data["pipeline_schedule"].strip()
             try:
                 await af.set_variable("pipeline_schedule", nuevo_valor)
@@ -122,25 +127,26 @@ async def guardar_grupo(request: Request, grupo: str):
             _invalidar_ia_narrativa()
             try:
                 from app.asistente_ia.llm_client import invalidar_config as _invalidar_llm
+
                 _invalidar_llm()
             except ImportError:
                 pass
         audit.registrar(
-            user["sub"], user["email"], "editar", "configuracion",
-            recurso_tipo="grupo", recurso_id=grupo,
+            user["sub"],
+            user["email"],
+            "editar",
+            "configuracion",
+            recurso_tipo="grupo",
+            recurso_id=grupo,
         )
     except Exception as exc:
         return RedirectResponse(f"/configuracion?error={exc}", status_code=303)
 
     if grupo == "email":
         return RedirectResponse(
-            f"/configuracion?msg=Configuracion de {grupo} guardada.&active={grupo}&test_smtp=1",
-            status_code=303
+            f"/configuracion?msg=Configuracion de {grupo} guardada.&active={grupo}&test_smtp=1", status_code=303
         )
-    return RedirectResponse(
-        f"/configuracion?msg=Configuracion de {grupo} guardada.&active={grupo}",
-        status_code=303
-    )
+    return RedirectResponse(f"/configuracion?msg=Configuracion de {grupo} guardada.&active={grupo}", status_code=303)
 
 
 @router.post("/email/test")

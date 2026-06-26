@@ -1,4 +1,6 @@
 import os
+import sys
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -24,7 +26,20 @@ AIRFLOW_URL = "http://airflow-webserver:8080" if IN_DOCKER else os.getenv("AIRFL
 AIRFLOW_USER = os.getenv("AIRFLOW_ADMIN_USER", "admin")
 AIRFLOW_PASSWORD = os.getenv("AIRFLOW_ADMIN_PASSWORD", "admin1234")
 
-# ── JWT ───────────────────────────────────────────────────────────────────────
-SECRET_KEY = os.getenv("SECRET_KEY", "changeme")
+# ── JWT (RNF-SEG-012: SECRET_KEY obligatoria) ────────────────────────────────
+_SECRET_KEY_RAW = os.getenv("SECRET_KEY", "")
+if not _SECRET_KEY_RAW or _SECRET_KEY_RAW == "changeme":
+    print(
+        "\n[SECURITY] SECRET_KEY no está definida o usa el valor por defecto 'changeme'.\n"
+        "           Define SECRET_KEY en tu archivo .env con una cadena aleatoria de al menos 32 caracteres.\n"
+        '           Ejemplo: SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")\n',
+        file=sys.stderr,
+    )
+    if not IN_DOCKER:
+        _SECRET_KEY_RAW = "changeme"
+    else:
+        raise RuntimeError("SECRET_KEY obligatoria en producción. Define SECRET_KEY en .env con un valor seguro.")
+
+SECRET_KEY = _SECRET_KEY_RAW
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRE_MINUTES", "60"))

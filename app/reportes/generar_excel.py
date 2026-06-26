@@ -7,33 +7,48 @@ _TZ = timezone(timedelta(hours=-5))  # America/Guayaquil — sin DST
 
 import openpyxl
 from openpyxl.chart import BarChart, LineChart, Reference
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from app.shared.analytics import load_enriched_fact, load_agg
+from app.shared.analytics import load_agg, load_enriched_fact
 
-_MESES_LABEL = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-                 "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-_MESES_SHORT = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-                 "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-_DOW_LABEL   = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-_FAA_DESC    = {"A": "Aerolínea (Carrier)", "B": "Meteorología (Weather)",
-                "C": "Sistema Aéreo (NAS)", "D": "Seguridad (Security)"}
-_QUARTERS    = {"1": "Q1 (Ene–Mar)", "2": "Q2 (Abr–Jun)",
-                "3": "Q3 (Jul–Sep)", "4": "Q4 (Oct–Dic)"}
-_CAUSA_COLS  = [
-    ("carrierdelay",      "Carrier (Aerolínea)"),
-    ("weatherdelay",      "Weather (Clima)"),
-    ("nasdelay",          "NAS (Sist. Aéreo)"),
-    ("securitydelay",     "Security (Seguridad)"),
+_MESES_LABEL = [
+    "",
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+_MESES_SHORT = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+_DOW_LABEL = ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+_FAA_DESC = {
+    "A": "Aerolínea (Carrier)",
+    "B": "Meteorología (Weather)",
+    "C": "Sistema Aéreo (NAS)",
+    "D": "Seguridad (Security)",
+}
+_QUARTERS = {"1": "Q1 (Ene–Mar)", "2": "Q2 (Abr–Jun)", "3": "Q3 (Jul–Sep)", "4": "Q4 (Oct–Dic)"}
+_CAUSA_COLS = [
+    ("carrierdelay", "Carrier (Aerolínea)"),
+    ("weatherdelay", "Weather (Clima)"),
+    ("nasdelay", "NAS (Sist. Aéreo)"),
+    ("securitydelay", "Security (Seguridad)"),
     ("lateaircraftdelay", "LateAircraft (Avión tardío)"),
 ]
 
-_BLUE_DARK  = "1B3A6B"
+_BLUE_DARK = "1B3A6B"
 _BLUE_LIGHT = "EBF0FA"
-_GREEN      = "16a34a"
-_AMBER      = "d97706"
-_RED        = "dc2626"
+_GREEN = "16a34a"
+_AMBER = "d97706"
+_RED = "dc2626"
 _THIN = Border(
     left=Side(style="thin", color="D1D5DB"),
     right=Side(style="thin", color="D1D5DB"),
@@ -43,6 +58,7 @@ _THIN = Border(
 
 
 # ── Style helpers ─────────────────────────────────────────────────────────────
+
 
 def _hdr(ws, fila: int, columnas: list[str]) -> None:
     fill = PatternFill("solid", fgColor=_BLUE_DARK)
@@ -111,6 +127,7 @@ def _filtros_display(filtros: dict | None) -> list[tuple[str, str]]:
 
 # ── Sheet builders ────────────────────────────────────────────────────────────
 
+
 def _sheet_otp(wb, df) -> None:
     """Hoja: Puntualidad OTP por aerolínea + bar chart."""
     ws = wb.create_sheet("Puntualidad OTP")
@@ -119,24 +136,31 @@ def _sheet_otp(wb, df) -> None:
         return
 
     vuelos_op = df[df["Cancelled"] == 0] if "Cancelled" in df.columns else df
-    grp = vuelos_op.groupby("Reporting_Airline").agg(
-        total=("pk_vuelo", "count"),
-        otp_sum=("ArrDel15", lambda x: (x == 0).sum()),
-    ).reset_index()
+    grp = (
+        vuelos_op.groupby("Reporting_Airline")
+        .agg(
+            total=("pk_vuelo", "count"),
+            otp_sum=("ArrDel15", lambda x: (x == 0).sum()),
+        )
+        .reset_index()
+    )
     if "ArrDelayMinutes" in vuelos_op.columns:
         delay = (
-            vuelos_op.groupby("Reporting_Airline")["ArrDelayMinutes"]
-            .mean().round(2).reset_index(name="retraso_prom")
+            vuelos_op.groupby("Reporting_Airline")["ArrDelayMinutes"].mean().round(2).reset_index(name="retraso_prom")
         )
         grp = grp.merge(delay, on="Reporting_Airline", how="left")
     else:
         grp["retraso_prom"] = 0.0
 
     if "DepDel15" in vuelos_op.columns:
-        dep = vuelos_op.groupby("Reporting_Airline").agg(
-            dep_sum=("DepDel15", lambda x: (x == 1).sum()),
-            dep_total=("pk_vuelo", "count"),
-        ).reset_index()
+        dep = (
+            vuelos_op.groupby("Reporting_Airline")
+            .agg(
+                dep_sum=("DepDel15", lambda x: (x == 1).sum()),
+                dep_total=("pk_vuelo", "count"),
+            )
+            .reset_index()
+        )
         dep["dep_pct"] = (dep["dep_sum"] / dep["dep_total"].replace(0, 1) * 100).round(2)
         grp = grp.merge(dep[["Reporting_Airline", "dep_pct"]], on="Reporting_Airline", how="left")
 
@@ -152,8 +176,7 @@ def _sheet_otp(wb, df) -> None:
 
     for _, r in grp.iterrows():
         otp_val = round(float(r["otp_pct"]), 2)
-        row = [r["Reporting_Airline"], int(r["total"]), otp_val,
-               round(float(r.get("retraso_prom") or 0), 2)]
+        row = [r["Reporting_Airline"], int(r["total"]), otp_val, round(float(r.get("retraso_prom") or 0), 2)]
         if has_dep:
             row.append(round(float(r.get("dep_pct") or 0), 2))
         ws.append(row)
@@ -206,14 +229,17 @@ def _sheet_tendencia(wb, df) -> None:
         dm = vop2.groupby("Month")["ArrDelayMinutes"].mean().round(1).reset_index(name="retraso_prom")
         grp = grp.merge(dm, on="Month", how="left")
 
-    has_canc  = "cancelados" in grp.columns
-    has_otp   = "otp_pct" in grp.columns
+    has_canc = "cancelados" in grp.columns
+    has_otp = "otp_pct" in grp.columns
     has_delay = "retraso_prom" in grp.columns
 
     headers = ["Mes", "Total vuelos"]
-    if has_canc:  headers += ["Cancelados", "Tasa cancel. (%)"]
-    if has_otp:   headers.append("OTP (%)")
-    if has_delay: headers.append("Retraso prom. arr. (min)")
+    if has_canc:
+        headers += ["Cancelados", "Tasa cancel. (%)"]
+    if has_otp:
+        headers.append("OTP (%)")
+    if has_delay:
+        headers.append("Retraso prom. arr. (min)")
     _hdr(ws, 1, headers)
 
     OTP_COL_IDX = (headers.index("OTP (%)") + 1) if has_otp else None
@@ -287,7 +313,7 @@ def _sheet_causas_retraso(wb, filtros: dict | None) -> None:
 
     # Bar chart causas
     data_row_start = 3
-    data_row_end   = 3 + len(totales)
+    data_row_end = 3 + len(totales)
     if data_row_end > data_row_start:
         chart = BarChart()
         chart.type = "bar"
@@ -295,12 +321,12 @@ def _sheet_causas_retraso(wb, filtros: dict | None) -> None:
         chart.x_axis.title = "Minutos"
         chart.shape = 4
         data_ref = Reference(ws, min_col=2, min_row=data_row_start, max_row=data_row_end)
-        cats_ref  = Reference(ws, min_col=1, min_row=data_row_start + 1, max_row=data_row_end)
+        cats_ref = Reference(ws, min_col=1, min_row=data_row_start + 1, max_row=data_row_end)
         chart.add_data(data_ref, titles_from_data=True)
         chart.set_categories(cats_ref)
         chart.width = 24
         chart.height = 12
-        ws.add_chart(chart, f"E3")
+        ws.add_chart(chart, "E3")
 
     # Tabla por aerolínea
     row_start = data_row_end + 3
@@ -340,11 +366,15 @@ def _sheet_peores_rutas(wb, filtros: dict | None) -> None:
 
     # Agrupar a nivel ruta (origin-dest) sumando carriers
     if "origin" in df.columns and "dest" in df.columns and "total_vuelos" in df.columns:
-        grp = df.groupby(["origin", "dest"]).agg(
-            total_vuelos=("total_vuelos", "sum"),
-            vuelos_at=("vuelos_a_tiempo", "sum") if "vuelos_a_tiempo" in df.columns else ("total_vuelos", "sum"),
-            retraso_prom=("retraso_prom", "mean") if "retraso_prom" in df.columns else ("total_vuelos", "sum"),
-        ).reset_index()
+        grp = (
+            df.groupby(["origin", "dest"])
+            .agg(
+                total_vuelos=("total_vuelos", "sum"),
+                vuelos_at=("vuelos_a_tiempo", "sum") if "vuelos_a_tiempo" in df.columns else ("total_vuelos", "sum"),
+                retraso_prom=("retraso_prom", "mean") if "retraso_prom" in df.columns else ("total_vuelos", "sum"),
+            )
+            .reset_index()
+        )
         if "vuelos_a_tiempo" in df.columns:
             grp["otp_pct"] = (grp["vuelos_at"] / grp["total_vuelos"].replace(0, 1) * 100).round(1)
         else:
@@ -360,13 +390,17 @@ def _sheet_peores_rutas(wb, filtros: dict | None) -> None:
     for _, r in peores.iterrows():
         orig = r.get("origin", "")
         dest = r.get("dest", "")
-        otp  = round(float(r.get("otp_pct") or 0), 1)
-        ws.append([
-            orig, dest, f"{orig}-{dest}",
-            int(r.get("total_vuelos") or 0),
-            otp,
-            round(float(r.get("retraso_prom") or 0), 1),
-        ])
+        otp = round(float(r.get("otp_pct") or 0), 1)
+        ws.append(
+            [
+                orig,
+                dest,
+                f"{orig}-{dest}",
+                int(r.get("total_vuelos") or 0),
+                otp,
+                round(float(r.get("retraso_prom") or 0), 1),
+            ]
+        )
         ri = ws.max_row
         _color_otp(ws, ri, OTP_COL, otp)
         _stripe(ws, ri, len(headers))
@@ -387,7 +421,7 @@ def _sheet_peores_rutas(wb, filtros: dict | None) -> None:
         chart.set_categories(cats)
         chart.width = 26
         chart.height = 16
-        ws.add_chart(chart, f"H2")
+        ws.add_chart(chart, "H2")
 
 
 def _sheet_dia_semana(wb, filtros: dict | None) -> None:
@@ -411,12 +445,14 @@ def _sheet_dia_semana(wb, filtros: dict | None) -> None:
     for _, r in df.iterrows():
         dow = int(r["day_of_week"])
         otp = round(float(r["otp_pct"]), 1)
-        ws.append([
-            _DOW_LABEL[dow] if 1 <= dow <= 7 else str(dow),
-            int(r.get("total_vuelos") or 0),
-            int(r.get("vuelos_a_tiempo") or 0),
-            otp,
-        ])
+        ws.append(
+            [
+                _DOW_LABEL[dow] if 1 <= dow <= 7 else str(dow),
+                int(r.get("total_vuelos") or 0),
+                int(r.get("vuelos_a_tiempo") or 0),
+                otp,
+            ]
+        )
         ri = ws.max_row
         _color_otp(ws, ri, OTP_COL, otp)
         _stripe(ws, ri, len(headers))
@@ -448,15 +484,15 @@ def _sheet_cancelaciones(wb, df) -> None:
         ws["A1"] = "Datos no disponibles"
         return
 
-    cancelados  = df[df["Cancelled"] == 1]
-    total_canc  = max(len(cancelados), 1)
-    grp         = cancelados.groupby("CancellationCode").size().reset_index(name="count")
-    headers     = ["Código FAA", "Descripción", "Cancelaciones", "% del total"]
+    cancelados = df[df["Cancelled"] == 1]
+    total_canc = max(len(cancelados), 1)
+    grp = cancelados.groupby("CancellationCode").size().reset_index(name="count")
+    headers = ["Código FAA", "Descripción", "Cancelaciones", "% del total"]
     _hdr(ws, 1, headers)
 
     for _, r in grp.sort_values("count", ascending=False).iterrows():
         code = str(r["CancellationCode"])
-        pct  = round(int(r["count"]) / total_canc * 100, 2)
+        pct = round(int(r["count"]) / total_canc * 100, 2)
         ws.append([code, _FAA_DESC.get(code, "Otro"), int(r["count"]), pct])
         _stripe(ws, ws.max_row, len(headers))
 
@@ -465,6 +501,7 @@ def _sheet_cancelaciones(wb, df) -> None:
     # Pie chart cancelaciones
     if ws.max_row > 2:
         from openpyxl.chart import PieChart
+
         chart = PieChart()
         chart.title = "Cancelaciones por Causa FAA"
         data = Reference(ws, min_col=3, min_row=1, max_row=ws.max_row)
@@ -502,11 +539,15 @@ def _sheet_rutas_eficiencia(wb, df) -> None:
 
     for _, r in grp.iterrows():
         ef = round(float(r["ef"]), 4)
-        ws.append([
-            f"{r['OriginCode']}-{r['DestCode']}",
-            r["OriginCode"], r["DestCode"],
-            int(r["total"]), ef,
-        ])
+        ws.append(
+            [
+                f"{r['OriginCode']}-{r['DestCode']}",
+                r["OriginCode"],
+                r["DestCode"],
+                int(r["total"]),
+                ef,
+            ]
+        )
         ri = ws.max_row
         _stripe(ws, ri, len(headers))
         cell = ws.cell(row=ri, column=EF_COL)
@@ -553,9 +594,9 @@ def _sheet_resumen(wb, df, filtros: dict | None) -> None:
     row += 1
 
     total_vuelos = len(df)
-    cancelados   = int(df["Cancelled"].sum()) if "Cancelled" in df.columns else 0
-    desviados    = int(df["Diverted"].sum()) if "Diverted" in df.columns else 0
-    otp_global   = 0.0
+    cancelados = int(df["Cancelled"].sum()) if "Cancelled" in df.columns else 0
+    desviados = int(df["Diverted"].sum()) if "Diverted" in df.columns else 0
+    otp_global = 0.0
     dep_delay_pct = 0.0
     if "ArrDel15" in df.columns and "Cancelled" in df.columns:
         vop = df[df["Cancelled"] == 0]
@@ -569,14 +610,14 @@ def _sheet_resumen(wb, df, filtros: dict | None) -> None:
         retraso_arr = round(float(vop3["ArrDelayMinutes"].mean() or 0), 2)
 
     metricas = [
-        ("Total vuelos (incl. cancelados)",   total_vuelos),
-        ("Vuelos operados",                    total_vuelos - cancelados),
-        ("Cancelados",                         cancelados),
-        ("Tasa cancelación (%)",               round(cancelados / max(total_vuelos, 1) * 100, 2)),
-        ("Desviados",                          desviados),
-        ("OTP global — arr. (%)",              otp_global),
+        ("Total vuelos (incl. cancelados)", total_vuelos),
+        ("Vuelos operados", total_vuelos - cancelados),
+        ("Cancelados", cancelados),
+        ("Tasa cancelación (%)", round(cancelados / max(total_vuelos, 1) * 100, 2)),
+        ("Desviados", desviados),
+        ("OTP global — arr. (%)", otp_global),
         ("% vuelos con demora salida ≥15 min", dep_delay_pct),
-        ("Retraso promedio llegada (min)",      retraso_arr),
+        ("Retraso promedio llegada (min)", retraso_arr),
     ]
     for label, val in metricas:
         ws.cell(row, 1, label).font = Font(bold=True, size=10)
@@ -590,13 +631,13 @@ def _sheet_resumen(wb, df, filtros: dict | None) -> None:
     ws.cell(row, 1, "CONTENIDO DEL REPORTE").font = Font(bold=True, size=11, color=_BLUE_DARK)
     row += 1
     for hoja, desc in [
-        ("Puntualidad OTP",        "OTP por aerolínea + gráfico de columnas"),
-        ("Tendencia Mensual",      "Vuelos, cancelaciones y OTP mes a mes + gráfico"),
-        ("Causas de Retraso",      "Minutos de retraso por tipo de causa + gráfico"),
-        ("Rutas — Peores OTP",     "Rutas con menor OTP (problema operacional) + gráfico"),
-        ("OTP por Día de Semana",  "Patrón semanal de puntualidad + gráfico"),
-        ("Cancelaciones FAA",      "Distribución por código FAA + gráfico circular"),
-        ("Rutas Eficientes",       "Top rutas por eficiencia de tiempo real vs programado"),
+        ("Puntualidad OTP", "OTP por aerolínea + gráfico de columnas"),
+        ("Tendencia Mensual", "Vuelos, cancelaciones y OTP mes a mes + gráfico"),
+        ("Causas de Retraso", "Minutos de retraso por tipo de causa + gráfico"),
+        ("Rutas — Peores OTP", "Rutas con menor OTP (problema operacional) + gráfico"),
+        ("OTP por Día de Semana", "Patrón semanal de puntualidad + gráfico"),
+        ("Cancelaciones FAA", "Distribución por código FAA + gráfico circular"),
+        ("Rutas Eficientes", "Top rutas por eficiencia de tiempo real vs programado"),
     ]:
         ws.cell(row, 1, hoja).font = Font(bold=True, size=10)
         ws.cell(row, 2, desc).font = Font(size=10, color="334155")
@@ -607,6 +648,7 @@ def _sheet_resumen(wb, df, filtros: dict | None) -> None:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def generar_excel(filtros: dict | None = None) -> bytes:
     """Genera .xlsx con 8 hojas, datos y gráficos embebidos. Retorna bytes."""

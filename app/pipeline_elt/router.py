@@ -1,14 +1,14 @@
 """Panel de control del pipeline ELT (CU-10, CU-11, CU-12, CU-13, CU-T06, CU-O08)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.pipeline_elt.clients import airflow_client as af
 from app.shared.clients import pb_client
-from app.shared.utils import audit
 from app.shared.deps import render, require_permission
+from app.shared.utils import audit
 from app.socios_api.webhook_dispatcher import dispatch_event
 
 router = APIRouter()
@@ -47,13 +47,17 @@ async def panel(request: Request):
             schedule_val = rows[0].get("valor", "manual")
     except Exception:
         pass
-    return render(request, "pipeline/panel.html", {
-        "estado": estado,
-        "historial": historial,
-        "dag_id": af.DAG_ID,
-        "schedule_val": schedule_val,
-        "schedule_label": _get_schedule_label(schedule_val),
-    })
+    return render(
+        request,
+        "pipeline/panel.html",
+        {
+            "estado": estado,
+            "historial": historial,
+            "dag_id": af.DAG_ID,
+            "schedule_val": schedule_val,
+            "schedule_label": _get_schedule_label(schedule_val),
+        },
+    )
 
 
 @router.post("/trigger")
@@ -61,15 +65,24 @@ async def trigger(request: Request):
     user = _perm_exec(request)
     try:
         result = await af.trigger_dag()
-        audit.registrar(user["sub"], user["email"], "ejecutar", "pipeline_elt",
-                        recurso_tipo="dag", recurso_id=af.DAG_ID,
-                        detalle=f"dag_run_id={result.get('dag_run_id', '')}")
-        dispatch_event("pipeline_completado", {
-            "dag_id": af.DAG_ID,
-            "dag_run_id": result.get("dag_run_id", ""),
-            "estado": "iniciado",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        audit.registrar(
+            user["sub"],
+            user["email"],
+            "ejecutar",
+            "pipeline_elt",
+            recurso_tipo="dag",
+            recurso_id=af.DAG_ID,
+            detalle=f"dag_run_id={result.get('dag_run_id', '')}",
+        )
+        dispatch_event(
+            "pipeline_completado",
+            {
+                "dag_id": af.DAG_ID,
+                "dag_run_id": result.get("dag_run_id", ""),
+                "estado": "iniciado",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
     except Exception as exc:
         return RedirectResponse(f"/pipeline?error={exc}", status_code=303)
     return RedirectResponse("/pipeline?msg=Pipeline iniciado.", status_code=303)
@@ -115,10 +128,16 @@ async def logs(request: Request, run_id: str, task_id: str, attempt: int = 1):
     except Exception as exc:
         log_text = str(exc)
         tasks = []
-    return render(request, "pipeline/logs.html", {
-        "run_id": run_id, "task_id": task_id,
-        "log_text": log_text, "tasks": tasks,
-    })
+    return render(
+        request,
+        "pipeline/logs.html",
+        {
+            "run_id": run_id,
+            "task_id": task_id,
+            "log_text": log_text,
+            "tasks": tasks,
+        },
+    )
 
 
 @router.post("/logs/{run_id}/{task_id}/reintentar")
@@ -126,8 +145,14 @@ async def reintentar_tarea(request: Request, run_id: str, task_id: str):
     user = _perm_exec(request)
     try:
         await af.clear_task_instance(af.DAG_ID, run_id, task_id)
-        audit.registrar(user["sub"], user["email"], "reintentar", "pipeline_elt",
-                        recurso_tipo="task_instance", recurso_id=f"{run_id}/{task_id}")
+        audit.registrar(
+            user["sub"],
+            user["email"],
+            "reintentar",
+            "pipeline_elt",
+            recurso_tipo="task_instance",
+            recurso_id=f"{run_id}/{task_id}",
+        )
     except Exception as exc:
         return RedirectResponse(f"/pipeline/logs/{run_id}/{task_id}?error={exc}", status_code=303)
     return RedirectResponse(f"/pipeline/logs/{run_id}/{task_id}?msg=Tarea+reintentada.", status_code=303)

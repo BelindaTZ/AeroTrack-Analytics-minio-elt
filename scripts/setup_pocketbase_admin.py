@@ -658,7 +658,7 @@ def main():
         ru = S.post(f"{BASE}/api/collections/app_users/records", json={
             "email": PB_EMAIL, "password": PB_PASSWORD,
             "passwordConfirm": PB_PASSWORD,
-            "nombre": "Belinda Toaquiza",
+            "nombre": os.getenv("ADMIN_NAME", "Admin"),
             "rol_id": admin_rid, "activo": True, "emailVisibility": True,
         })
         if ru.status_code in (200, 201):

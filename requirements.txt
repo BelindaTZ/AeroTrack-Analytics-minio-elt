@@ -1,0 +1,40 @@
+# AeroTrack Analytics — Dependencias del backend
+# Generado desde Dockerfile — mantener sincronizado
+
+# Core
+python-dotenv>=1.0.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+jinja2>=3.1.0
+python-multipart>=0.0.9
+
+# Data
+pandas>=2.0.0
+pyarrow>=14.0.0
+minio>=7.2.0
+
+# HTTP
+requests>=2.31.0
+httpx>=0.27.0
+
+# Auth
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Reports
+plotly>=5.18.0
+openpyxl>=3.1.0
+weasyprint>=62.0
+
+# Utils
+email-validator>=2.1.0
+croniter>=2.0.0
+
+# ML (anomaly detection)
+scikit-learn>=1.4.0
+
+# Dev/Test (no instalar en Docker)
+pytest>=8.0.0
+ruff>=0.4.0
+mypy>=1.10.0
+mkdocs-material>=9.5.0

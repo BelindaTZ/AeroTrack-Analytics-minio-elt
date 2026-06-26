@@ -1,7 +1,6 @@
 """Helpers compartidos para cargar fact_vuelo enriquecido con dimensiones."""
 
 import time
-from typing import Optional
 
 import pandas as pd
 
@@ -32,7 +31,7 @@ def _desnormalizar(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _safe_read(bucket: str, tabla: str, cols: list[str]) -> Optional[pd.DataFrame]:
+def _safe_read(bucket: str, tabla: str, cols: list[str]) -> pd.DataFrame | None:
     try:
         df = read_parquet(bucket, tabla)
         existing = [c for c in cols if c in df.columns]
@@ -54,13 +53,16 @@ def _load_base_fact(bucket: str) -> pd.DataFrame:
         if col.startswith("fk_") or col == "pk_vuelo":
             fact[col] = pd.to_numeric(fact[col], errors="coerce").fillna(0).astype("int64")
 
-    def _norm_pk(df: Optional[pd.DataFrame], pk_col: str) -> Optional[pd.DataFrame]:
+    def _norm_pk(df: pd.DataFrame | None, pk_col: str) -> pd.DataFrame | None:
         if df is not None and pk_col in df.columns:
             df = df.copy()
             df[pk_col] = pd.to_numeric(df[pk_col], errors="coerce").fillna(0).astype("int64")
         return df
 
-    dim_t = _norm_pk(_safe_read(bucket, "dim_tiempo", ["pk_tiempo", "Year", "Month", "DayOfWeek", "FlightDate", "Quarter"]), "pk_tiempo")
+    dim_t = _norm_pk(
+        _safe_read(bucket, "dim_tiempo", ["pk_tiempo", "Year", "Month", "DayOfWeek", "FlightDate", "Quarter"]),
+        "pk_tiempo",
+    )
     if dim_t is not None and "fk_tiempo" in fact.columns:
         fact = fact.merge(dim_t, left_on="fk_tiempo", right_on="pk_tiempo", how="left")
 
@@ -68,27 +70,50 @@ def _load_base_fact(bucket: str) -> pd.DataFrame:
     if dim_al is not None and "fk_aerolinea" in fact.columns:
         fact = fact.merge(dim_al, left_on="fk_aerolinea", right_on="pk_aerolinea", how="left")
 
-    dim_r = _norm_pk(_safe_read(bucket, "dim_ruta", ["pk_ruta", "OriginCode", "DestCode", "OriginCityName", "DestCityName", "Distance"]), "pk_ruta")
+    dim_r = _norm_pk(
+        _safe_read(
+            bucket, "dim_ruta", ["pk_ruta", "OriginCode", "DestCode", "OriginCityName", "DestCityName", "Distance"]
+        ),
+        "pk_ruta",
+    )
     if dim_r is not None and "fk_ruta" in fact.columns:
         fact = fact.merge(dim_r, left_on="fk_ruta", right_on="pk_ruta", how="left")
 
-    dim_can = _norm_pk(_safe_read(bucket, "dim_cancelacion", ["pk_cancelacion", "Cancelled", "CancellationCode", "Diverted"]), "pk_cancelacion")
+    dim_can = _norm_pk(
+        _safe_read(bucket, "dim_cancelacion", ["pk_cancelacion", "Cancelled", "CancellationCode", "Diverted"]),
+        "pk_cancelacion",
+    )
     if dim_can is not None and "fk_cancelacion" in fact.columns:
         fact = fact.merge(dim_can, left_on="fk_cancelacion", right_on="pk_cancelacion", how="left")
 
-    dim_cl = _norm_pk(_safe_read(bucket, "dim_clasificacion_retraso", ["pk_clasificacion", "ArrDel15", "DepDel15"]), "pk_clasificacion")
+    dim_cl = _norm_pk(
+        _safe_read(bucket, "dim_clasificacion_retraso", ["pk_clasificacion", "ArrDel15", "DepDel15"]),
+        "pk_clasificacion",
+    )
     if dim_cl is not None and "fk_clasificacion_retraso" in fact.columns:
         fact = fact.merge(dim_cl, left_on="fk_clasificacion_retraso", right_on="pk_clasificacion", how="left")
 
-    dim_hor = _norm_pk(_safe_read(bucket, "dim_horario", ["pk_horario", "ArrDelay", "DepDelay", "ArrDelayMinutes", "DepDelayMinutes"]), "pk_horario")
+    dim_hor = _norm_pk(
+        _safe_read(bucket, "dim_horario", ["pk_horario", "ArrDelay", "DepDelay", "ArrDelayMinutes", "DepDelayMinutes"]),
+        "pk_horario",
+    )
     if dim_hor is not None and "fk_horario" in fact.columns:
         fact = fact.merge(dim_hor, left_on="fk_horario", right_on="pk_horario", how="left")
 
-    dim_rc = _norm_pk(_safe_read(bucket, "dim_retraso_causa", ["pk_retraso_causa", "CarrierDelay", "WeatherDelay", "NASDelay", "SecurityDelay", "LateAircraftDelay"]), "pk_retraso_causa")
+    dim_rc = _norm_pk(
+        _safe_read(
+            bucket,
+            "dim_retraso_causa",
+            ["pk_retraso_causa", "CarrierDelay", "WeatherDelay", "NASDelay", "SecurityDelay", "LateAircraftDelay"],
+        ),
+        "pk_retraso_causa",
+    )
     if dim_rc is not None and "fk_retraso_causa" in fact.columns:
         fact = fact.merge(dim_rc, left_on="fk_retraso_causa", right_on="pk_retraso_causa", how="left")
 
-    dim_dev = _norm_pk(_safe_read(bucket, "dim_desvio", ["pk_desvio", "DivArrDelay", "DivDistance", "Div1Airport"]), "pk_desvio")
+    dim_dev = _norm_pk(
+        _safe_read(bucket, "dim_desvio", ["pk_desvio", "DivArrDelay", "DivDistance", "Div1Airport"]), "pk_desvio"
+    )
     if dim_dev is not None and "fk_desvio" in fact.columns:
         fact = fact.merge(dim_dev, left_on="fk_desvio", right_on="pk_desvio", how="left")
 
@@ -100,7 +125,7 @@ def _load_base_fact(bucket: str) -> pd.DataFrame:
 
 
 def load_enriched_fact(
-    filtros: Optional[dict] = None,
+    filtros: dict | None = None,
     bucket: str = MINIO_BUCKET_DIMS,
 ) -> pd.DataFrame:
     """
@@ -141,7 +166,7 @@ def load_enriched_fact(
 
 def load_agg(
     name: str,
-    filtros: Optional[dict] = None,
+    filtros: dict | None = None,
     bucket: str = MINIO_BUCKET_DIMS,
 ) -> pd.DataFrame:
     """Lee una tabla de agregación pre-computada desde MinIO con cache TTL 10 min.

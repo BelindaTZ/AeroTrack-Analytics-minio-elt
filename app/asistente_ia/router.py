@@ -6,8 +6,6 @@ Historial de conversación por sesión (en memoria, cookie session_id).
 import logging
 import secrets
 import time
-import uuid
-from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -15,13 +13,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.asistente_ia.llm_client import call_llm, get_ia_config, modulo_activo, resolver_api_key
-from app.asistente_ia.rag import parse_intent, build_context, build_messages
+from app.asistente_ia.rag import build_context, build_messages, parse_intent
 from app.shared.clients import pb_client as pb
 from app.shared.deps import render, require_permission
 from app.shared.utils import audit
 
 router = APIRouter()
-_perm_ver  = require_permission("asistente_ia", "ver")
+_perm_ver = require_permission("asistente_ia", "ver")
 _perm_exec = require_permission("asistente_ia", "ejecutar")
 
 # Historial en memoria: {session_id: {"history": [...], "expires": float}}
@@ -49,12 +47,15 @@ def _save_session(session_id: str, history: list[dict]) -> None:
 def _persist_conversacion(user_id: str, pregunta: str, respuesta: str, fuentes: dict) -> None:
     """Persiste un intercambio en PocketBase. Resiliente: no propaga errores."""
     try:
-        pb.create_record("conversaciones_asistente", {
-            "usuario_id": user_id,
-            "pregunta": pregunta,
-            "respuesta": respuesta,
-            "fuentes": fuentes,
-        })
+        pb.create_record(
+            "conversaciones_asistente",
+            {
+                "usuario_id": user_id,
+                "pregunta": pregunta,
+                "respuesta": respuesta,
+                "fuentes": fuentes,
+            },
+        )
     except Exception:
         log.warning("No se pudo persistir la conversación en PocketBase", exc_info=True)
 
@@ -66,14 +67,14 @@ def _ensure_session(request: Request) -> str:
 @router.get("", response_class=HTMLResponse)
 def chat_page(request: Request):
     user = _perm_ver(request)
-    activo    = modulo_activo()
-    cfg       = get_ia_config()
+    activo = modulo_activo()
+    cfg = get_ia_config()
     proveedor = cfg.get("ia_proveedor", "groq")
-    modelo    = cfg.get("ia_modelo", "")
+    modelo = cfg.get("ia_modelo", "")
     tiene_key = bool(resolver_api_key(cfg, proveedor.lower()))
 
     session_id = _ensure_session(request)
-    history    = _get_session(session_id)
+    history = _get_session(session_id)
 
     try:
         historial_records = pb.list_records_all(
@@ -89,16 +90,20 @@ def chat_page(request: Request):
     except Exception:
         fuentes_records = []
 
-    response = render(request, "asistente_ia/chat.html", {
-        "activo":           activo,
-        "proveedor":        proveedor,
-        "modelo":           modelo,
-        "tiene_key":        tiene_key,
-        "session_id":       session_id,
-        "history":          history,
-        "historial":        historial_records,
-        "fuentes":          fuentes_records,
-    })
+    response = render(
+        request,
+        "asistente_ia/chat.html",
+        {
+            "activo": activo,
+            "proveedor": proveedor,
+            "modelo": modelo,
+            "tiene_key": tiene_key,
+            "session_id": session_id,
+            "history": history,
+            "historial": historial_records,
+            "fuentes": fuentes_records,
+        },
+    )
     response.set_cookie("chat_session", session_id, httponly=True, max_age=_SESSION_TTL)
     return response
 
@@ -114,7 +119,7 @@ async def chat_message(request: Request):
         )
 
     body = await request.json()
-    question   = str(body.get("mensaje", "")).strip()
+    question = str(body.get("mensaje", "")).strip()
     session_id = str(body.get("session_id", _ensure_session(request)))
 
     if not question:
@@ -136,7 +141,7 @@ async def chat_message(request: Request):
         return JSONResponse({"error": str(exc)}, status_code=503)
     except RuntimeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=503)
-    except Exception as exc:
+    except Exception:
         log.exception("Error inesperado en call_llm")
         return JSONResponse(
             {"error": "Ocurrió un error inesperado al procesar tu consulta. Intenta de nuevo."},
@@ -145,7 +150,7 @@ async def chat_message(request: Request):
 
     # Actualizar historial (sin el mensaje con contexto expandido)
     new_history = history + [
-        {"role": "user",      "content": question},
+        {"role": "user", "content": question},
         {"role": "assistant", "content": respuesta},
     ]
     # Mantener solo las últimas 20 interacciones (10 pares)
@@ -154,15 +159,21 @@ async def chat_message(request: Request):
     _persist_conversacion(user["sub"], question, respuesta, filtros)
 
     audit.registrar(
-        user["sub"], user["email"], "consultar_ia", "asistente_ia",
-        recurso_tipo="chat", recurso_id=session_id[:8],
+        user["sub"],
+        user["email"],
+        "consultar_ia",
+        "asistente_ia",
+        recurso_tipo="chat",
+        recurso_id=session_id[:8],
     )
 
-    return JSONResponse({
-        "respuesta":  respuesta,
-        "filtros":    filtros,
-        "session_id": session_id,
-    })
+    return JSONResponse(
+        {
+            "respuesta": respuesta,
+            "filtros": filtros,
+            "session_id": session_id,
+        }
+    )
 
 
 @router.post("/reset")
@@ -213,6 +224,7 @@ async def toggle_fuente(request: Request):
         pb.update_record("asistente_fuentes", record["id"], {"activa": nueva_activa})
         # Invalidar cache en rag.py
         from app.asistente_ia.rag import _SOURCE_CACHE
+
         _SOURCE_CACHE["data"] = None
         return JSONResponse({"clave": clave, "activa": nueva_activa})
     except Exception as exc:

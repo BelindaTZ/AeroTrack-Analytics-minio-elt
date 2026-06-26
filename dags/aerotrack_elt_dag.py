@@ -18,13 +18,12 @@ UI: http://localhost:8080 ? busca "aerotrack_elt_pipeline"
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+from aerotrack_tasks import extract_pipeline, load_pipeline, transform_pipeline
 from airflow.decorators import dag, task
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
-
-from aerotrack_tasks import extract_pipeline, load_pipeline, transform_pipeline
 
 
 def _get_schedule() -> str | None:
@@ -37,9 +36,9 @@ def _get_schedule() -> str | None:
 
 
 def _on_failure(context: dict) -> None:
-    ti        = context.get("task_instance")
+    ti = context.get("task_instance")
     exception = context.get("exception")
-    print(f"FALLO EN EL PIPELINE")
+    print("FALLO EN EL PIPELINE")
     print(f"   DAG  : {ti.dag_id}")
     print(f"   Tarea: {ti.task_id}")
     print(f"   Error: {exception}")
@@ -54,8 +53,8 @@ def _on_failure(context: dict) -> None:
     max_active_runs=1,
     dagrun_timeout=timedelta(hours=4),
     default_args={
-        "owner":       "aerotrack",
-        "retries":     2,
+        "owner": "aerotrack",
+        "retries": 2,
         "retry_delay": timedelta(minutes=5),
         "on_failure_callback": _on_failure,
     },

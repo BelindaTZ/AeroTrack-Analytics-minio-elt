@@ -1,15 +1,13 @@
 """Dependencias FastAPI reutilizables: autenticación JWT y verificación RBAC."""
 
 import time
-from typing import Optional
 
 from fastapi import Request
-from fastapi.responses import RedirectResponse
 from jose import JWTError
 
 from app.seguridad.jwt.service import verificar_token
 from app.shared.clients import pb_client
-from app.shared.templates import templates, MODULOS_SIDEBAR, MODULOS_ADMIN
+from app.shared.templates import MODULOS_ADMIN, MODULOS_SIDEBAR, templates
 
 # Cache de permisos por rol: {rol_id: {expires, permissions: {modulo: [accion]}}}
 _perm_cache: dict[str, dict] = {}
@@ -25,7 +23,7 @@ def _get_cached_permissions(rol_id: str) -> dict[str, list[str]]:
     return perms
 
 
-def invalidate_permission_cache(rol_id: Optional[str] = None) -> None:
+def invalidate_permission_cache(rol_id: str | None = None) -> None:
     """Invalida el caché de permisos (llamar al guardar cambios de permisos)."""
     if rol_id:
         _perm_cache.pop(rol_id, None)
@@ -33,7 +31,7 @@ def invalidate_permission_cache(rol_id: Optional[str] = None) -> None:
         _perm_cache.clear()
 
 
-def get_current_user(request: Request) -> Optional[dict]:
+def get_current_user(request: Request) -> dict | None:
     """Decodifica el JWT de la cookie. Retorna el payload del usuario o None."""
     token = request.cookies.get("access_token")
     if not token:
@@ -71,6 +69,7 @@ def has_permission(permissions: dict[str, list[str]], modulo: str, accion: str) 
 
 def require_permission(modulo: str, accion: str):
     """Devuelve una dependencia FastAPI que verifica un permiso específico."""
+
     def _check(request: Request):
         user = get_current_user(request)
         if not user:
@@ -79,6 +78,7 @@ def require_permission(modulo: str, accion: str):
         if not has_permission(perms, modulo, accion):
             raise PermissionError(f"Sin permiso {modulo}.{accion}")
         return user
+
     return _check
 
 

@@ -4,10 +4,10 @@ Patrón: Groq llama-3.1-8b-instant (primario) → Gemini 2.5 Flash (fallback en 
 Caché en memoria TTL 300s, clave = MD5(prompt). Temperatura 0.4.
 Contexto = solo KPIs agregados, nunca filas raw.
 """
+
 import hashlib
 import logging
 import time
-from typing import Optional
 
 import requests
 
@@ -42,7 +42,7 @@ def _cache_key(prompt: str) -> str:
     return hashlib.md5(prompt.encode()).hexdigest()
 
 
-def _get_cached(key: str) -> Optional[tuple[str, str]]:
+def _get_cached(key: str) -> tuple[str, str] | None:
     e = _cache.get(key)
     if e and time.time() < e["expires"]:
         return e["text"], e["provider"]
@@ -62,18 +62,14 @@ def _call_groq(prompt: str, api_key: str) -> str:
         "max_tokens": 180,
     }
     r = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        json=payload, headers=headers, timeout=_TIMEOUT
+        "https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers, timeout=_TIMEOUT
     )
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"].strip()
 
 
 def _call_gemini(prompt: str, api_key: str) -> str:
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.5-flash:generateContent?key={api_key}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.15, "maxOutputTokens": 180},

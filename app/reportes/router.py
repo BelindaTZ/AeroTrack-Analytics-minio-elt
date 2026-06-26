@@ -2,81 +2,91 @@
 
 import io
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 _TZ = timezone(timedelta(hours=-5))  # America/Guayaquil — sin DST
 
 import pandas as pd
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
-from app.dashboard.kpis import _calcular_kpis_agg, _get_umbrales
+from app.dashboard.kpis import _calcular_kpis_agg
 from app.reportes.generar_excel import generar_excel
-from app.reportes.generar_pdf import generar_pdf, subir_pdf_minio, _weasyprint_available
+from app.reportes.generar_pdf import _weasyprint_available, generar_pdf, subir_pdf_minio
 from app.shared.analytics import (
-    load_agg, load_enriched_fact,
-    get_years, get_aerolinas, get_origins, get_dests,
+    get_aerolinas,
+    get_dests,
+    get_origins,
+    get_years,
+    load_agg,
+    load_enriched_fact,
 )
 from app.shared.deps import render, require_permission
 from app.shared.utils import audit
 
 router = APIRouter()
-_perm_ver    = require_permission("reportes", "ver")
+_perm_ver = require_permission("reportes", "ver")
 _perm_export = require_permission("reportes", "exportar")
 
 _SECCIONES = [
-    {"clave": "kpis",          "label": "KPIs operacionales"},
-    {"clave": "otp_mensual",   "label": "Tendencia OTP mensual"},
-    {"clave": "top_aerolineas","label": "Desempeño por aerolínea"},
-    {"clave": "causas_retraso","label": "Causas de retraso"},
-    {"clave": "peores_rutas",  "label": "Rutas problemáticas"},
-    {"clave": "dia_semana",    "label": "OTP por día de semana"},
+    {"clave": "kpis", "label": "KPIs operacionales"},
+    {"clave": "otp_mensual", "label": "Tendencia OTP mensual"},
+    {"clave": "top_aerolineas", "label": "Desempeño por aerolínea"},
+    {"clave": "causas_retraso", "label": "Causas de retraso"},
+    {"clave": "peores_rutas", "label": "Rutas problemáticas"},
+    {"clave": "dia_semana", "label": "OTP por día de semana"},
     {"clave": "cancelaciones", "label": "Cancelaciones FAA"},
-    {"clave": "rutas",         "label": "Top rutas eficientes"},
+    {"clave": "rutas", "label": "Top rutas eficientes"},
 ]
 
-_FAA_DESC = {"A": "Aerolínea (Carrier)", "B": "Meteorología (Weather)",
-             "C": "Sistema Aéreo (NAS)", "D": "Seguridad (Security)"}
+_FAA_DESC = {
+    "A": "Aerolínea (Carrier)",
+    "B": "Meteorología (Weather)",
+    "C": "Sistema Aéreo (NAS)",
+    "D": "Seguridad (Security)",
+}
 
-_FILTRO_KEYS = ["year", "quarter", "month", "dow", "airline", "origin", "dest",
-                "cancel_code", "solo_cancelados"]
+_FILTRO_KEYS = ["year", "quarter", "month", "dow", "airline", "origin", "dest", "cancel_code", "solo_cancelados"]
 
 
 def _ensure_exports_bucket() -> None:
     try:
         from minio import Minio
-        from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration
         from minio.commonconfig import ENABLED
-        from app.config import MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_BUCKET_EXPORTS
+        from minio.lifecycleconfig import Expiration, LifecycleConfig, Rule
 
-        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                       secret_key=MINIO_SECRET_KEY, secure=False)
+        from app.config import MINIO_ACCESS_KEY, MINIO_BUCKET_EXPORTS, MINIO_ENDPOINT, MINIO_SECRET_KEY
+
+        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
         if not client.bucket_exists(MINIO_BUCKET_EXPORTS):
             client.make_bucket(MINIO_BUCKET_EXPORTS)
-            config = LifecycleConfig([
-                Rule(ENABLED, rule_id="expire-7d", expiration=Expiration(days=7))
-            ])
+            config = LifecycleConfig([Rule(ENABLED, rule_id="expire-7d", expiration=Expiration(days=7))])
             client.set_bucket_lifecycle(MINIO_BUCKET_EXPORTS, config)
     except Exception:
         pass
 
 
-def _subir_export_minio(data: bytes, nombre: str, content_type: str) -> Optional[str]:
+def _subir_export_minio(data: bytes, nombre: str, content_type: str) -> str | None:
     """Sube cualquier export al bucket aerotrack-exports y retorna URL firmada (1 h)."""
     try:
         from minio import Minio
-        from app.config import (MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY,
-                                MINIO_BUCKET_EXPORTS, MINIO_PUBLIC_ENDPOINT)
 
-        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                       secret_key=MINIO_SECRET_KEY, secure=False)
+        from app.config import (
+            MINIO_ACCESS_KEY,
+            MINIO_BUCKET_EXPORTS,
+            MINIO_ENDPOINT,
+            MINIO_PUBLIC_ENDPOINT,
+            MINIO_SECRET_KEY,
+        )
+
+        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
         if not client.bucket_exists(MINIO_BUCKET_EXPORTS):
             client.make_bucket(MINIO_BUCKET_EXPORTS)
 
         obj_name = f"reportes/{nombre}"
-        client.put_object(MINIO_BUCKET_EXPORTS, obj_name, io.BytesIO(data),
-                          length=len(data), content_type=content_type)
-        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+        client.put_object(MINIO_BUCKET_EXPORTS, obj_name, io.BytesIO(data), length=len(data), content_type=content_type)
+        sign_client = Minio(
+            MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False
+        )
         sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(MINIO_BUCKET_EXPORTS, "us-east-1")
         url = sign_client.presigned_get_object(MINIO_BUCKET_EXPORTS, obj_name, expires=timedelta(hours=1))
         return url
@@ -115,9 +125,11 @@ def _datos_para_pdf(df) -> dict:
             if "ActualElapsedTime" in vop.columns and "CRSElapsedTime" in vop.columns:
                 sub = vop[vop["CRSElapsedTime"] > 0].copy()
                 sub["eficiencia"] = sub["ActualElapsedTime"] / sub["CRSElapsedTime"]
-                grp_r = sub.groupby(["OriginCode", "DestCode"]).agg(
-                    total=("pk_vuelo", "count"), ef_media=("eficiencia", "mean")
-                ).reset_index()
+                grp_r = (
+                    sub.groupby(["OriginCode", "DestCode"])
+                    .agg(total=("pk_vuelo", "count"), ef_media=("eficiencia", "mean"))
+                    .reset_index()
+                )
                 grp_r = grp_r[grp_r["total"] >= 5].nsmallest(10, "ef_media")
                 datos["rutas"] = [
                     {
@@ -133,14 +145,13 @@ def _datos_para_pdf(df) -> dict:
     return datos
 
 
-_MESES_SHORT  = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-                  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-_DIAS_SHORT   = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-_CAUSA_COLS   = [
-    ("carrierdelay",      "Carrier"),
-    ("weatherdelay",      "Weather"),
-    ("nasdelay",          "NAS"),
-    ("securitydelay",     "Security"),
+_MESES_SHORT = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+_DIAS_SHORT = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+_CAUSA_COLS = [
+    ("carrierdelay", "Carrier"),
+    ("weatherdelay", "Weather"),
+    ("nasdelay", "NAS"),
+    ("securitydelay", "Security"),
     ("lateaircraftdelay", "LateAircraft"),
 ]
 
@@ -153,10 +164,15 @@ def _preparar_datos_pdf(filtros: dict) -> dict:
     try:
         df_otp = load_agg("agg_otp_aerolinea_mes", filtros)
         if not df_otp.empty and "month" in df_otp.columns:
-            grp = df_otp.groupby("month").agg(
-                total=("total_vuelos", "sum"),
-                at=("vuelos_a_tiempo", "sum"),
-            ).reset_index().sort_values("month")
+            grp = (
+                df_otp.groupby("month")
+                .agg(
+                    total=("total_vuelos", "sum"),
+                    at=("vuelos_a_tiempo", "sum"),
+                )
+                .reset_index()
+                .sort_values("month")
+            )
             grp["otp"] = (grp["at"] / grp["total"].replace(0, pd.NA) * 100).fillna(0.0).round(1)
             datos["otp_mensual"] = [
                 {
@@ -167,19 +183,23 @@ def _preparar_datos_pdf(filtros: dict) -> dict:
             ]
 
         if not df_otp.empty and "carrier" in df_otp.columns:
-            grp_al = df_otp.groupby("carrier").agg(
-                total=("total_vuelos", "sum"),
-                at=("vuelos_a_tiempo", "sum"),
-                delay_w=("delay_avg", "mean"),
-            ).reset_index()
+            grp_al = (
+                df_otp.groupby("carrier")
+                .agg(
+                    total=("total_vuelos", "sum"),
+                    at=("vuelos_a_tiempo", "sum"),
+                    delay_w=("delay_avg", "mean"),
+                )
+                .reset_index()
+            )
             grp_al["otp"] = (grp_al["at"] / grp_al["total"].replace(0, pd.NA) * 100).fillna(0.0).round(1)
             grp_al = grp_al[grp_al["total"] >= 50].sort_values("total", ascending=False).head(20)
             datos["top_aerolineas"] = [
                 {
                     "aerolinea": str(r["carrier"]),
-                    "total":     int(r["total"]),
-                    "otp":       float(r["otp"]),
-                    "retraso":   f"{float(r.get('delay_w') or 0):.1f}",
+                    "total": int(r["total"]),
+                    "otp": float(r["otp"]),
+                    "retraso": f"{float(r.get('delay_w') or 0):.1f}",
                 }
                 for _, r in grp_al.iterrows()
             ]
@@ -215,16 +235,16 @@ def _preparar_datos_pdf(filtros: dict) -> dict:
             grp_r = df_rutas.groupby(["origin", "dest"]).agg(**agg_cols).reset_index()
             if "vuelos_at" in grp_r.columns:
                 grp_r["otp_pct"] = (
-                    grp_r["vuelos_at"] / grp_r["total_vuelos"].replace(0, pd.NA) * 100
-                ).fillna(0.0).round(1)
+                    (grp_r["vuelos_at"] / grp_r["total_vuelos"].replace(0, pd.NA) * 100).fillna(0.0).round(1)
+                )
             else:
                 grp_r["otp_pct"] = 0.0
             grp_r = grp_r[grp_r["total_vuelos"] >= 50].sort_values("otp_pct").head(15)
             datos["peores_rutas"] = [
                 {
-                    "ruta":    f"{r['origin']}-{r['dest']}",
-                    "vuelos":  int(r["total_vuelos"]),
-                    "otp":     float(r["otp_pct"]),
+                    "ruta": f"{r['origin']}-{r['dest']}",
+                    "vuelos": int(r["total_vuelos"]),
+                    "otp": float(r["otp_pct"]),
                     "retraso": float(r.get("retraso_prom") or 0),
                 }
                 for _, r in grp_r.iterrows()
@@ -238,7 +258,9 @@ def _preparar_datos_pdf(filtros: dict) -> dict:
         if not df_dia.empty and "otp_pct" in df_dia.columns:
             datos["dia_semana"] = [
                 {
-                    "dia": _DIAS_SHORT[int(r["day_of_week"])] if 1 <= int(r["day_of_week"]) <= 7 else str(r["day_of_week"]),
+                    "dia": _DIAS_SHORT[int(r["day_of_week"])]
+                    if 1 <= int(r["day_of_week"]) <= 7
+                    else str(r["day_of_week"]),
                     "otp": float(r["otp_pct"]),
                 }
                 for _, r in df_dia.sort_values("day_of_week").iterrows()
@@ -258,33 +280,54 @@ def _preparar_datos_pdf(filtros: dict) -> dict:
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
+
 @router.get("", response_class=HTMLResponse)
 def index(request: Request):
     user = _perm_ver(request)
     _ensure_exports_bucket()
-    return render(request, "reportes/index.html", {
-        "secciones":    _SECCIONES,
-        "weasyprint_ok": _weasyprint_available(),
-        "years":        get_years(),
-        "aerolinas":    get_aerolinas(),
-        "origins":      get_origins(),
-        "dests":        get_dests(),
-    })
+    return render(
+        request,
+        "reportes/index.html",
+        {
+            "secciones": _SECCIONES,
+            "weasyprint_ok": _weasyprint_available(),
+            "years": get_years(),
+            "aerolinas": get_aerolinas(),
+            "origins": get_origins(),
+            "dests": get_dests(),
+        },
+    )
 
 
 @router.get("/preview")
 def preview(
     request: Request,
-    year: str = "", quarter: str = "", month: str = "", dow: str = "",
-    airline: str = "", origin: str = "", dest: str = "",
-    cancel_code: str = "", solo_cancelados: str = "",
+    year: str = "",
+    quarter: str = "",
+    month: str = "",
+    dow: str = "",
+    airline: str = "",
+    origin: str = "",
+    dest: str = "",
+    cancel_code: str = "",
+    solo_cancelados: str = "",
 ):
     _perm_ver(request)
-    filtros = {k: v for k, v in {
-        "year": year, "quarter": quarter, "month": month, "dow": dow,
-        "airline": airline, "origin": origin, "dest": dest,
-        "cancel_code": cancel_code, "solo_cancelados": solo_cancelados,
-    }.items() if v}
+    filtros = {
+        k: v
+        for k, v in {
+            "year": year,
+            "quarter": quarter,
+            "month": month,
+            "dow": dow,
+            "airline": airline,
+            "origin": origin,
+            "dest": dest,
+            "cancel_code": cancel_code,
+            "solo_cancelados": solo_cancelados,
+        }.items()
+        if v
+    }
     try:
         df = load_enriched_fact(filtros or None)
         total = len(df)
@@ -301,15 +344,17 @@ def preview(
         rutas_n = 0
         if "OriginCode" in df.columns and "DestCode" in df.columns:
             rutas_n = int(df.groupby(["OriginCode", "DestCode"]).ngroups)
-        return JSONResponse({
-            "total": total,
-            "otp": otp,
-            "cancelados": cancelados,
-            "cancel_pct": round(cancelados / max(total, 1) * 100, 1),
-            "retraso": retraso,
-            "aerolinas": aerolinas_n,
-            "rutas": rutas_n,
-        })
+        return JSONResponse(
+            {
+                "total": total,
+                "otp": otp,
+                "cancelados": cancelados,
+                "cancel_pct": round(cancelados / max(total, 1) * 100, 1),
+                "retraso": retraso,
+                "aerolinas": aerolinas_n,
+                "rutas": rutas_n,
+            }
+        )
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
 
@@ -319,11 +364,16 @@ def historial(request: Request):
     _perm_ver(request)
     try:
         from minio import Minio
-        from app.config import (MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY,
-                                MINIO_BUCKET_EXPORTS, MINIO_PUBLIC_ENDPOINT)
 
-        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                       secret_key=MINIO_SECRET_KEY, secure=False)
+        from app.config import (
+            MINIO_ACCESS_KEY,
+            MINIO_BUCKET_EXPORTS,
+            MINIO_ENDPOINT,
+            MINIO_PUBLIC_ENDPOINT,
+            MINIO_SECRET_KEY,
+        )
+
+        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
         if not client.bucket_exists(MINIO_BUCKET_EXPORTS):
             return JSONResponse({"items": []})
 
@@ -338,18 +388,26 @@ def historial(request: Request):
             nombre = obj.object_name.split("/", 1)[-1]
             ext = nombre.rsplit(".", 1)[-1] if "." in nombre else "bin"
             try:
-                sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
-                sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(MINIO_BUCKET_EXPORTS, "us-east-1")
-                url = sign_client.presigned_get_object(MINIO_BUCKET_EXPORTS, obj.object_name, expires=timedelta(hours=1))
+                sign_client = Minio(
+                    MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False
+                )
+                sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(
+                    MINIO_BUCKET_EXPORTS, "us-east-1"
+                )
+                url = sign_client.presigned_get_object(
+                    MINIO_BUCKET_EXPORTS, obj.object_name, expires=timedelta(hours=1)
+                )
             except Exception:
                 url = ""
-            items.append({
-                "nombre": nombre,
-                "url": url,
-                "fecha": obj.last_modified.astimezone(_TZ).strftime("%d/%m/%Y %H:%M"),
-                "tipo": ext,
-                "tamanio_kb": round(obj.size / 1024, 1),
-            })
+            items.append(
+                {
+                    "nombre": nombre,
+                    "url": url,
+                    "fecha": obj.last_modified.astimezone(_TZ).strftime("%d/%m/%Y %H:%M"),
+                    "tipo": ext,
+                    "tamanio_kb": round(obj.size / 1024, 1),
+                }
+            )
         return JSONResponse({"items": items})
     except Exception as exc:
         return JSONResponse({"items": [], "error": str(exc)})
@@ -358,27 +416,48 @@ def historial(request: Request):
 @router.get("/preview-charts")
 def preview_charts(
     request: Request,
-    year: str = "", quarter: str = "", month: str = "", dow: str = "",
-    airline: str = "", origin: str = "", dest: str = "",
-    cancel_code: str = "", solo_cancelados: str = "",
+    year: str = "",
+    quarter: str = "",
+    month: str = "",
+    dow: str = "",
+    airline: str = "",
+    origin: str = "",
+    dest: str = "",
+    cancel_code: str = "",
+    solo_cancelados: str = "",
 ):
     """JSON con datos de charts para la previsualización web (Chart.js)."""
     _perm_ver(request)
-    filtros = {k: v for k, v in {
-        "year": year, "quarter": quarter, "month": month, "dow": dow,
-        "airline": airline, "origin": origin, "dest": dest,
-        "cancel_code": cancel_code, "solo_cancelados": solo_cancelados,
-    }.items() if v}
+    filtros = {
+        k: v
+        for k, v in {
+            "year": year,
+            "quarter": quarter,
+            "month": month,
+            "dow": dow,
+            "airline": airline,
+            "origin": origin,
+            "dest": dest,
+            "cancel_code": cancel_code,
+            "solo_cancelados": solo_cancelados,
+        }.items()
+        if v
+    }
 
     resp: dict = {}
 
     try:
         df_otp = load_agg("agg_otp_aerolinea_mes", filtros)
         if not df_otp.empty and "month" in df_otp.columns:
-            grp = df_otp.groupby("month").agg(
-                total=("total_vuelos", "sum"),
-                at=("vuelos_a_tiempo", "sum"),
-            ).reset_index().sort_values("month")
+            grp = (
+                df_otp.groupby("month")
+                .agg(
+                    total=("total_vuelos", "sum"),
+                    at=("vuelos_a_tiempo", "sum"),
+                )
+                .reset_index()
+                .sort_values("month")
+            )
             grp["otp"] = (grp["at"] / grp["total"].replace(0, pd.NA) * 100).fillna(0.0).round(1)
             resp["otp_mensual"] = {
                 "labels": [
@@ -413,8 +492,8 @@ def preview_charts(
             grp_r = df_rutas.groupby(["origin", "dest"]).agg(**agg_cols).reset_index()
             if "vuelos_at" in grp_r.columns:
                 grp_r["otp_pct"] = (
-                    grp_r["vuelos_at"] / grp_r["total_vuelos"].replace(0, pd.NA) * 100
-                ).fillna(0.0).round(1)
+                    (grp_r["vuelos_at"] / grp_r["total_vuelos"].replace(0, pd.NA) * 100).fillna(0.0).round(1)
+                )
             else:
                 grp_r["otp_pct"] = 0.0
             grp_r = grp_r[grp_r["total_vuelos"] >= 50].sort_values("otp_pct").head(10)
@@ -436,12 +515,12 @@ async def generar_excel_endpoint(request: Request):
     try:
         excel_bytes = generar_excel(filtros or None)
         nombre = f"aerotrack_reporte_{datetime.now(_TZ).strftime('%Y%m%d_%H%M')}.xlsx"
-        audit.registrar(user["sub"], user["email"], "exportar", "reportes",
-                        recurso_tipo="excel", recurso_id=nombre)
+        audit.registrar(user["sub"], user["email"], "exportar", "reportes", recurso_tipo="excel", recurso_id=nombre)
         # Guardar en MinIO para historial (best-effort)
         try:
             _subir_export_minio(
-                excel_bytes, nombre,
+                excel_bytes,
+                nombre,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         except Exception:
@@ -462,16 +541,29 @@ async def generar_csv_endpoint(request: Request):
     filtros = _extract_filtros(form)
     try:
         df = load_enriched_fact(filtros or None)
-        cols_csv = [c for c in [
-            "FlightDate", "Reporting_Airline", "OriginCode", "DestCode",
-            "Cancelled", "CancellationCode", "Diverted",
-            "ArrDel15", "DepDel15", "ArrDelayMinutes", "DepDelayMinutes",
-            "ActualElapsedTime", "CRSElapsedTime", "Distance",
-        ] if c in df.columns]
+        cols_csv = [
+            c
+            for c in [
+                "FlightDate",
+                "Reporting_Airline",
+                "OriginCode",
+                "DestCode",
+                "Cancelled",
+                "CancellationCode",
+                "Diverted",
+                "ArrDel15",
+                "DepDel15",
+                "ArrDelayMinutes",
+                "DepDelayMinutes",
+                "ActualElapsedTime",
+                "CRSElapsedTime",
+                "Distance",
+            ]
+            if c in df.columns
+        ]
         csv_bytes = df[cols_csv].to_csv(index=False).encode("utf-8")
         nombre = f"aerotrack_datos_{datetime.now(_TZ).strftime('%Y%m%d_%H%M')}.csv"
-        audit.registrar(user["sub"], user["email"], "exportar", "reportes",
-                        recurso_tipo="csv", recurso_id=nombre)
+        audit.registrar(user["sub"], user["email"], "exportar", "reportes", recurso_tipo="csv", recurso_id=nombre)
         try:
             _subir_export_minio(csv_bytes, nombre, "text/csv")
         except Exception:
@@ -492,17 +584,24 @@ async def generar_pdf_endpoint(request: Request):
         return JSONResponse({"error": "WeasyPrint no está instalado en este servidor."}, status_code=501)
 
     form = await request.form()
-    filtros  = _extract_filtros(form)
+    filtros = _extract_filtros(form)
     secciones = list(form.getlist("secciones")) or [s["clave"] for s in _SECCIONES]
 
     periodo_parts = []
-    if filtros.get("year"):    periodo_parts.append(str(filtros["year"]))
-    if filtros.get("quarter"): periodo_parts.append(f"Q{filtros['quarter']}")
-    if filtros.get("month"):   periodo_parts.append(f"Mes {filtros['month']}")
-    if filtros.get("dow"):     periodo_parts.append(f"Día {filtros['dow']}")
-    if filtros.get("airline"): periodo_parts.append(filtros["airline"])
-    if filtros.get("origin"):  periodo_parts.append(f"Desde {filtros['origin']}")
-    if filtros.get("dest"):    periodo_parts.append(f"Hacia {filtros['dest']}")
+    if filtros.get("year"):
+        periodo_parts.append(str(filtros["year"]))
+    if filtros.get("quarter"):
+        periodo_parts.append(f"Q{filtros['quarter']}")
+    if filtros.get("month"):
+        periodo_parts.append(f"Mes {filtros['month']}")
+    if filtros.get("dow"):
+        periodo_parts.append(f"Día {filtros['dow']}")
+    if filtros.get("airline"):
+        periodo_parts.append(filtros["airline"])
+    if filtros.get("origin"):
+        periodo_parts.append(f"Desde {filtros['origin']}")
+    if filtros.get("dest"):
+        periodo_parts.append(f"Hacia {filtros['dest']}")
     periodo = " · ".join(periodo_parts) or "Todos los datos"
 
     try:
@@ -520,8 +619,7 @@ async def generar_pdf_endpoint(request: Request):
     nombre = f"aerotrack_reporte_{datetime.now(_TZ).strftime('%Y%m%d_%H%M')}.pdf"
     url = subir_pdf_minio(pdf_bytes, nombre)
 
-    audit.registrar(user["sub"], user["email"], "exportar", "reportes",
-                    recurso_tipo="pdf", recurso_id=nombre)
+    audit.registrar(user["sub"], user["email"], "exportar", "reportes", recurso_tipo="pdf", recurso_id=nombre)
 
     if url:
         return JSONResponse({"ok": True, "url": url, "nombre": nombre})

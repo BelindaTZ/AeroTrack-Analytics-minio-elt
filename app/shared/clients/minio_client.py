@@ -1,14 +1,13 @@
 """Operaciones MinIO reutilizables para todos los módulos."""
 
 import io
-from typing import Optional
 
 import pandas as pd
 import urllib3
 from minio import Minio
 from minio.error import S3Error
 
-from app.config import MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY
+from app.config import MINIO_ACCESS_KEY, MINIO_ENDPOINT, MINIO_SECRET_KEY
 
 # Timeout para operaciones de red hacia MinIO.
 # Sin timeout, response.read() bloquea indefinidamente si MinIO tiene lentitud
@@ -56,13 +55,12 @@ def write_parquet(bucket: str, tabla: str, df: pd.DataFrame) -> None:
         buf = io.BytesIO()
         df.to_parquet(buf, index=False, engine="pyarrow")
         buf.seek(0)
-        client.put_object(bucket, obj_name, buf, length=buf.getbuffer().nbytes,
-                          content_type="application/octet-stream")
+        client.put_object(bucket, obj_name, buf, length=buf.getbuffer().nbytes, content_type="application/octet-stream")
     except S3Error as exc:
         raise RuntimeError(f"Error MinIO al escribir '{obj_name}': {exc}") from exc
 
 
-def stat_parquet(bucket: str, tabla: str) -> Optional[dict]:
+def stat_parquet(bucket: str, tabla: str) -> dict | None:
     """Retorna {size_mb, modified} o None si el objeto no existe."""
     client = get_client()
     obj_name = f"{tabla}.parquet"

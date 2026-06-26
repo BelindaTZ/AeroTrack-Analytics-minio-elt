@@ -2,12 +2,12 @@
 
 import json
 
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.shared.clients import pb_client
-from app.shared.utils import audit
 from app.shared.deps import invalidate_permission_cache, render, require_permission
+from app.shared.utils import audit
 
 router = APIRouter()
 _perm = require_permission("seguridad", "ver")
@@ -17,8 +17,9 @@ _TODAS_ACCIONES = ["ver", "crear", "editar", "eliminar", "ejecutar", "exportar",
 
 def _permisos_de_rol(rid: str) -> dict[str, list[str]]:
     """Retorna {modulo_clave: [accion]} para el rol dado."""
-    rows = pb_client.list_records_all("roles_permisos", filter=f'rol_id="{rid}"',
-                                      expand="permiso_id,permiso_id.modulo_id")
+    rows = pb_client.list_records_all(
+        "roles_permisos", filter=f'rol_id="{rid}"', expand="permiso_id,permiso_id.modulo_id"
+    )
     result: dict[str, list[str]] = {}
     for row in rows:
         expanded = row.get("expand", {})
@@ -40,13 +41,17 @@ async def gestionar_permisos(request: Request, rid: str):
     modulos = pb_client.list_records("modulos", sort="orden")
     permisos_actuales = _permisos_de_rol(rid)
     permisos_disponibles = pb_client.list_records_all("permisos", expand="modulo_id")
-    return render(request, "roles/permisos.html", {
-        "rol": rol,
-        "modulos": modulos,
-        "permisos_actuales": permisos_actuales,
-        "permisos_disponibles": permisos_disponibles,
-        "todas_acciones": _TODAS_ACCIONES,
-    })
+    return render(
+        request,
+        "roles/permisos.html",
+        {
+            "rol": rol,
+            "modulos": modulos,
+            "permisos_actuales": permisos_actuales,
+            "permisos_disponibles": permisos_disponibles,
+            "todas_acciones": _TODAS_ACCIONES,
+        },
+    )
 
 
 @router.post("/{rid}/permisos", response_class=HTMLResponse)
@@ -81,9 +86,15 @@ async def guardar_permisos(request: Request, rid: str):
         pb_client.create_record("roles_permisos", {"rol_id": rid, "permiso_id": pid})
 
     invalidate_permission_cache(rid)
-    audit.registrar(user["sub"], user["email"], "configurar", "seguridad",
-                    recurso_tipo="permisos_rol", recurso_id=rid,
-                    detalle=json.dumps({"permisos_count": len(seleccionados)}))
+    audit.registrar(
+        user["sub"],
+        user["email"],
+        "configurar",
+        "seguridad",
+        recurso_tipo="permisos_rol",
+        recurso_id=rid,
+        detalle=json.dumps({"permisos_count": len(seleccionados)}),
+    )
     return RedirectResponse(f"/auth/roles/{rid}/permisos?msg=Permisos guardados.", status_code=303)
 
 
@@ -95,9 +106,13 @@ async def matriz(request: Request):
     matriz: dict[str, dict] = {}
     for rol in roles:
         matriz[rol["id"]] = _permisos_de_rol(rol["id"])
-    return render(request, "roles/matriz.html", {
-        "roles": roles,
-        "modulos": modulos,
-        "matriz": matriz,
-        "todas_acciones": _TODAS_ACCIONES,
-    })
+    return render(
+        request,
+        "roles/matriz.html",
+        {
+            "roles": roles,
+            "modulos": modulos,
+            "matriz": matriz,
+            "todas_acciones": _TODAS_ACCIONES,
+        },
+    )

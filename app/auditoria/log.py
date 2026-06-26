@@ -2,7 +2,6 @@
 
 import csv
 import io
-import json
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
@@ -32,6 +31,7 @@ def _localizar_registros(registros: list[dict]) -> list[dict]:
     for r in registros:
         r["fecha_local"] = _fmt_local(r.get("created", ""))
     return registros
+
 
 _PAGE_SIZE = 50
 
@@ -65,13 +65,15 @@ def log_auditoria(
 
     filter_str = "&&".join(filtros_pb)
 
-    registros = _localizar_registros(pb_client.list_records(
-        "auditoria",
-        filter=filter_str,
-        sort="-created",
-        page=page,
-        per_page=_PAGE_SIZE,
-    ))
+    registros = _localizar_registros(
+        pb_client.list_records(
+            "auditoria",
+            filter=filter_str,
+            sort="-created",
+            page=page,
+            per_page=_PAGE_SIZE,
+        )
+    )
 
     # Contar total para paginación
     total = len(pb_client.list_records_all("auditoria", filter=filter_str)) if filter_str else None
@@ -80,20 +82,28 @@ def log_auditoria(
     modulos_disponibles = _get_distinct("modulo")
     acciones_disponibles = _get_distinct("accion")
 
-    return render(request, "auditoria/index.html", {
-        "registros": registros,
-        "page": page,
-        "page_size": _PAGE_SIZE,
-        "total": total,
-        "has_next": len(registros) == _PAGE_SIZE,
-        "has_prev": page > 1,
-        "filtros": {
-            "modulo": modulo, "accion": accion, "usuario": usuario,
-            "resultado": resultado, "desde": desde, "hasta": hasta,
+    return render(
+        request,
+        "auditoria/index.html",
+        {
+            "registros": registros,
+            "page": page,
+            "page_size": _PAGE_SIZE,
+            "total": total,
+            "has_next": len(registros) == _PAGE_SIZE,
+            "has_prev": page > 1,
+            "filtros": {
+                "modulo": modulo,
+                "accion": accion,
+                "usuario": usuario,
+                "resultado": resultado,
+                "desde": desde,
+                "hasta": hasta,
+            },
+            "modulos_disponibles": modulos_disponibles,
+            "acciones_disponibles": acciones_disponibles,
         },
-        "modulos_disponibles": modulos_disponibles,
-        "acciones_disponibles": acciones_disponibles,
-    })
+    )
 
 
 @router.get("/export")
@@ -127,21 +137,24 @@ def export_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Fecha", "Usuario", "Email", "Módulo", "Acción", "Recurso tipo",
-                     "Recurso ID", "Resultado", "IP", "Detalle"])
+    writer.writerow(
+        ["Fecha", "Usuario", "Email", "Módulo", "Acción", "Recurso tipo", "Recurso ID", "Resultado", "IP", "Detalle"]
+    )
     for r in registros:
-        writer.writerow([
-            _fmt_local(r.get("created", "")),
-            r.get("usuario_id", ""),
-            r.get("usuario_email", ""),
-            r.get("modulo", ""),
-            r.get("accion", ""),
-            r.get("recurso_tipo", ""),
-            r.get("recurso_id", ""),
-            r.get("resultado", ""),
-            r.get("ip_address", ""),
-            r.get("detalle", ""),
-        ])
+        writer.writerow(
+            [
+                _fmt_local(r.get("created", "")),
+                r.get("usuario_id", ""),
+                r.get("usuario_email", ""),
+                r.get("modulo", ""),
+                r.get("accion", ""),
+                r.get("recurso_tipo", ""),
+                r.get("recurso_id", ""),
+                r.get("resultado", ""),
+                r.get("ip_address", ""),
+                r.get("detalle", ""),
+            ]
+        )
 
     output.seek(0)
     return StreamingResponse(

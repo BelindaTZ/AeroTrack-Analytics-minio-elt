@@ -16,16 +16,19 @@ def registrar(
 ) -> None:
     """Inserta un registro de auditoría. Nunca lanza excepción al llamador."""
     try:
-        pb_client.create_record("auditoria", {
-            "usuario_id": usuario_id,
-            "usuario_email": usuario_email,
-            "accion": accion,
-            "modulo": modulo,
-            "recurso_tipo": recurso_tipo,
-            "recurso_id": recurso_id,
-            "detalle": detalle,
-            "ip_address": ip_address,
-            "resultado": resultado,
-        })
+        pb_client.create_record(
+            "auditoria",
+            {
+                "usuario_id": usuario_id,
+                "usuario_email": usuario_email,
+                "accion": accion,
+                "modulo": modulo,
+                "recurso_tipo": recurso_tipo,
+                "recurso_id": recurso_id,
+                "detalle": detalle,
+                "ip_address": ip_address,
+                "resultado": resultado,
+            },
+        )
     except Exception:
         pass  # El fallo de auditoría no debe interrumpir la operación principal

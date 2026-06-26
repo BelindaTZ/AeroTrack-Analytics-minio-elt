@@ -3,9 +3,8 @@ Soporta OpenAI, Anthropic, Gemini y endpoint custom compatible con OpenAI.
 Configuración dinámica desde PocketBase (grupo 'ia').
 """
 
-import time
 import logging
-from typing import Optional
+import time
 
 import requests
 
@@ -23,7 +22,7 @@ def get_ia_config() -> dict:
     if _cfg_cache["data"] is not None and time.time() < _cfg_cache["expires"]:
         return _cfg_cache["data"]
     rows = pb_client.list_records("configuracion_sistema", filter='modulo="ia"')
-    cfg  = {r["clave"]: r["valor"] for r in rows}
+    cfg = {r["clave"]: r["valor"] for r in rows}
     _cfg_cache = {"data": cfg, "expires": time.time() + _CFG_TTL}
     return cfg
 
@@ -52,26 +51,24 @@ def resolver_api_key(cfg: dict, proveedor: str) -> str:
     return generic
 
 
-def call_llm(messages: list[dict], extra_timeout: Optional[int] = None) -> str:
+def call_llm(messages: list[dict], extra_timeout: int | None = None) -> str:
     """
     Llama al LLM configurado.
     messages: lista de {"role": "system"|"user"|"assistant", "content": str}
     Retorna el texto de respuesta.
     Lanza ValueError si falta API key, RuntimeError en error de red.
     """
-    cfg          = get_ia_config()
-    proveedor    = cfg.get("ia_proveedor", "groq").lower()
-    api_key      = resolver_api_key(cfg, proveedor)
-    modelo       = cfg.get("ia_modelo", "llama-3.1-8b-instant")
+    cfg = get_ia_config()
+    proveedor = cfg.get("ia_proveedor", "groq").lower()
+    api_key = resolver_api_key(cfg, proveedor)
+    modelo = cfg.get("ia_modelo", "llama-3.1-8b-instant")
     endpoint_cus = cfg.get("ia_endpoint_custom", "").rstrip("/")
-    max_tokens   = int(cfg.get("ia_max_tokens", "2048"))
-    temperatura  = float(cfg.get("ia_temperatura", "0.3"))
-    timeout      = extra_timeout or int(cfg.get("ia_timeout_segundos", cfg.get("ia_timeout", "30")))
+    max_tokens = int(cfg.get("ia_max_tokens", "2048"))
+    temperatura = float(cfg.get("ia_temperatura", "0.3"))
+    timeout = extra_timeout or int(cfg.get("ia_timeout_segundos", cfg.get("ia_timeout", "30")))
 
     if not api_key:
-        raise ValueError(
-            "API key no configurada. Vaya a Configuración → IA para ingresar las credenciales."
-        )
+        raise ValueError("API key no configurada. Vaya a Configuración → IA para ingresar las credenciales.")
 
     if proveedor == "groq":
         base = endpoint_cus or "https://api.groq.com/openai"
@@ -88,6 +85,7 @@ def call_llm(messages: list[dict], extra_timeout: Optional[int] = None) -> str:
 
 
 # ── Manejo de errores amigables ───────────────────────────────────────────────
+
 
 def _friendly_error(exc: requests.RequestException, proveedor: str) -> RuntimeError:
     """Convierte excepciones de requests en mensajes comprensibles para el usuario."""
@@ -115,8 +113,7 @@ def _friendly_error(exc: requests.RequestException, proveedor: str) -> RuntimeEr
             )
         if status == 404:
             return RuntimeError(
-                f"El modelo configurado no existe en {proveedor}. "
-                "Verifica el nombre del modelo en Configuración → IA."
+                f"El modelo configurado no existe en {proveedor}. Verifica el nombre del modelo en Configuración → IA."
             )
         if status == 400:
             return RuntimeError(
@@ -128,25 +125,28 @@ def _friendly_error(exc: requests.RequestException, proveedor: str) -> RuntimeEr
                 f"El servicio {proveedor} está experimentando problemas internos (código {status}). "
                 "Intenta de nuevo en unos minutos."
             )
-        return RuntimeError(
-            f"Error al contactar {proveedor} (código HTTP {status}). Intenta de nuevo."
-        )
+        return RuntimeError(f"Error al contactar {proveedor} (código HTTP {status}). Intenta de nuevo.")
     return RuntimeError(
-        f"Error inesperado al contactar el servicio de IA ({proveedor}). "
-        "Intenta de nuevo o revisa la configuración."
+        f"Error inesperado al contactar el servicio de IA ({proveedor}). Intenta de nuevo o revisa la configuración."
     )
 
 
 # ── Implementaciones por proveedor ────────────────────────────────────────────
 
+
 def _call_openai_compat(
-    base_url: str, api_key: str, model: str,
-    messages: list[dict], max_tokens: int, temp: float, timeout: int,
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    max_tokens: int,
+    temp: float,
+    timeout: int,
 ) -> str:
     proveedor = "Groq" if "groq.com" in base_url else "OpenAI/custom"
-    url       = f"{base_url}/v1/chat/completions"
-    headers   = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload   = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temp}
+    url = f"{base_url}/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temp}
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=timeout)
         r.raise_for_status()
@@ -156,12 +156,16 @@ def _call_openai_compat(
 
 
 def _call_anthropic(
-    api_key: str, model: str, messages: list[dict],
-    max_tokens: int, temp: float, timeout: int,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    max_tokens: int,
+    temp: float,
+    timeout: int,
 ) -> str:
-    system    = next((m["content"] for m in messages if m["role"] == "system"), "")
+    system = next((m["content"] for m in messages if m["role"] == "system"), "")
     chat_msgs = [m for m in messages if m["role"] != "system"]
-    headers   = {
+    headers = {
         "x-api-key": api_key,
         "Content-Type": "application/json",
         "anthropic-version": "2023-06-01",
@@ -175,8 +179,7 @@ def _call_anthropic(
     if system:
         payload["system"] = system
     try:
-        r = requests.post("https://api.anthropic.com/v1/messages",
-                          json=payload, headers=headers, timeout=timeout)
+        r = requests.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers, timeout=timeout)
         r.raise_for_status()
         return r.json()["content"][0]["text"].strip()
     except requests.RequestException as exc:
@@ -184,14 +187,15 @@ def _call_anthropic(
 
 
 def _call_gemini(
-    api_key: str, model: str, messages: list[dict],
-    max_tokens: int, temp: float, timeout: int,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    max_tokens: int,
+    temp: float,
+    timeout: int,
 ) -> str:
     mdl_name = model or "gemini-2.0-flash"
-    url      = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{mdl_name}:generateContent?key={api_key}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{mdl_name}:generateContent?key={api_key}"
     contents = []
     for m in messages:
         if m["role"] == "system":

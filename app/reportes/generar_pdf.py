@@ -3,27 +3,27 @@
 import io
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 _TZ = timezone(timedelta(hours=-5))  # America/Guayaquil — sin DST
 
 log = logging.getLogger(__name__)
 
-_MESES   = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-            "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-_DIAS    = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+_MESES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+_DIAS = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 _FAA_DESC = {"A": "Aerolínea", "B": "Meteorología", "C": "Sist. Aéreo", "D": "Seguridad"}
 
 
 def _weasyprint_available() -> bool:
     try:
         import weasyprint  # noqa: F401
+
         return True
     except (ImportError, OSError):
         return False
 
 
 # ── SVG chart helpers ────────────────────────────────────────────────────────
+
 
 def _otp_color(v: float) -> str:
     return "#16a34a" if v >= 80 else "#d97706" if v >= 70 else "#dc2626"
@@ -50,13 +50,9 @@ def _svg_line_otp(labels: list, values: list, width: int = 500, height: int = 17
     for gv in [60, 70, 80, 90, 100]:
         gy = cy(gv)
         parts.append(
-            f'<line x1="{PL}" y1="{gy:.1f}" x2="{width - PR}" y2="{gy:.1f}" '
-            f'stroke="#e2e8f0" stroke-width="1"/>'
+            f'<line x1="{PL}" y1="{gy:.1f}" x2="{width - PR}" y2="{gy:.1f}" stroke="#e2e8f0" stroke-width="1"/>'
         )
-        parts.append(
-            f'<text x="{PL - 4}" y="{gy + 3:.1f}" text-anchor="end" '
-            f'font-size="8" fill="#94a3b8">{gv}%</text>'
-        )
+        parts.append(f'<text x="{PL - 4}" y="{gy + 3:.1f}" text-anchor="end" font-size="8" fill="#94a3b8">{gv}%</text>')
 
     # umbral 80% en ámbar punteado
     gy80 = cy(80)
@@ -68,10 +64,7 @@ def _svg_line_otp(labels: list, values: list, width: int = 500, height: int = 17
     # área rellena bajo la línea
     path_pts = " ".join(f"{cx(i):.1f},{cy(v):.1f}" for i, v in enumerate(values))
     bot = cy(y_min)
-    parts.append(
-        f'<polygon points="{cx(0):.1f},{bot} {path_pts} {cx(n - 1):.1f},{bot}" '
-        f'fill="rgba(27,58,107,0.09)"/>'
-    )
+    parts.append(f'<polygon points="{cx(0):.1f},{bot} {path_pts} {cx(n - 1):.1f},{bot}" fill="rgba(27,58,107,0.09)"/>')
     parts.append(
         f'<polyline points="{path_pts}" fill="none" stroke="#1B3A6B" '
         f'stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
@@ -90,10 +83,7 @@ def _svg_line_otp(labels: list, values: list, width: int = 500, height: int = 17
                 f'font-size="8" fill="#64748b">{labels[i]}</text>'
             )
 
-    return (
-        f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">'
-        f'{"".join(parts)}</svg>'
-    )
+    return f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
 
 def _svg_hbar(labels: list, values: list, unit: str = "", width: int = 500) -> str:
@@ -120,14 +110,10 @@ def _svg_hbar(labels: list, values: list, unit: str = "", width: int = 500) -> s
         parts.append(f'<rect x="{PL}" y="{y}" width="{bw}" height="{bar_h}" fill="{color}" rx="3"/>')
         val_str = f"{val:,.0f}{unit}"
         parts.append(
-            f'<text x="{PL + bw + 5}" y="{y + bar_h / 2 + 3:.0f}" '
-            f'font-size="9" fill="#64748b">{val_str}</text>'
+            f'<text x="{PL + bw + 5}" y="{y + bar_h / 2 + 3:.0f}" font-size="9" fill="#64748b">{val_str}</text>'
         )
 
-    return (
-        f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">'
-        f'{"".join(parts)}</svg>'
-    )
+    return f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
 
 def _svg_vbar_otp(labels: list, values: list, width: int = 500, height: int = 160) -> str:
@@ -149,12 +135,10 @@ def _svg_vbar_otp(labels: list, values: list, width: int = 500, height: int = 16
     for gv in [60, 70, 80, 90, 100]:
         gy = cy(gv)
         parts.append(
-            f'<line x1="{PL}" y1="{gy:.1f}" x2="{width - PR}" y2="{gy:.1f}" '
-            f'stroke="#e2e8f0" stroke-width="1"/>'
+            f'<line x1="{PL}" y1="{gy:.1f}" x2="{width - PR}" y2="{gy:.1f}" stroke="#e2e8f0" stroke-width="1"/>'
         )
         parts.append(
-            f'<text x="{PL - 3}" y="{gy + 3:.1f}" text-anchor="end" '
-            f'font-size="7.5" fill="#94a3b8">{gv}%</text>'
+            f'<text x="{PL - 3}" y="{gy + 3:.1f}" text-anchor="end" font-size="7.5" fill="#94a3b8">{gv}%</text>'
         )
 
     gy80 = cy(80)
@@ -168,12 +152,10 @@ def _svg_vbar_otp(labels: list, values: list, width: int = 500, height: int = 16
         by = PT + H - bh
         bx = cx(i) - bar_w / 2
         parts.append(
-            f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w}" '
-            f'height="{bh:.1f}" fill="{_otp_color(v)}" rx="2"/>'
+            f'<rect x="{bx:.1f}" y="{by:.1f}" width="{bar_w}" height="{bh:.1f}" fill="{_otp_color(v)}" rx="2"/>'
         )
         parts.append(
-            f'<text x="{cx(i):.1f}" y="{height - 5}" text-anchor="middle" '
-            f'font-size="8" fill="#64748b">{lbl}</text>'
+            f'<text x="{cx(i):.1f}" y="{height - 5}" text-anchor="middle" font-size="8" fill="#64748b">{lbl}</text>'
         )
         if bh > 14:
             parts.append(
@@ -181,13 +163,11 @@ def _svg_vbar_otp(labels: list, values: list, width: int = 500, height: int = 16
                 f'font-size="7.5" fill="#64748b">{v:.1f}%</text>'
             )
 
-    return (
-        f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">'
-        f'{"".join(parts)}</svg>'
-    )
+    return f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
 
 # ── HTML report builder ──────────────────────────────────────────────────────
+
 
 def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | None = None) -> str:
     datos = datos or {}
@@ -196,9 +176,9 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
 
     # ── KPIs Operacionales ──────────────────────────────────────────────────
     if "kpis" in secciones:
-        otp_v    = kpis.get("otp_global", 0) * 100
-        canc_v   = kpis.get("tasa_cancelacion", 0) * 100
-        otp_col  = "#16a34a" if otp_v >= 80 else "#d97706" if otp_v >= 70 else "#dc2626"
+        otp_v = kpis.get("otp_global", 0) * 100
+        canc_v = kpis.get("tasa_cancelacion", 0) * 100
+        otp_col = "#16a34a" if otp_v >= 80 else "#d97706" if otp_v >= 70 else "#dc2626"
         canc_col = "#dc2626" if canc_v > 5 else "#d97706" if canc_v > 2 else "#16a34a"
         html_sec += f"""
         <section class="seccion">
@@ -206,7 +186,7 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
           <div class="kpi-grid">
             <div class="kpi-card">
               <div class="kpi-label">Total Vuelos</div>
-              <div class="kpi-val">{kpis.get('total_vuelos', 0):,}</div>
+              <div class="kpi-val">{kpis.get("total_vuelos", 0):,}</div>
             </div>
             <div class="kpi-card">
               <div class="kpi-label">OTP Global</div>
@@ -219,21 +199,21 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Retraso Promedio</div>
-              <div class="kpi-val">{kpis.get('retraso_promedio', 0):.1f} min</div>
+              <div class="kpi-val">{kpis.get("retraso_promedio", 0):.1f} min</div>
             </div>
           </div>
         </section>"""
 
     # ── Tendencia OTP Mensual ───────────────────────────────────────────────
     if "otp_mensual" in secciones and datos.get("otp_mensual"):
-        trend  = datos["otp_mensual"]
+        trend = datos["otp_mensual"]
         labels = [t["mes"] for t in trend]
         values = [t["otp"] for t in trend]
-        svg    = _svg_line_otp(labels, values)
+        svg = _svg_line_otp(labels, values)
         if svg:
             avg_otp = round(sum(values) / len(values), 1) if values else 0
-            best    = max(trend, key=lambda t: t["otp"])
-            worst   = min(trend, key=lambda t: t["otp"])
+            best = max(trend, key=lambda t: t["otp"])
+            worst = min(trend, key=lambda t: t["otp"])
             html_sec += f"""
         <section class="seccion">
           <h2>Tendencia OTP Mensual</h2>
@@ -241,8 +221,8 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
           <div class="legend-row">
             <span class="legend-item"><span class="leg-dot" style="background:#d97706"></span>Umbral 80%</span>
             <span class="legend-item">Promedio: <strong>{avg_otp}%</strong></span>
-            <span class="legend-item">Mejor: <strong>{best['mes']} ({best['otp']:.1f}%)</strong></span>
-            <span class="legend-item">Peor: <strong>{worst['mes']} ({worst['otp']:.1f}%)</strong></span>
+            <span class="legend-item">Mejor: <strong>{best["mes"]} ({best["otp"]:.1f}%)</strong></span>
+            <span class="legend-item">Peor: <strong>{worst["mes"]} ({worst["otp"]:.1f}%)</strong></span>
           </div>
         </section>"""
 
@@ -251,15 +231,14 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
         aerolineas = datos.get("top_aerolineas") or []
         if not aerolineas and kpis.get("top3_aerolineas"):
             aerolineas = [
-                {"aerolinea": al["aerolinea"], "total": al["total"],
-                 "otp": round(al["otp"] * 100, 1), "retraso": "—"}
+                {"aerolinea": al["aerolinea"], "total": al["total"], "otp": round(al["otp"] * 100, 1), "retraso": "—"}
                 for al in kpis["top3_aerolineas"]
             ]
         if aerolineas:
             labels_al = [al["aerolinea"] for al in aerolineas[:15]]
             values_al = [al["otp"] for al in aerolineas[:15]]
-            svg_al    = _svg_vbar_otp(labels_al, values_al)
-            rows_al   = "".join(
+            svg_al = _svg_vbar_otp(labels_al, values_al)
+            rows_al = "".join(
                 f"<tr><td class='center'>{i + 1}</td><td>{al['aerolinea']}</td>"
                 f"<td class='right'>{al['total']:,}</td>"
                 f"<td class='center' style='color:{_otp_color(al['otp'])};font-weight:700'>"
@@ -280,10 +259,10 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
 
     # ── Causas de Retraso ───────────────────────────────────────────────────
     if "causas_retraso" in secciones and datos.get("causas_retraso"):
-        causas    = datos["causas_retraso"]
-        labels_c  = [c["label"] for c in causas]
-        values_c  = [c["minutos"] for c in causas]
-        svg_c     = _svg_hbar(labels_c, values_c, " min")
+        causas = datos["causas_retraso"]
+        labels_c = [c["label"] for c in causas]
+        values_c = [c["minutos"] for c in causas]
+        svg_c = _svg_hbar(labels_c, values_c, " min")
         rows_caus = "".join(
             f"<tr><td>{c['label']}</td><td class='right'>{c['minutos']:,.0f}</td>"
             f"<td class='center'>{c['pct']:.1f}%</td></tr>"
@@ -303,11 +282,11 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
 
     # ── Rutas con Mayor Problemática ────────────────────────────────────────
     if "peores_rutas" in secciones and datos.get("peores_rutas"):
-        peores    = datos["peores_rutas"]
+        peores = datos["peores_rutas"]
         labels_pr = [r["ruta"] for r in peores[:12]]
         values_pr = [r["otp"] for r in peores[:12]]
-        svg_pr    = _svg_vbar_otp(labels_pr, values_pr)
-        rows_pr   = "".join(
+        svg_pr = _svg_vbar_otp(labels_pr, values_pr)
+        rows_pr = "".join(
             f"<tr><td><strong>{r['ruta']}</strong></td>"
             f"<td class='right'>{r['vuelos']:,}</td>"
             f"<td class='center' style='color:{_otp_color(r['otp'])};font-weight:700'>{r['otp']:.1f}%</td>"
@@ -328,10 +307,10 @@ def _html_reporte(kpis: dict, secciones: list[str], periodo: str, datos: dict | 
     # ── OTP por Día de Semana ───────────────────────────────────────────────
     if "dia_semana" in secciones and datos.get("dia_semana"):
         dias_data = datos["dia_semana"]
-        labels_d  = [d["dia"] for d in dias_data]
-        values_d  = [d["otp"] for d in dias_data]
-        svg_d     = _svg_vbar_otp(labels_d, values_d)
-        rows_d    = "".join(
+        labels_d = [d["dia"] for d in dias_data]
+        values_d = [d["otp"] for d in dias_data]
+        svg_d = _svg_vbar_otp(labels_d, values_d)
+        rows_d = "".join(
             f"<tr><td>{d['dia']}</td>"
             f"<td class='center' style='color:{_otp_color(d['otp'])};font-weight:700'>{d['otp']:.1f}%</td></tr>"
             for d in dias_data
@@ -441,12 +420,13 @@ def generar_pdf(
     secciones: list[str],
     periodo: str,
     datos: dict | None = None,
-) -> Optional[bytes]:
+) -> bytes | None:
     """Genera PDF usando WeasyPrint. Retorna bytes o None si no disponible."""
     if not _weasyprint_available():
         return None
     try:
         from weasyprint import HTML as WP_HTML
+
         html = _html_reporte(kpis, secciones, periodo, datos)
         return WP_HTML(string=html).write_pdf()
     except Exception as exc:
@@ -454,24 +434,34 @@ def generar_pdf(
         return None
 
 
-def subir_pdf_minio(pdf_bytes: bytes, nombre: str) -> Optional[str]:
+def subir_pdf_minio(pdf_bytes: bytes, nombre: str) -> str | None:
     """Sube el PDF a MinIO aerotrack-exports y retorna URL firmada (1 h)."""
     try:
         from minio import Minio
-        from app.config import (MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY,
-                                MINIO_BUCKET_EXPORTS, MINIO_PUBLIC_ENDPOINT)
 
-        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                       secret_key=MINIO_SECRET_KEY, secure=False)
+        from app.config import (
+            MINIO_ACCESS_KEY,
+            MINIO_BUCKET_EXPORTS,
+            MINIO_ENDPOINT,
+            MINIO_PUBLIC_ENDPOINT,
+            MINIO_SECRET_KEY,
+        )
+
+        client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
         if not client.bucket_exists(MINIO_BUCKET_EXPORTS):
             client.make_bucket(MINIO_BUCKET_EXPORTS)
 
         obj_name = f"reportes/{nombre}"
         client.put_object(
-            MINIO_BUCKET_EXPORTS, obj_name, io.BytesIO(pdf_bytes),
-            length=len(pdf_bytes), content_type="application/pdf",
+            MINIO_BUCKET_EXPORTS,
+            obj_name,
+            io.BytesIO(pdf_bytes),
+            length=len(pdf_bytes),
+            content_type="application/pdf",
         )
-        sign_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+        sign_client = Minio(
+            MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False
+        )
         sign_client._region_map[MINIO_BUCKET_EXPORTS] = client._region_map.get(MINIO_BUCKET_EXPORTS, "us-east-1")
         url = sign_client.presigned_get_object(MINIO_BUCKET_EXPORTS, obj_name, expires=timedelta(hours=1))
         return url

@@ -39,8 +39,8 @@ MINIO_BUCKET_DIMS    = os.getenv("MINIO_BUCKET_DIMS",    "aerotrack-dims")
 MINIO_BUCKET_EXPORTS = os.getenv("MINIO_BUCKET_EXPORTS", "aerotrack-exports")
 
 # ── Credenciales PocketBase ───────────────────────────────────
-PB_EMAIL      = os.getenv("PB_EMAIL",    "btoaquizaz@uteq.edu.ec")
-PB_PASSWORD   = os.getenv("PB_PASSWORD", "admin12345")
+PB_EMAIL      = os.getenv("PB_EMAIL", "")
+PB_PASSWORD   = os.getenv("PB_PASSWORD", "")
 PB_COLLECTION = os.getenv("PB_COLLECTION", "vuelos_raw")
 BATCH_SIZE    = int(os.getenv("BATCH_SIZE", "5000"))
 

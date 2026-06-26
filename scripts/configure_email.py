@@ -21,9 +21,9 @@ except ImportError:
         PB_EMAIL    = os.getenv("PB_EMAIL")
         PB_PASSWORD = os.getenv("PB_PASSWORD")
 
-# ── Credenciales Gmail a configurar ───────────────────────────
-GMAIL_ADDRESS  = "sleepislife2409@gmail.com"
-GMAIL_APP_PASS = "tnne niot mssf sjks"
+# ── Credenciales Gmail a configurar (desde .env) ──────────────
+GMAIL_ADDRESS  = os.getenv("GMAIL_ADDRESS", "")
+GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS", "")
 SMTP_HOST      = "smtp.gmail.com"
 SMTP_PORT      = 587
 

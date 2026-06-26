@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -43,31 +43,39 @@ async def _enviar_webhook(webhook: dict, payload: dict) -> None:
                     },
                 )
             if resp.is_success:
-                ahora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                ahora = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
                 try:
-                    pb.update_record("pb_api_webhooks", webhook_id, {
-                        "ultimo_envio": ahora,
-                        "ultimo_estado": "exitoso",
-                    })
+                    pb.update_record(
+                        "pb_api_webhooks",
+                        webhook_id,
+                        {
+                            "ultimo_envio": ahora,
+                            "ultimo_estado": "exitoso",
+                        },
+                    )
                 except Exception:
                     pass
-                log.info(f"Webhook {webhook_id} -> {url} OK (intento {attempt+1})")
+                log.info(f"Webhook {webhook_id} -> {url} OK (intento {attempt + 1})")
                 return
 
-            log.warning(f"Webhook {webhook_id} -> {url} HTTP {resp.status_code} (intento {attempt+1}/{_MAX_RETRIES})")
+            log.warning(f"Webhook {webhook_id} -> {url} HTTP {resp.status_code} (intento {attempt + 1}/{_MAX_RETRIES})")
 
         except Exception as exc:
-            log.warning(f"Webhook {webhook_id} -> {url} error: {exc} (intento {attempt+1}/{_MAX_RETRIES})")
+            log.warning(f"Webhook {webhook_id} -> {url} error: {exc} (intento {attempt + 1}/{_MAX_RETRIES})")
 
         if attempt < _MAX_RETRIES - 1:
             await asyncio.sleep(_BACKOFF[attempt])
 
-    ahora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    ahora = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     try:
-        pb.update_record("pb_api_webhooks", webhook_id, {
-            "ultimo_envio": ahora,
-            "ultimo_estado": "fallido",
-        })
+        pb.update_record(
+            "pb_api_webhooks",
+            webhook_id,
+            {
+                "ultimo_envio": ahora,
+                "ultimo_estado": "fallido",
+            },
+        )
     except Exception:
         pass
     log.error(f"Webhook {webhook_id} -> {url} FALLIDO tras {_MAX_RETRIES} intentos")

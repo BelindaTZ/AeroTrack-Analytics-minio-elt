@@ -30,7 +30,8 @@ RUN pip install --no-cache-dir \
     openpyxl>=3.1.0 \
     weasyprint>=62.0 \
     email-validator>=2.1.0 \
-    croniter>=2.0.0
+    croniter>=2.0.0 \
+    scikit-learn>=1.4.0
 
 # En desarrollo docker-compose monta ./app:/code/app (sobreescribe esto)
 COPY app/ /code/app/

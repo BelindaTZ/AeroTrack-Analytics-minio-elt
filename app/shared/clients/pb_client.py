@@ -5,11 +5,11 @@ El token de administrador se cachea para evitar re-autenticar en cada request.
 """
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
-from app.config import PB_URL, PB_EMAIL, PB_PASSWORD
+from app.config import PB_EMAIL, PB_PASSWORD, PB_URL
 
 _admin_cache: dict = {"token": "", "expires": 0.0}
 
@@ -42,8 +42,9 @@ def auth_user(email: str, password: str) -> tuple[str, dict]:
     return data["token"], data["record"]
 
 
-def list_records(collection: str, filter: str = "", expand: str = "",
-                 page: int = 1, per_page: int = 200, sort: str = "") -> list[dict]:
+def list_records(
+    collection: str, filter: str = "", expand: str = "", page: int = 1, per_page: int = 200, sort: str = ""
+) -> list[dict]:
     """Lista registros de una colección con paginación y filtro."""
     token = _get_admin_token()
     params: dict[str, Any] = {"page": page, "perPage": per_page}
@@ -94,7 +95,7 @@ def list_records_all(collection: str, filter: str = "", expand: str = "", sort: 
     return result
 
 
-def get_record(collection: str, record_id: str, expand: str = "") -> Optional[dict]:
+def get_record(collection: str, record_id: str, expand: str = "") -> dict | None:
     token = _get_admin_token()
     params = {"expand": expand} if expand else {}
     r = requests.get(
@@ -145,10 +146,14 @@ def delete_record(collection: str, record_id: str) -> None:
 
 def change_user_password(user_id: str, new_password: str) -> None:
     """Cambia la contraseña de un usuario en app_users."""
-    update_record("app_users", user_id, {
-        "password": new_password,
-        "passwordConfirm": new_password,
-    })
+    update_record(
+        "app_users",
+        user_id,
+        {
+            "password": new_password,
+            "passwordConfirm": new_password,
+        },
+    )
 
 
 def get_permissions_for_role(rol_id: str) -> dict[str, list[str]]:

@@ -33,9 +33,13 @@ Servicios disponibles:
 
 ## Setup inicial (primera vez)
 
+Los scripts de setup (`scripts/`) leen la configuración de `.env`. Ejecutar solo la primera vez:
+
 ```bash
-# Desde el host (no dentro de Docker)
-pip install -r scripts/requirements-setup.txt
+# Instalar dependencias del setup (solo una vez)
+pip install python-dotenv requests pandas pyarrow minio tqdm
+
+# Ejecutar setup (desde el host, no desde Docker)
 python scripts/run_setup_inicial.py
 ```
 

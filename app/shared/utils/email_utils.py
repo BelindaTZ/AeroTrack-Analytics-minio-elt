@@ -3,7 +3,6 @@
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
 
 from app.shared.clients import pb_client
 
@@ -14,7 +13,7 @@ def _get_smtp_config() -> dict:
     return cfg
 
 
-def send_welcome_email(destinatario: str, nombre: str, password_temporal: str, login_url: str) -> Optional[str]:
+def send_welcome_email(destinatario: str, nombre: str, password_temporal: str, login_url: str) -> str | None:
     """Envía email de bienvenida con credenciales. Retorna None si ok, o mensaje de error."""
     try:
         cfg = _get_smtp_config()

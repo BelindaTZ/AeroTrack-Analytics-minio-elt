@@ -2,7 +2,7 @@
 
 import httpx
 
-from app.config import AIRFLOW_URL, AIRFLOW_USER, AIRFLOW_PASSWORD
+from app.config import AIRFLOW_PASSWORD, AIRFLOW_URL, AIRFLOW_USER
 
 DAG_ID = "aerotrack_elt_pipeline"
 _AUTH = (AIRFLOW_USER, AIRFLOW_PASSWORD)

@@ -80,6 +80,90 @@ Plataforma web de inteligencia operacional para aerolíneas que ingesta datos de
 
 ---
 
+## Dependencias Python
+
+Archivo: `requirements.txt` (sincronizado con `Dockerfile`)
+
+### Core
+```
+python-dotenv>=1.0.0
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+jinja2>=3.1.0
+python-multipart>=0.0.9
+```
+
+### Data
+```
+pandas>=2.0.0
+pyarrow>=14.0.0
+minio>=7.2.0
+```
+
+### HTTP
+```
+requests>=2.31.0
+httpx>=0.27.0
+```
+
+### Auth
+```
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+```
+
+### Reports
+```
+plotly>=5.18.0
+openpyxl>=3.1.0
+weasyprint>=62.0
+```
+
+### Utils
+```
+email-validator>=2.1.0
+croniter>=2.0.0
+```
+
+### Dev/Test
+```
+pytest>=8.0.0
+ruff>=0.4.0
+mypy>=1.10.0
+```
+
+**Nota:** `weasyprint` es opcional. Si no está instalado, el endpoint PDF devuelve HTTP 501 y el resto del sistema funciona normalmente.
+
+---
+
+## Variables de entorno
+
+Todas las variables se definen en `.env` (nunca se sube al repositorio). Template: `.env.example`
+
+| Variable | Descripción | Obligatoria |
+|---|---|---|
+| `PB_URL` | URL PocketBase (host) | Sí |
+| `PB_EMAIL` | Email admin PocketBase | Sí |
+| `PB_PASSWORD` | Contraseña admin PocketBase | Sí |
+| `MINIO_URL` | Endpoint MinIO (host) | Sí |
+| `MINIO_ACCESS` | Access key MinIO | Sí |
+| `MINIO_SECRET` | Secret key MinIO | Sí |
+| `SECRET_KEY` | Clave firma JWT (mín 32 chars) | Sí |
+| `ALGORITHM` | Algoritmo JWT (default: HS256) | No |
+| `TOKEN_EXPIRE_MINUTES` | TTL token JWT (default: 60) | No |
+| `AIRFLOW_ADMIN_USER` | Usuario Airflow | Sí |
+| `AIRFLOW_ADMIN_PASSWORD` | Contraseña Airflow | Sí |
+| `POSTGRES_USER` | Usuario Postgres (Airflow) | Sí |
+| `POSTGRES_PASSWORD` | Contraseña Postgres | Sí |
+| `FERNET_KEY` | Clave Fernet (Airflow) | Sí |
+| `GROQ_API_KEY` | API key Groq (para IA) | No |
+| `GEMINI_API_KEY` | API key Gemini (para IA) | No |
+| `GMAIL_ADDRESS` | Gmail para SMTP (setup) | No |
+| `GMAIL_APP_PASS` | Gmail app password | No |
+| `ADMIN_NAME` | Nombre usuario admin inicial | No |
+
+---
+
 ## Servicios Docker (docker-compose.yml)
 
 | Servicio | Imagen | Puerto expuesto | Función |

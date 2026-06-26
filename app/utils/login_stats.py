@@ -34,9 +34,9 @@ def _fmt(n: int) -> str:
 
 def _fetch_vuelos_sync() -> str:
     from minio import Minio
+
     try:
-        mc = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                   secret_key=MINIO_SECRET_KEY, secure=False)
+        mc = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
         resp = mc.get_object(MINIO_BUCKET_DIMS, "fact_vuelo.parquet")
         data = resp.read()
         resp.close()
@@ -70,9 +70,9 @@ async def _fetch_disponibilidad() -> str:
 
 def _fetch_aerolineas_sync() -> str:
     from minio import Minio
+
     try:
-        mc = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY,
-                   secret_key=MINIO_SECRET_KEY, secure=False)
+        mc = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
         resp = mc.get_object(MINIO_BUCKET_DIMS, "dim_aerolinea.parquet")
         data = resp.read()
         resp.close()

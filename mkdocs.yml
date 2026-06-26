@@ -1,0 +1,60 @@
+site_name: AeroTrack Analytics
+site_description: Documentación técnica del sistema de Business Intelligence para aviación
+site_url: https://aerotrack.example.com
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: blue
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Inicio: index.md
+  - Guía de Inicio:
+    - Instalación: getting-started/installation.md
+    - Configuración: getting-started/configuration.md
+    - Primeros Pasos: getting-started/quickstart.md
+  - Arquitectura:
+    - Visión General: architecture/overview.md
+    - Decisiones Técnicas: architecture/decisiones.md
+    - Modelo de Datos: architecture/data-model.md
+    - Seguridad: architecture/security.md
+  - API:
+    - Autenticación: api/authentication.md
+    - Dashboard: api/dashboard.md
+    - Pipeline: api/pipeline.md
+    - Predictivo: api/predictive.md
+    - Asistente IA: api/assistant.md
+  - Despliegue:
+    - Docker: deployment/docker.md
+    - Producción: deployment/production.md
+  - Desarrollo:
+    - Contribuir: development/contributing.md
+    - Testing: development/testing.md
+    - Code Style: development/code-style.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - admonitions
+  - pymdownx.details
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/aerotrack/analytics
